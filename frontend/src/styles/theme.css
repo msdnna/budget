@@ -1,0 +1,19 @@
+/* Light mode defaults */
+:root {
+  --border:        #e8e8e8;
+  --nav-bg:        #ffffff;
+  --nav-border:    #e5e5e5;
+  --nav-item:      #999999;
+  --divider:       #d9d9d9;
+  --divider-hover: #aaaaaa;
+}
+
+/* Dark mode overrides via JS-controlled attribute */
+:root[data-theme="dark"] {
+  --border:        #333333;
+  --nav-bg:        #1e1e1e;
+  --nav-border:    #333333;
+  --nav-item:      #aaaaaa;
+  --divider:       #444444;
+  --divider-hover: #555555;
+}

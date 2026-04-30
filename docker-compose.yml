@@ -1,0 +1,76 @@
+services:
+  mongodb:
+    image: mongo:8.0
+    container_name: budget-mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-password}
+      MONGO_INITDB_DATABASE: ${MONGO_DB:-budget}
+      TZ: ${TZ:-Europe/Moscow}
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - budget-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      args:
+        - HTTP_PROXY=${HTTP_PROXY:-}
+        - HTTPS_PROXY=${HTTPS_PROXY:-}
+        - NO_PROXY=${NO_PROXY:-localhost,127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}
+    container_name: budget-backend
+    restart: unless-stopped
+    environment:
+      - MONGO_URI=mongodb://${MONGO_USERNAME:-admin}:${MONGO_PASSWORD:-password}@mongodb:27017/${MONGO_DB:-budget}?authSource=admin
+      - DB_NAME=${MONGO_DB:-budget}
+      - PORT=8080
+      - PDF_FONT_PATH=/usr/share/fonts/dejavu/DejaVuSans.ttf
+      - JWT_SECRET=${JWT_SECRET}
+      - TZ=${TZ:-Europe/Moscow}
+    ports:
+      - "8080:8080"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - budget-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - HTTP_PROXY=${HTTP_PROXY:-}
+        - HTTPS_PROXY=${HTTPS_PROXY:-}
+        - NO_PROXY=${NO_PROXY:-localhost,127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}
+    container_name: budget-frontend
+    restart: unless-stopped
+    environment:
+      - TZ=${TZ:-Europe/Moscow}
+    ports:
+      - "8082:80"
+    depends_on:
+      - backend
+    networks:
+      - budget-network
+
+volumes:
+  mongodb_data:
+
+networks:
+  budget-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.31.0.0/24
+          gateway: 172.31.0.1
