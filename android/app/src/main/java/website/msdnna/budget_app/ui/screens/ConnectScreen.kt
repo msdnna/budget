@@ -1,14 +1,20 @@
 package website.msdnna.budget_app.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -16,16 +22,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import website.msdnna.budget_app.BuildConfig
 import website.msdnna.budget_app.ui.components.MbLogo
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import website.msdnna.budget_app.data.api.RetrofitClient
+import website.msdnna.budget_app.data.discovery.DiscoveredServer
+import website.msdnna.budget_app.data.discovery.ServerDiscovery
 import website.msdnna.budget_app.data.model.LoginRequest
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -34,9 +45,10 @@ fun ConnectScreen(
     primaryColor: Color,
     savedServerUrl: String?,
     serverHistory: List<String> = emptyList(),
-    onAuthenticated: (serverUrl: String, token: String, displayName: String, avatarUrl: String?) -> Unit
+    onAuthenticated: (serverUrl: String, token: String, userId: String, displayName: String, avatarUrl: String?) -> Unit
 ) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     val savedHost = savedServerUrl?.removePrefix("https://")?.removePrefix("http://") ?: ""
     val savedSsl  = savedServerUrl?.startsWith("https://") ?: false
@@ -49,6 +61,40 @@ fun ConnectScreen(
     var error            by remember { mutableStateOf<String?>(null) }
     var loading          by remember { mutableStateOf(false) }
     var dropdownExpanded by remember { mutableStateOf(false) }
+
+    // Discovery state — local-network scan results.
+    var discoveryActive by remember { mutableStateOf(false) }
+    var discoveryFinished by remember { mutableStateOf(false) }
+    val discovered = remember { mutableStateListOf<DiscoveredServer>() }
+    var discoveryJob by remember { mutableStateOf<Job?>(null) }
+
+    fun startDiscovery() {
+        discoveryJob?.cancel()
+        discovered.clear()
+        discoveryFinished = false
+        discoveryActive = true
+        discoveryJob = scope.launch {
+            try {
+                ServerDiscovery.discover(context).collect { server ->
+                    // Avoid duplicates if both http and https probes match (rare but possible).
+                    if (discovered.none { it.url == server.url }) discovered += server
+                }
+            } finally {
+                discoveryActive = false
+                discoveryFinished = true
+            }
+        }
+    }
+
+    fun cancelDiscovery() {
+        discoveryJob?.cancel()
+        discoveryJob = null
+        discoveryActive = false
+    }
+
+    DisposableEffect(Unit) {
+        onDispose { discoveryJob?.cancel() }
+    }
 
     val passwordFocus = remember { FocusRequester() }
 
@@ -102,7 +148,7 @@ fun ConnectScreen(
                 val service = RetrofitClient.getService(fullServerUrl)
                 val resp = service.login(LoginRequest(login.trim(), password))
                 loading = false
-                onAuthenticated(fullServerUrl, resp.token, resp.displayName, resp.avatarUrl)
+                onAuthenticated(fullServerUrl, resp.token, resp.userId, resp.displayName, resp.avatarUrl)
             } catch (e: Exception) {
                 loading = false
                 error = when {
@@ -119,10 +165,9 @@ fun ConnectScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
             .imePadding(),
-        contentAlignment = Alignment.Center
     ) {
         Card(
-            modifier = Modifier.widthIn(max = 420.dp).padding(24.dp),
+            modifier = Modifier.widthIn(max = 420.dp).padding(24.dp).align(Alignment.Center),
             elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
         ) {
@@ -133,7 +178,7 @@ fun ConnectScreen(
                 MbLogo(primaryColor = primaryColor, fontSize = 80.sp)
 
                 Spacer(Modifier.height(40.dp))
-                Divider(color = MaterialTheme.colorScheme.outlineVariant)
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 Spacer(Modifier.height(28.dp))
 
                 if (step == 1) {
@@ -158,7 +203,7 @@ fun ConnectScreen(
                             label = { Text("Адрес сервера") },
                             placeholder = { Text("192.168.1.100:8080") },
                             isError = error != null,
-                            modifier = Modifier.fillMaxWidth().menuAnchor(),
+                            modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable),
                             singleLine = true,
                             enabled = !loading,
                             trailingIcon = if (serverHistory.isNotEmpty()) {
@@ -221,6 +266,22 @@ fun ConnectScreen(
                         )
                     }
 
+                    Spacer(Modifier.height(12.dp))
+                    DiscoverySection(
+                        primaryColor = primaryColor,
+                        active = discoveryActive,
+                        finished = discoveryFinished,
+                        results = discovered,
+                        enabled = !loading,
+                        onStart = ::startDiscovery,
+                        onCancel = ::cancelDiscovery,
+                        onPick = { srv ->
+                            serverHost = srv.host
+                            useHttps = srv.ssl
+                            error = null
+                        },
+                    )
+
                     ErrorBlock(error)
                     Spacer(Modifier.height(20.dp))
 
@@ -241,14 +302,14 @@ fun ConnectScreen(
                 } else {
                     // ── Step 2: Login ─────────────────────────────────
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                        if (savedServerUrl.isNullOrBlank()) {
-                            IconButton(onClick = { step = 1; error = null }, modifier = Modifier.size(32.dp)) {
-                                Icon(Icons.Default.ArrowBack, "Назад", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
+                        // Back button is always available so the user can change the server
+                        // address even after a logout (logout doesn't clear the saved URL).
+                        IconButton(onClick = { step = 1; error = null }, modifier = Modifier.size(32.dp)) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Изменить сервер", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         Text("Вход в аккаунт", style = MaterialTheme.typography.titleLarge,
                             modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
-                        if (savedServerUrl.isNullOrBlank()) Spacer(Modifier.width(32.dp))
+                        Spacer(Modifier.width(32.dp))
                     }
                     Spacer(Modifier.height(6.dp))
                     Text(fullServerUrl, style = MaterialTheme.typography.bodySmall,
@@ -305,8 +366,123 @@ fun ConnectScreen(
                 }
 
                 Spacer(Modifier.height(16.dp))
-                Text("msdnnaBudget", style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+            }
+        }
+        Text(
+            "msdnnaBudget · v${BuildConfig.VERSION_NAME}",
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 16.dp),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+        )
+    }
+}
+
+@Composable
+private fun DiscoverySection(
+    primaryColor: Color,
+    active: Boolean,
+    finished: Boolean,
+    results: List<DiscoveredServer>,
+    enabled: Boolean,
+    onStart: () -> Unit,
+    onCancel: () -> Unit,
+    onPick: (DiscoveredServer) -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        OutlinedButton(
+            onClick = if (active) onCancel else onStart,
+            modifier = Modifier.fillMaxWidth().height(44.dp),
+            enabled = enabled,
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = primaryColor),
+        ) {
+            if (active) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(16.dp),
+                    color = primaryColor,
+                    strokeWidth = 2.dp,
+                )
+                Spacer(Modifier.width(10.dp))
+                Text("Сканирование… Отменить", fontWeight = FontWeight.Medium)
+            } else {
+                Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    if (finished && results.isEmpty()) "Поиск не дал результатов — повторить"
+                    else "Поиск в локальной сети",
+                    fontWeight = FontWeight.Medium,
+                )
+            }
+        }
+
+        if (active || results.isNotEmpty()) {
+            Spacer(Modifier.height(10.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                results.forEach { srv ->
+                    DiscoveredServerCard(srv = srv, primaryColor = primaryColor, onClick = { onPick(srv) })
+                }
+                if (active && results.isEmpty()) {
+                    Text(
+                        "Поиск серверов в подсети…",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DiscoveredServerCard(
+    srv: DiscoveredServer,
+    primaryColor: Color,
+    onClick: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        tonalElevation = 0.dp,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.Default.Wifi,
+                contentDescription = null,
+                tint = primaryColor,
+                modifier = Modifier.size(20.dp),
+            )
+            Spacer(Modifier.width(10.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(srv.host, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(2.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = if (srv.ssl) Icons.Default.Lock else Icons.Default.LockOpen,
+                        contentDescription = null,
+                        tint = if (srv.ssl) primaryColor else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(12.dp),
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        if (srv.ssl) "HTTPS" else "HTTP",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (srv.apiVersion.isNotBlank()) {
+                        Text(
+                            " · API v${srv.apiVersion}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
             }
         }
     }

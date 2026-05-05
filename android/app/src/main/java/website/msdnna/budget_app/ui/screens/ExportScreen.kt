@@ -133,7 +133,7 @@ fun ExportScreen(serverUrl: String, primaryColor: Color) {
                     },
                     modifier = Modifier.fillMaxWidth().height(48.dp),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = primaryColor),
-                    border = ButtonDefaults.outlinedButtonBorder.copy(
+                    border = ButtonDefaults.outlinedButtonBorder(enabled = !loading).copy(
                         brush = androidx.compose.ui.graphics.SolidColor(primaryColor)
                     ),
                     enabled = !loading

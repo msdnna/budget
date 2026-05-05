@@ -8,11 +8,11 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.fragment.app.FragmentActivity
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
@@ -28,15 +28,22 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import website.msdnna.budget_app.data.api.RetrofitClient
 import website.msdnna.budget_app.data.preferences.AppPreferences
+import website.msdnna.budget_app.data.repository.CategoryRepository
+import website.msdnna.budget_app.data.security.AppLock
+import website.msdnna.budget_app.data.security.PinSecurity
 import website.msdnna.budget_app.notifications.NotificationReceiver
 import website.msdnna.budget_app.notifications.NotificationScheduler
 import website.msdnna.budget_app.ui.components.MbLogo
 import website.msdnna.budget_app.ui.screens.ConnectScreen
+import website.msdnna.budget_app.ui.screens.LockScreen
 import website.msdnna.budget_app.ui.screens.MainScreen
+import website.msdnna.budget_app.ui.screens.PinSetupScreen
 import website.msdnna.budget_app.ui.theme.BudgetTheme
 import website.msdnna.budget_app.ui.theme.themeByKey
 
-class MainActivity : ComponentActivity() {
+private data class AuthSnapshot(val url: String?, val token: String?, val name: String, val avatar: String?)
+
+class MainActivity : FragmentActivity() {
     private val mainHandler = Handler(Looper.getMainLooper())
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -66,6 +73,12 @@ class MainActivity : ComponentActivity() {
             var authToken    by remember { mutableStateOf<String?>(null) }
             var displayName  by remember { mutableStateOf("") }
             var avatarUrl    by remember { mutableStateOf<String?>(null) }
+            var prefsReady   by remember { mutableStateOf(false) }
+            // PIN state managed inside the loader effect (not via a separate
+            // collectAsStateWithLifecycle) so the lock-gate decision can't
+            // observe the initialValue=null race against `prefsReady=true`.
+            var pinHash      by remember { mutableStateOf<String?>(null) }
+            var pinSalt      by remember { mutableStateOf<String?>(null) }
 
             val notifPermissionLauncher = rememberLauncherForActivityResult(
                 ActivityResultContracts.RequestPermission()
@@ -73,21 +86,52 @@ class MainActivity : ComponentActivity() {
 
             LaunchedEffect(Unit) {
                 // Read initial values from DataStore in one shot to avoid race.
-                combine(prefs.serverUrl, prefs.authToken, prefs.displayName, prefs.avatarUrl)
-                    { url, token, name, avatar -> arrayOf(url, token, name, avatar) }
+                val snap = combine(prefs.serverUrl, prefs.authToken, prefs.displayName, prefs.avatarUrl)
+                    { url, token, name, avatar -> AuthSnapshot(url, token, name, avatar) }
                     .first()
-                    .let { values ->
-                        serverUrl   = values[0] as? String ?: ""
-                        authToken   = values[1] as? String ?: ""
-                        displayName = values[2] as? String ?: ""
-                        avatarUrl   = values[3] as? String
+                val token = snap.token ?: ""
+                // Materialise PIN values synchronously *before* flipping prefsReady so
+                // the lock-gate sees a consistent snapshot. A separate reactive
+                // collection used to race here and briefly report hasPin=false.
+                val storedPin  = prefs.pinHash.first()
+                val storedSalt = prefs.pinSalt.first()
+                // Set RetrofitClient BEFORE updating state: recomposition creates ViewModels
+                // whose init coroutines (Dispatchers.Main.immediate) enqueue OkHttp requests
+                // synchronously. The token must be visible to OkHttp threads before that.
+                RetrofitClient.authToken = token
+                serverUrl   = snap.url ?: ""
+                authToken   = token
+                displayName = snap.name
+                avatarUrl   = snap.avatar
+                pinHash     = storedPin
+                pinSalt     = storedSalt
+                if (storedPin.isNullOrBlank()) AppLock.unlock()
+                prefsReady  = true
+
+                // Keep PIN state live for runtime changes (settings toggles, recovery).
+                launch { prefs.pinHash.collect { pinHash = it } }
+                launch { prefs.pinSalt.collect { pinSalt = it } }
+
+                // Backfill user_id for sessions created before the offline-mode rollout
+                // (or any time it ends up blank) so locally-created records get an
+                // author attribution.
+                val url = snap.url
+                if (token.isNotBlank() && !url.isNullOrBlank() && prefs.userId.first().isBlank()) {
+                    runCatching {
+                        val me = RetrofitClient.getService(url).getMe()
+                        val uid = me["user_id"].orEmpty()
+                        if (uid.isNotBlank()) {
+                            prefs.setAuth(token, uid, snap.name, snap.avatar)
+                        }
                     }
+                }
             }
 
             // Register 401 callback — called on OkHttp background thread.
             DisposableEffect(Unit) {
                 RetrofitClient.onUnauthorized = {
                     mainHandler.post {
+                        RetrofitClient.authToken = ""
                         authToken = ""
                         scope.launch { prefs.clearAuth() }
                     }
@@ -95,15 +139,49 @@ class MainActivity : ComponentActivity() {
                 onDispose { RetrofitClient.onUnauthorized = null }
             }
 
-            // Keep RetrofitClient.authToken in sync with state.
+            // Safety-net: keep RetrofitClient in sync if authToken changes for any other reason.
             LaunchedEffect(authToken) {
                 RetrofitClient.authToken = authToken ?: ""
+            }
+
+            // Warm the shared category cache once we have a server + token.
+            // Done here (not per-VM) so VMs don't fan out 3 parallel requests
+            // when their screens compose during cold start.
+            LaunchedEffect(serverUrl, authToken) {
+                val url = serverUrl
+                if (!url.isNullOrBlank() && !authToken.isNullOrBlank()) {
+                    CategoryRepository.loadAll(url)
+                }
+            }
+
+            // App-lock state. pinHash/pinSalt are managed in the loader effect above
+            // (not here) to avoid a race where collectAsStateWithLifecycle's
+            // initialValue=null caused the lock gate to slip past.
+            val biometricEnabled by prefs.biometricEnabled.collectAsStateWithLifecycle(initialValue = false)
+            val lockTimeoutSec   by prefs.lockTimeoutSec.collectAsStateWithLifecycle(initialValue = 60)
+            val pinSetupPrompted by prefs.pinSetupPrompted.collectAsStateWithLifecycle(initialValue = false)
+            val isUnlocked       by AppLock.isUnlocked.collectAsStateWithLifecycle()
+
+            val hasPin = !pinHash.isNullOrBlank() && !pinSalt.isNullOrBlank()
+
+            // Track foreground/background to apply the configurable lock timeout.
+            val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+            DisposableEffect(lifecycleOwner, hasPin, lockTimeoutSec) {
+                val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+                    when (event) {
+                        androidx.lifecycle.Lifecycle.Event.ON_PAUSE  -> AppLock.onPause()
+                        androidx.lifecycle.Lifecycle.Event.ON_RESUME -> AppLock.onResume(lockTimeoutSec, hasPin)
+                        else -> Unit
+                    }
+                }
+                lifecycleOwner.lifecycle.addObserver(observer)
+                onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
             }
 
             BudgetTheme(primary = primaryColor, isDark = isDark) {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     when {
-                        serverUrl == null -> {
+                        serverUrl == null || !prefsReady -> {
                             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                 MbLogo(primaryColor = primaryColor, fontSize = 72.sp)
                             }
@@ -116,17 +194,57 @@ class MainActivity : ComponentActivity() {
                                 primaryColor   = primaryColor,
                                 savedServerUrl = serverUrl.takeIf { !it.isNullOrBlank() },
                                 serverHistory  = serverHistory,
-                                onAuthenticated = { url, token, name, avatar ->
+                                onAuthenticated = { url, token, userId, name, avatar ->
+                                    // Set token BEFORE state update so it's visible to ViewModel
+                                    // init coroutines that start synchronously on recomposition.
+                                    RetrofitClient.authToken = token
                                     serverUrl   = url
                                     authToken   = token
                                     displayName = name
                                     avatarUrl   = avatar
+                                    AppLock.unlock()
                                     scope.launch {
                                         prefs.setServerUrl(url)
-                                        prefs.setAuth(token, "", name, avatar)
+                                        prefs.setAuth(token, userId, name, avatar)
                                         prefs.addToServerHistory(url)
                                     }
                                 }
+                            )
+                        }
+
+                        hasPin && !isUnlocked -> {
+                            LockScreen(
+                                primaryColor     = primaryColor,
+                                pinSalt          = pinSalt!!,
+                                pinHash          = pinHash!!,
+                                biometricEnabled = biometricEnabled,
+                                serverUrl        = serverUrl!!,
+                                onUnlocked       = { AppLock.unlock() },
+                                onPinReset       = {
+                                    scope.launch {
+                                        prefs.clearPinAndBiometric()
+                                        prefs.setPinSetupPrompted(false)
+                                        AppLock.unlock()
+                                    }
+                                },
+                            )
+                        }
+
+                        !hasPin && !pinSetupPrompted -> {
+                            // First post-login launch — offer to protect the app.
+                            PinSetupScreen(
+                                primaryColor = primaryColor,
+                                onSkip = {
+                                    scope.launch { prefs.setPinSetupPrompted(true) }
+                                },
+                                onPinSet = { pin, enableBio ->
+                                    val stored = PinSecurity.hash(pin)
+                                    scope.launch {
+                                        prefs.setPin(stored.hashBase64, stored.saltBase64)
+                                        prefs.setBiometricEnabled(enableBio)
+                                        prefs.setPinSetupPrompted(true)
+                                    }
+                                },
                             )
                         }
 
@@ -144,17 +262,11 @@ class MainActivity : ComponentActivity() {
                             onDarkModeChange = { dark ->
                                 scope.launch { prefs.setDarkMode(dark) }
                             },
-                            onResetServer = {
-                                serverUrl = ""
-                                authToken = ""
-                                scope.launch {
-                                    prefs.clearServerUrl()
-                                    prefs.clearAuth()
-                                }
-                            },
                             onLogout = {
+                                RetrofitClient.authToken = ""
                                 authToken = ""
-                                scope.launch { prefs.clearAuth() }
+                                AppLock.lock()
+                                scope.launch { prefs.clearAuthAndSecurity() }
                             },
                             onRequestNotifPermission = {
                                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {

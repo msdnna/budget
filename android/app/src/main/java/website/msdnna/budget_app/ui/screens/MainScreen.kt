@@ -1,14 +1,18 @@
 package website.msdnna.budget_app.ui.screens
 
-import android.app.TimePickerDialog
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.TrendingDown
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.LightMode
@@ -24,11 +28,25 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
+import website.msdnna.budget_app.BuildConfig
+import website.msdnna.budget_app.data.api.RetrofitClient
 import website.msdnna.budget_app.data.preferences.AppPreferences
+import website.msdnna.budget_app.data.repository.TransactionRepository
+import website.msdnna.budget_app.data.repository.WishlistRepository
+import website.msdnna.budget_app.data.AppContainer
 import website.msdnna.budget_app.notifications.NotificationPrefs
 import website.msdnna.budget_app.notifications.NotificationScheduler
+import website.msdnna.budget_app.data.update.ApkDownloader
+import website.msdnna.budget_app.data.update.ApkInstaller
+import website.msdnna.budget_app.data.update.DownloadProgress
+import website.msdnna.budget_app.data.update.UpdateState
+import website.msdnna.budget_app.data.update.resolveUpdate
+import website.msdnna.budget_app.ui.components.MandatoryUpdateDialog
 import website.msdnna.budget_app.ui.components.MbLogo
+import website.msdnna.budget_app.ui.components.OptionalUpdateProgressDialog
+import website.msdnna.budget_app.ui.components.UpdateBanner
 import website.msdnna.budget_app.ui.theme.AppTheme
 import website.msdnna.budget_app.ui.theme.AppThemes
 import java.util.Calendar
@@ -37,8 +55,8 @@ private data class NavItem(val label: String, val icon: ImageVector, val route: 
 
 private val NAV_ITEMS = listOf(
     NavItem("Статистика", Icons.Default.BarChart,      "statistics"),
-    NavItem("Доходы",     Icons.Default.TrendingUp,    "income"),
-    NavItem("Расходы",    Icons.Default.TrendingDown,  "expenses"),
+    NavItem("Доходы",     Icons.AutoMirrored.Filled.TrendingUp,    "income"),
+    NavItem("Расходы",    Icons.AutoMirrored.Filled.TrendingDown,  "expenses"),
     NavItem("Прогноз",    Icons.Default.Lightbulb,     "forecast"),
     NavItem("Экспорт",    Icons.Default.FileDownload,  "export"),
 )
@@ -62,18 +80,77 @@ fun MainScreen(
     avatarUrl: String? = null,
     onThemeChange: (AppTheme) -> Unit,
     onDarkModeChange: (Boolean) -> Unit = {},
-    onResetServer: () -> Unit,
     onLogout: () -> Unit = {},
     onRequestNotifPermission: () -> Unit = {}
 ) {
-    var currentRoute by remember { mutableStateOf("statistics") }
+    val pagerState = rememberPagerState(initialPage = 0) { NAV_ITEMS.size }
+    val currentRoute = NAV_ITEMS[pagerState.currentPage].route
     var showSettings by remember { mutableStateOf(false) }
+    var showConflicts by remember { mutableStateOf(false) }
+    var showNotifications by remember { mutableStateOf(false) }
+    var showSecurity by remember { mutableStateOf(false) }
+    var valuesHidden by remember { mutableStateOf(false) }
+    // Per-route selection count published by each transactional screen via callback;
+    // we read the entry for the currently visible route to decide between the
+    // section title and a "Выбрано: N" counter in the top app bar.
+    val selectionCounts = remember { androidx.compose.runtime.mutableStateMapOf<String, Int>() }
+    val activeSelectionCount = selectionCounts[currentRoute] ?: 0
+    var apiVersion by remember { mutableStateOf<String?>(null) }
+    var updateState by remember { mutableStateOf<UpdateState>(UpdateState.None) }
+    var bannerDismissed by remember { mutableStateOf(false) }
+    var downloadProgress by remember { mutableStateOf<DownloadProgress?>(null) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+
+    // canInstall depends on a system permission the user grants outside our app.
+    // Re-check on ON_RESUME so the mandatory dialog flips to "Скачать и установить"
+    // immediately after the user comes back from settings.
+    var canInstallApk by remember { mutableStateOf(ApkInstaller.canInstall(context)) }
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                canInstallApk = ApkInstaller.canInstall(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    val conflictCount by remember {
+        combine(
+            TransactionRepository.observeConflictCount(),
+            WishlistRepository.observeConflictCount(),
+        ) { a, b -> a + b }
+    }.collectAsStateWithLifecycle(initialValue = 0)
+
+    LaunchedEffect(serverUrl) {
+        try {
+            val v = RetrofitClient.getService(serverUrl).getVersion()
+            apiVersion = v.api
+            updateState = resolveUpdate(
+                current = BuildConfig.VERSION_NAME,
+                latest = v.androidLatest,
+                minRequired = v.androidMinRequired,
+                serverUrl = serverUrl,
+            )
+        } catch (e: Exception) {}
+    }
+
+    fun startDownload(url: String, version: String, onDone: (java.io.File) -> Unit) {
+        downloadProgress = DownloadProgress.Running(0, 0)
+        scope.launch {
+            ApkDownloader.download(context, url, version).collect { p ->
+                downloadProgress = p
+                if (p is DownloadProgress.Done) onDone(p.file)
+            }
+        }
+    }
 
     val notifPrefs by prefs.notifPrefs.collectAsStateWithLifecycle(
         initialValue = NotificationPrefs()
     )
+    val pieUnitRuble by prefs.pieUnitRuble.collectAsStateWithLifecycle(initialValue = true)
 
     val now = Calendar.getInstance()
     val today = remember {
@@ -88,10 +165,25 @@ fun MainScreen(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         MbLogo(primaryColor = primaryColor, fontSize = 20.sp)
-                        Text(
-                            PAGE_TITLES[currentRoute] ?: "",
-                            style = MaterialTheme.typography.titleMedium
-                        )
+                        androidx.compose.animation.Crossfade(
+                            targetState = activeSelectionCount > 0,
+                            animationSpec = androidx.compose.animation.core.tween(180),
+                            label = "title"
+                        ) { showCounter ->
+                            if (showCounter) {
+                                Text(
+                                    "Выбрано: $activeSelectionCount",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = primaryColor
+                                )
+                            } else {
+                                Text(
+                                    PAGE_TITLES[currentRoute] ?: "",
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+                            }
+                        }
                     }
                 },
                 actions = {
@@ -99,8 +191,27 @@ fun MainScreen(
                         today,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(end = 8.dp)
+                        modifier = Modifier.padding(end = 4.dp)
                     )
+                    if (conflictCount > 0) {
+                        BadgedBox(
+                            badge = {
+                                Badge(containerColor = MaterialTheme.colorScheme.error) {
+                                    Text(conflictCount.toString())
+                                }
+                            }
+                        ) {
+                            IconButton(onClick = { showConflicts = true }) {
+                                Icon(Icons.Default.SyncProblem, "Конфликты синхронизации")
+                            }
+                        }
+                    }
+                    IconButton(onClick = { valuesHidden = !valuesHidden }) {
+                        Icon(
+                            if (valuesHidden) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                            if (valuesHidden) "Показать суммы" else "Скрыть суммы"
+                        )
+                    }
                     IconButton(onClick = { showSettings = true }) {
                         Icon(Icons.Default.Settings, "Настройки")
                     }
@@ -116,10 +227,10 @@ fun MainScreen(
                 containerColor = MaterialTheme.colorScheme.surface,
                 tonalElevation = 0.dp   // no tonal tinting → bar stays pure white
             ) {
-                NAV_ITEMS.forEach { item ->
+                NAV_ITEMS.forEachIndexed { index, item ->
                     NavigationBarItem(
-                        selected = currentRoute == item.route,
-                        onClick  = { currentRoute = item.route },
+                        selected = pagerState.currentPage == index,
+                        onClick  = { scope.launch { pagerState.animateScrollToPage(index) } },
                         icon     = { Icon(item.icon, item.label) },
                         label    = { Text(item.label, fontSize = 10.sp) },
                         colors   = NavigationBarItemDefaults.colors(
@@ -136,29 +247,92 @@ fun MainScreen(
             }
         }
     ) { padding ->
-        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
-            when (currentRoute) {
-                "statistics" -> StatisticsScreen(serverUrl, primaryColor)
-                "income"     -> IncomeScreen(serverUrl, primaryColor)
-                "expenses"   -> ExpensesScreen(serverUrl, primaryColor)
-                "forecast"   -> ForecastScreen(serverUrl, primaryColor)
-                "export"     -> ExportScreen(serverUrl, primaryColor)
+        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            val s = updateState
+            if (s is UpdateState.Optional && !bannerDismissed) {
+                UpdateBanner(
+                    latestVersion = s.latest,
+                    primaryColor = primaryColor,
+                    onClick = {
+                        if (!canInstallApk) {
+                            ApkInstaller.openUnknownSourcesSettings(context)
+                            return@UpdateBanner
+                        }
+                        startDownload(s.apkUrl, s.latest) { file ->
+                            ApkInstaller.install(context, file)
+                        }
+                    },
+                    onDismiss = { bannerDismissed = true },
+                )
+            }
+            HorizontalPager(
+                state = pagerState,
+                // Pre-compose all off-screen pages so multi-page swipes never have
+                // to inflate during the gesture. Cold-start cost is one-time;
+                // subsequent swipes are pure layout-translate of cached compositions.
+                beyondViewportPageCount = NAV_ITEMS.size - 1,
+                modifier = Modifier.weight(1f).fillMaxWidth()
+            ) { page ->
+                key(NAV_ITEMS[page].route) {
+                    when (NAV_ITEMS[page].route) {
+                        "statistics" -> StatisticsScreen(serverUrl, primaryColor, valuesHidden, pieUnitRuble)
+                        "income"     -> IncomeScreen(
+                            serverUrl, primaryColor, valuesHidden,
+                            onSelectionCountChange = { selectionCounts["income"] = it }
+                        )
+                        "expenses"   -> ExpensesScreen(
+                            serverUrl, primaryColor, valuesHidden,
+                            onSelectionCountChange = { selectionCounts["expenses"] = it }
+                        )
+                        "forecast"   -> ForecastScreen(
+                            serverUrl, primaryColor,
+                            onSelectionCountChange = { selectionCounts["forecast"] = it }
+                        )
+                        "export"     -> ExportScreen(serverUrl, primaryColor)
+                    }
+                }
             }
         }
     }
 
-    if (showSettings) {
-        SettingsDialog(
-            primaryColor     = primaryColor,
-            isDark           = isDark,
-            activeTheme      = activeTheme,
-            displayName      = displayName,
-            notifPrefs       = notifPrefs,
-            onThemeChange    = { theme ->
-                onThemeChange(theme)
-                scope.launch { prefs.setThemeKey(theme.key) }
+    // Optional update — show a small progress dialog while the APK is downloading.
+    val optState = updateState
+    val dp = downloadProgress
+    if (optState is UpdateState.Optional && dp != null) {
+        OptionalUpdateProgressDialog(
+            latestVersion = optState.latest,
+            primaryColor = primaryColor,
+            progress = dp,
+            onDismiss = { downloadProgress = null },
+        )
+    }
+
+    // Mandatory update — fullscreen blocking dialog.
+    if (optState is UpdateState.Required) {
+        MandatoryUpdateDialog(
+            latestVersion = optState.latest,
+            primaryColor = primaryColor,
+            progress = downloadProgress,
+            canInstall = canInstallApk,
+            onDownload = {
+                startDownload(optState.apkUrl, optState.latest) { file ->
+                    ApkInstaller.install(context, file)
+                }
             },
-            onDarkModeChange = onDarkModeChange,
+            onGrantInstallPermission = {
+                ApkInstaller.openUnknownSourcesSettings(context)
+            },
+        )
+    }
+
+    if (showConflicts) {
+        ConflictsScreen(serverUrl = serverUrl, onClose = { showConflicts = false })
+    }
+
+    if (showNotifications) {
+        NotificationsScreen(
+            primaryColor = primaryColor,
+            notifPrefs = notifPrefs,
             onNotifPrefsChange = { np ->
                 scope.launch {
                     prefs.setNotifPrefs(np)
@@ -168,15 +342,53 @@ fun MainScreen(
                     onRequestNotifPermission()
                 }
             },
-            onResetServer  = {
+            onClose = { showNotifications = false },
+        )
+    }
+
+    if (showSettings) {
+        val availableUpdate = when (val s = updateState) {
+            is UpdateState.Optional -> s.latest
+            is UpdateState.Required -> s.latest
+            UpdateState.None -> null
+        }
+        SettingsDialog(
+            primaryColor     = primaryColor,
+            isDark           = isDark,
+            activeTheme      = activeTheme,
+            displayName      = displayName,
+            apiVersion       = apiVersion,
+            availableUpdate  = availableUpdate,
+            pieUnitRuble     = pieUnitRuble,
+            onThemeChange    = { theme ->
+                onThemeChange(theme)
+                scope.launch { prefs.setThemeKey(theme.key) }
+            },
+            onDarkModeChange = onDarkModeChange,
+            onOpenNotifications = {
                 showSettings = false
-                scope.launch { prefs.clearServerUrl(); onResetServer() }
+                showNotifications = true
+            },
+            onOpenSecurity = {
+                showSettings = false
+                showSecurity = true
+            },
+            onPieUnitChange = { ruble ->
+                scope.launch { prefs.setPieUnitRuble(ruble) }
             },
             onLogout       = {
                 showSettings = false
                 onLogout()
             },
             onDismiss      = { showSettings = false }
+        )
+    }
+
+    if (showSecurity) {
+        SecurityScreen(
+            primaryColor = primaryColor,
+            prefs        = prefs,
+            onClose      = { showSecurity = false },
         )
     }
 }
@@ -187,24 +399,17 @@ fun SettingsDialog(
     isDark: Boolean = false,
     activeTheme: AppTheme,
     displayName: String = "",
-    notifPrefs: NotificationPrefs = NotificationPrefs(),
+    apiVersion: String? = null,
+    availableUpdate: String? = null,
+    pieUnitRuble: Boolean = true,
     onThemeChange: (AppTheme) -> Unit,
     onDarkModeChange: (Boolean) -> Unit = {},
-    onNotifPrefsChange: (NotificationPrefs) -> Unit = {},
-    onResetServer: () -> Unit,
+    onOpenNotifications: () -> Unit = {},
+    onOpenSecurity: () -> Unit = {},
+    onPieUnitChange: (Boolean) -> Unit = {},
     onLogout: () -> Unit = {},
     onDismiss: () -> Unit
 ) {
-    val context = LocalContext.current
-
-    // Local mutable copy so changes reflect immediately in UI
-    var np by remember(notifPrefs) { mutableStateOf(notifPrefs) }
-
-    fun save(updated: NotificationPrefs) {
-        np = updated
-        onNotifPrefsChange(updated)
-    }
-
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Настройки") },
@@ -213,9 +418,10 @@ fun SettingsDialog(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Logged-in user info
+                // Logged-in user info — logout icon at the trailing edge.
                 if (displayName.isNotBlank()) {
                     Row(
+                        modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
@@ -232,13 +438,20 @@ fun SettingsDialog(
                                 fontWeight = FontWeight.Bold
                             )
                         }
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(displayName, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                             Text("Вы авторизованы", style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
+                        IconButton(onClick = onLogout) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ExitToApp,
+                                contentDescription = "Выйти из аккаунта",
+                                tint = MaterialTheme.colorScheme.error,
+                            )
+                        }
                     }
-                    Divider()
+                    HorizontalDivider()
                 }
 
                 // Theme picker
@@ -289,66 +502,135 @@ fun SettingsDialog(
                     )
                 }
 
-                Divider()
+                HorizontalDivider()
 
-                // Notifications section
-                Text("Уведомления", style = MaterialTheme.typography.labelLarge,
+                // Pie chart unit
+                Text("Диаграммы", style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
-
-                // Expenses notification
-                NotifRow(
-                    label       = "Напоминание о расходах",
-                    sublabel    = "Ежедневно",
-                    enabled     = np.expensesEnabled,
-                    hour        = np.expensesHour,
-                    minute      = np.expensesMinute,
-                    dayOfMonth  = null,
-                    primaryColor = primaryColor,
-                    onToggle    = { save(np.copy(expensesEnabled = it)) },
-                    onTimePick  = { h, m -> save(np.copy(expensesHour = h, expensesMinute = m)) },
-                    onDayPick   = null,
-                    onShowTimePicker = { h, m, onPick ->
-                        TimePickerDialog(context, { _, hour, minute -> onPick(hour, minute) }, h, m, true).show()
-                    }
-                )
-
-                // Income notification
-                NotifRow(
-                    label       = "Напоминание о доходах",
-                    sublabel    = "Ежемесячно",
-                    enabled     = np.incomeEnabled,
-                    hour        = np.incomeHour,
-                    minute      = np.incomeMinute,
-                    dayOfMonth  = np.incomeDay,
-                    primaryColor = primaryColor,
-                    onToggle    = { save(np.copy(incomeEnabled = it)) },
-                    onTimePick  = { h, m -> save(np.copy(incomeHour = h, incomeMinute = m)) },
-                    onDayPick   = { d -> save(np.copy(incomeDay = d)) },
-                    onShowTimePicker = { h, m, onPick ->
-                        TimePickerDialog(context, { _, hour, minute -> onPick(hour, minute) }, h, m, true).show()
-                    }
-                )
-
-                Divider()
-
-                // Logout
-                TextButton(
-                    onClick = onLogout,
-                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Icon(Icons.Default.ExitToApp, null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("Выйти из аккаунта")
+                    Text("Единица Pie Chart", style = MaterialTheme.typography.bodyMedium)
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        FilterChip(
+                            selected = !pieUnitRuble,
+                            onClick  = { onPieUnitChange(false) },
+                            label    = { Text("%") },
+                            colors   = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = primaryColor,
+                                selectedLabelColor     = Color.White
+                            )
+                        )
+                        FilterChip(
+                            selected = pieUnitRuble,
+                            onClick  = { onPieUnitChange(true) },
+                            label    = { Text("₽") },
+                            colors   = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = primaryColor,
+                                selectedLabelColor     = Color.White
+                            )
+                        )
+                    }
                 }
 
-                // Change server
-                TextButton(
-                    onClick = onResetServer,
-                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant)
+                HorizontalDivider()
+
+                // Notifications — opens dedicated screen
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(onClick = onOpenNotifications)
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    Icon(Icons.Default.WifiOff, null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("Изменить сервер")
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Icon(
+                            Icons.Default.Notifications,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text("Уведомления", style = MaterialTheme.typography.bodyMedium)
+                    }
+                    Icon(
+                        Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
+                HorizontalDivider()
+
+                // Защита приложения — opens a dedicated screen
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(onClick = onOpenSecurity)
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Icon(
+                            Icons.Default.Lock,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text("Защита приложения", style = MaterialTheme.typography.bodyMedium)
+                    }
+                    Icon(
+                        Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
+                HorizontalDivider()
+
+                // Version info
+                Text(
+                    "Версия",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Приложение", style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    val current = "v${BuildConfig.VERSION_NAME}"
+                    val text = if (!availableUpdate.isNullOrBlank())
+                        "$current (доступна v$availableUpdate)"
+                    else current
+                    Text(
+                        text,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (!availableUpdate.isNullOrBlank()) primaryColor
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Сервер (API)", style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        apiVersion?.let { "v$it" } ?: "…",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
         },
@@ -358,92 +640,3 @@ fun SettingsDialog(
     )
 }
 
-@Composable
-private fun NotifRow(
-    label: String,
-    sublabel: String,
-    enabled: Boolean,
-    hour: Int,
-    minute: Int,
-    dayOfMonth: Int?,
-    primaryColor: Color,
-    onToggle: (Boolean) -> Unit,
-    onTimePick: (Int, Int) -> Unit,
-    onDayPick: ((Int) -> Unit)?,
-    onShowTimePicker: (Int, Int, (Int, Int) -> Unit) -> Unit
-) {
-    var showDayMenu by remember { mutableStateOf(false) }
-
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(label, style = MaterialTheme.typography.bodyMedium)
-            Switch(
-                checked = enabled,
-                onCheckedChange = onToggle,
-                colors = SwitchDefaults.colors(checkedThumbColor = primaryColor, checkedTrackColor = primaryColor.copy(alpha = 0.4f))
-            )
-        }
-
-        if (enabled) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(start = 4.dp)
-            ) {
-                Text(sublabel, style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-
-                // Day picker (only for monthly)
-                if (dayOfMonth != null && onDayPick != null) {
-                    Box {
-                        TimeChip(
-                            text = "${dayOfMonth} числа",
-                            primaryColor = primaryColor,
-                            onClick = { showDayMenu = true }
-                        )
-                        DropdownMenu(
-                            expanded = showDayMenu,
-                            onDismissRequest = { showDayMenu = false }
-                        ) {
-                            (1..31).forEach { day ->
-                                DropdownMenuItem(
-                                    text = { Text("$day числа") },
-                                    onClick = {
-                                        onDayPick(day)
-                                        showDayMenu = false
-                                    }
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // Time chip
-                TimeChip(
-                    text = "%02d:%02d".format(hour, minute),
-                    primaryColor = primaryColor,
-                    onClick = { onShowTimePicker(hour, minute, onTimePick) }
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun TimeChip(text: String, primaryColor: Color, onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(primaryColor.copy(alpha = 0.12f))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 4.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(text, style = MaterialTheme.typography.bodySmall,
-            color = primaryColor, fontWeight = FontWeight.Medium)
-    }
-}

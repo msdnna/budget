@@ -10,6 +10,12 @@ data class UserInfo(
 
 data class HealthResponse(val ok: Boolean, val app: String)
 
+data class VersionResponse(
+    val api: String = "",
+    @SerializedName("android_latest")       val androidLatest: String = "",
+    @SerializedName("android_min_required") val androidMinRequired: String = "",
+)
+
 data class LoginRequest(
     val login: String,
     val password: String
@@ -33,7 +39,12 @@ data class Transaction(
     val purpose: String? = null,
     val description: String? = null,
     val hidden: Boolean = false,
-    @SerializedName("created_by") val createdBy: UserInfo? = null
+    @SerializedName("created_by") val createdBy: UserInfo? = null,
+    @SerializedName("created_at") val createdAt: String = "",
+    val version: Int = 0,
+    @SerializedName("updated_at") val updatedAt: String = "",
+    @SerializedName("deleted_at") val deletedAt: String? = null,
+    @SerializedName("last_modified_by") val lastModifiedBy: UserInfo? = null,
 )
 
 data class TransactionListResponse(
@@ -100,7 +111,12 @@ data class WishlistItem(
     val purchased: Boolean = false,
     val frequency: String = "monthly",
     val notes: String? = null,
-    @SerializedName("created_by") val createdBy: UserInfo? = null
+    @SerializedName("created_by") val createdBy: UserInfo? = null,
+    @SerializedName("created_at") val createdAt: String = "",
+    val version: Int = 0,
+    @SerializedName("updated_at") val updatedAt: String = "",
+    @SerializedName("deleted_at") val deletedAt: String? = null,
+    @SerializedName("last_modified_by") val lastModifiedBy: UserInfo? = null,
 )
 
 data class CreateWishlistRequest(
@@ -130,4 +146,67 @@ data class UpdateWishlistRequest(
     val purchased: Boolean? = null,
     val notes: String? = null,
     @SerializedName("created_by") val createdBy: UserInfo? = null
+)
+
+data class Category(
+    val id: String = "",
+    val section: String = "",
+    val name: String = "",
+    @SerializedName("is_default") val isDefault: Boolean = true,
+    @SerializedName("created_at") val createdAt: String = "",
+    val version: Int = 0,
+    @SerializedName("updated_at") val updatedAt: String = "",
+    @SerializedName("deleted_at") val deletedAt: String? = null,
+    @SerializedName("last_modified_by") val lastModifiedBy: UserInfo? = null,
+)
+
+data class CreateCategoryRequest(
+    val section: String,
+    val name: String
+)
+
+data class StatisticsOverviewResponse(
+    val summary: StatsSummary = StatsSummary(),
+    val expenseByCategory: List<CategoryStat> = emptyList(),
+    val incomeByCategory: List<CategoryStat> = emptyList(),
+    val monthly: List<MonthlyStat> = emptyList()
+)
+
+data class CategoriesAllResponse(
+    val expense: List<Category> = emptyList(),
+    val income: List<Category> = emptyList(),
+    val wishlist: List<Category> = emptyList()
+)
+
+// ===== Sync DTOs =====
+
+data class SyncPullResponse(
+    val transactions: List<Transaction> = emptyList(),
+    val wishlist: List<WishlistItem> = emptyList(),
+    val categories: List<Category> = emptyList(),
+    @SerializedName("server_time") val serverTime: String = "",
+)
+
+data class SyncOperation(
+    @SerializedName("op_id")        val opId: String,
+    val type: String,                          // "create" | "update" | "delete"
+    val entity: String,                        // "transaction" | "wishlist" | "category"
+    val id: String,
+    @SerializedName("base_version") val baseVersion: Int = 0,
+    val force: Boolean = false,
+    val payload: Any? = null,
+)
+
+data class SyncPushRequest(val operations: List<SyncOperation>)
+
+data class SyncOperationResult(
+    @SerializedName("op_id")  val opId: String = "",
+    val status: String = "",                   // "ok" | "conflict" | "error"
+    val record: Map<String, @JvmSuppressWildcards Any?>? = null,
+    val error: String? = null,
+)
+
+data class SyncPushResponse(
+    val results: List<SyncOperationResult> = emptyList(),
+    @SerializedName("server_time") val serverTime: String = "",
 )

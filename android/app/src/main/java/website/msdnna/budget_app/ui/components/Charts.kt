@@ -4,11 +4,13 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -69,7 +71,13 @@ fun DonutChart(
 }
 
 @Composable
-fun ChartLegend(slices: List<PieSlice>, modifier: Modifier = Modifier) {
+fun ChartLegend(
+    slices: List<PieSlice>,
+    modifier: Modifier = Modifier,
+    pieUnitRuble: Boolean = true,
+    valuesHidden: Boolean = false
+) {
+    val total = slices.sumOf { it.value.toDouble() }.toFloat()
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         slices.forEach { slice ->
             Row(
@@ -89,11 +97,30 @@ fun ChartLegend(slices: List<PieSlice>, modifier: Modifier = Modifier) {
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
                 )
-                Text(
-                    text = "%.0f ₽".format(slice.value),
-                    style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.Medium
-                )
+                if (pieUnitRuble) {
+                    if (valuesHidden) {
+                        Box(
+                            modifier = Modifier
+                                .height(14.dp)
+                                .width(48.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.22f))
+                        )
+                    } else {
+                        Text(
+                            text = "%.0f ₽".format(slice.value),
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                } else {
+                    val pct = if (total > 0f) slice.value / total * 100f else 0f
+                    Text(
+                        text = "%.1f%%".format(pct),
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
             }
         }
     }

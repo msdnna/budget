@@ -6,6 +6,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import androidx.core.app.NotificationCompat
+import java.util.Calendar
 import website.msdnna.budget_app.MainActivity
 import website.msdnna.budget_app.R
 
@@ -18,19 +19,28 @@ class NotificationReceiver : BroadcastReceiver() {
     }
 
     override fun onReceive(context: Context, intent: Intent) {
-        when (intent.action) {
+        val action = intent.action ?: return
+        val frequency = NotificationFrequency.fromName(
+            intent.getStringExtra(NotificationScheduler.EXTRA_FREQUENCY),
+            NotificationFrequency.DAILY,
+        )
+        val hour       = intent.getIntExtra(NotificationScheduler.EXTRA_HOUR, 0)
+        val minute     = intent.getIntExtra(NotificationScheduler.EXTRA_MINUTE, 0)
+        val dayOfWeek  = intent.getIntExtra(NotificationScheduler.EXTRA_DAY_OF_WEEK, Calendar.MONDAY)
+        val dayOfMonth = intent.getIntExtra(NotificationScheduler.EXTRA_DAY_OF_MONTH, 1)
+
+        when (action) {
             NotificationScheduler.ACTION_EXPENSES -> {
-                show(context, ID_EXPENSES, "Расходы", "Не забудьте внести расходы за сегодня")
-                val hour   = intent.getIntExtra("hour", 21)
-                val minute = intent.getIntExtra("minute", 0)
-                NotificationScheduler.scheduleExpenses(context, hour, minute)
+                show(context, ID_EXPENSES, "Расходы", "Не забудьте внести расходы")
+                NotificationScheduler.scheduleExpenses(
+                    context, frequency, hour, minute, dayOfWeek, dayOfMonth,
+                )
             }
             NotificationScheduler.ACTION_INCOME -> {
-                show(context, ID_INCOME, "Доходы", "Не забудьте внести доходы за этот месяц")
-                val hour   = intent.getIntExtra("hour", 12)
-                val minute = intent.getIntExtra("minute", 0)
-                val day    = intent.getIntExtra("day", 30)
-                NotificationScheduler.scheduleIncome(context, hour, minute, day)
+                show(context, ID_INCOME, "Доходы", "Не забудьте внести доходы")
+                NotificationScheduler.scheduleIncome(
+                    context, frequency, hour, minute, dayOfWeek, dayOfMonth,
+                )
             }
         }
     }

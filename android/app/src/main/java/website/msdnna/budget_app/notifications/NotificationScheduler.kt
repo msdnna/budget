@@ -12,47 +12,68 @@ object NotificationScheduler {
     private const val REQ_EXPENSES = 1001
     private const val REQ_INCOME   = 1002
 
+    const val EXTRA_FREQUENCY    = "frequency"
+    const val EXTRA_HOUR         = "hour"
+    const val EXTRA_MINUTE       = "minute"
+    const val EXTRA_DAY_OF_WEEK  = "dayOfWeek"
+    const val EXTRA_DAY_OF_MONTH = "dayOfMonth"
+
     fun applyPrefs(context: Context, prefs: NotificationPrefs) {
         if (prefs.expensesEnabled) {
-            scheduleExpenses(context, prefs.expensesHour, prefs.expensesMinute)
-        } else {
-            cancelExpenses(context)
-        }
+            scheduleExpenses(
+                context, prefs.expensesFrequency,
+                prefs.expensesHour, prefs.expensesMinute,
+                prefs.expensesDayOfWeek, prefs.expensesDayOfMonth,
+            )
+        } else cancelExpenses(context)
+
         if (prefs.incomeEnabled) {
-            scheduleIncome(context, prefs.incomeHour, prefs.incomeMinute, prefs.incomeDay)
-        } else {
-            cancelIncome(context)
-        }
+            scheduleIncome(
+                context, prefs.incomeFrequency,
+                prefs.incomeHour, prefs.incomeMinute,
+                prefs.incomeDayOfWeek, prefs.incomeDayOfMonth,
+            )
+        } else cancelIncome(context)
     }
 
-    fun scheduleExpenses(context: Context, hour: Int, minute: Int) {
+    fun scheduleExpenses(
+        context: Context, frequency: NotificationFrequency,
+        hour: Int, minute: Int, dayOfWeek: Int, dayOfMonth: Int,
+    ) = schedule(
+        context, REQ_EXPENSES, ACTION_EXPENSES,
+        frequency, hour, minute, dayOfWeek, dayOfMonth,
+    )
+
+    fun scheduleIncome(
+        context: Context, frequency: NotificationFrequency,
+        hour: Int, minute: Int, dayOfWeek: Int, dayOfMonth: Int,
+    ) = schedule(
+        context, REQ_INCOME, ACTION_INCOME,
+        frequency, hour, minute, dayOfWeek, dayOfMonth,
+    )
+
+    private fun schedule(
+        context: Context, reqCode: Int, action: String,
+        frequency: NotificationFrequency,
+        hour: Int, minute: Int, dayOfWeek: Int, dayOfMonth: Int,
+    ) {
         val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val pi = buildPendingIntent(context, REQ_EXPENSES, ACTION_EXPENSES, hour, minute, -1)
-        am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, nextDaily(hour, minute), pi)
+        val pi = buildPendingIntent(
+            context, reqCode, action,
+            frequency, hour, minute, dayOfWeek, dayOfMonth,
+        )
+        val triggerAt = nextTrigger(frequency, hour, minute, dayOfWeek, dayOfMonth)
+        am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)
     }
 
-    fun scheduleIncome(context: Context, hour: Int, minute: Int, day: Int) {
-        val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val pi = buildPendingIntent(context, REQ_INCOME, ACTION_INCOME, hour, minute, day)
-        am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, nextMonthly(hour, minute, day), pi)
-    }
+    fun cancelExpenses(context: Context) = cancel(context, REQ_EXPENSES, ACTION_EXPENSES)
+    fun cancelIncome(context: Context)   = cancel(context, REQ_INCOME, ACTION_INCOME)
 
-    fun cancelExpenses(context: Context) {
+    private fun cancel(context: Context, reqCode: Int, action: String) {
         val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val pi = PendingIntent.getBroadcast(
-            context, REQ_EXPENSES,
-            Intent(context, NotificationReceiver::class.java).apply { action = ACTION_EXPENSES },
-            PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
-        ) ?: return
-        am.cancel(pi)
-        pi.cancel()
-    }
-
-    fun cancelIncome(context: Context) {
-        val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val pi = PendingIntent.getBroadcast(
-            context, REQ_INCOME,
-            Intent(context, NotificationReceiver::class.java).apply { action = ACTION_INCOME },
+            context, reqCode,
+            Intent(context, NotificationReceiver::class.java).apply { this.action = action },
             PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
         ) ?: return
         am.cancel(pi)
@@ -61,13 +82,16 @@ object NotificationScheduler {
 
     private fun buildPendingIntent(
         context: Context, reqCode: Int, action: String,
-        hour: Int, minute: Int, day: Int
+        frequency: NotificationFrequency,
+        hour: Int, minute: Int, dayOfWeek: Int, dayOfMonth: Int,
     ): PendingIntent {
         val intent = Intent(context, NotificationReceiver::class.java).apply {
             this.action = action
-            putExtra("hour", hour)
-            putExtra("minute", minute)
-            if (day >= 0) putExtra("day", day)
+            putExtra(EXTRA_FREQUENCY, frequency.name)
+            putExtra(EXTRA_HOUR, hour)
+            putExtra(EXTRA_MINUTE, minute)
+            putExtra(EXTRA_DAY_OF_WEEK, dayOfWeek)
+            putExtra(EXTRA_DAY_OF_MONTH, dayOfMonth)
         }
         return PendingIntent.getBroadcast(
             context, reqCode, intent,
@@ -75,7 +99,17 @@ object NotificationScheduler {
         )
     }
 
-    fun nextDaily(hour: Int, minute: Int): Long =
+    fun nextTrigger(
+        frequency: NotificationFrequency,
+        hour: Int, minute: Int, dayOfWeek: Int, dayOfMonth: Int,
+    ): Long = when (frequency) {
+        NotificationFrequency.DAILY     -> nextDaily(hour, minute)
+        NotificationFrequency.WEEKLY    -> nextWeekly(hour, minute, dayOfWeek)
+        NotificationFrequency.MONTHLY   -> nextMonthly(hour, minute, dayOfMonth, monthsStep = 1)
+        NotificationFrequency.QUARTERLY -> nextMonthly(hour, minute, dayOfMonth, monthsStep = 3)
+    }
+
+    private fun nextDaily(hour: Int, minute: Int): Long =
         Calendar.getInstance().apply {
             set(Calendar.HOUR_OF_DAY, hour)
             set(Calendar.MINUTE, minute)
@@ -84,7 +118,20 @@ object NotificationScheduler {
             if (timeInMillis <= System.currentTimeMillis()) add(Calendar.DAY_OF_YEAR, 1)
         }.timeInMillis
 
-    fun nextMonthly(hour: Int, minute: Int, day: Int): Long =
+    private fun nextWeekly(hour: Int, minute: Int, dayOfWeek: Int): Long =
+        Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, hour)
+            set(Calendar.MINUTE, minute)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+            // Calendar.DAY_OF_WEEK uses 1..7 with SUNDAY=1.
+            val current = get(Calendar.DAY_OF_WEEK)
+            var diff = ((dayOfWeek - current) + 7) % 7
+            if (diff == 0 && timeInMillis <= System.currentTimeMillis()) diff = 7
+            add(Calendar.DAY_OF_YEAR, diff)
+        }.timeInMillis
+
+    private fun nextMonthly(hour: Int, minute: Int, day: Int, monthsStep: Int): Long =
         Calendar.getInstance().apply {
             set(Calendar.DAY_OF_MONTH, minOf(day, getActualMaximum(Calendar.DAY_OF_MONTH)))
             set(Calendar.HOUR_OF_DAY, hour)
@@ -92,7 +139,7 @@ object NotificationScheduler {
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
             if (timeInMillis <= System.currentTimeMillis()) {
-                add(Calendar.MONTH, 1)
+                add(Calendar.MONTH, monthsStep)
                 set(Calendar.DAY_OF_MONTH, minOf(day, getActualMaximum(Calendar.DAY_OF_MONTH)))
             }
         }.timeInMillis

@@ -1,10 +1,14 @@
 package website.msdnna.budget_app.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
@@ -22,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -30,12 +35,16 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
-import website.msdnna.budget_app.data.api.RetrofitClient
+import website.msdnna.budget_app.data.model.Category
 import website.msdnna.budget_app.data.model.CreateWishlistRequest
-import website.msdnna.budget_app.data.model.ForecastData
+import website.msdnna.budget_app.data.model.UpdateWishlistRequest
+import website.msdnna.budget_app.data.model.UserInfo
 import website.msdnna.budget_app.data.model.WishlistItem
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import website.msdnna.budget_app.ui.components.*
 import website.msdnna.budget_app.ui.theme.LocalExpenseColor
+import website.msdnna.budget_app.ui.viewmodels.ForecastViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlin.math.roundToInt
 import androidx.compose.material.icons.filled.Edit
 
@@ -59,145 +68,185 @@ private fun monthlyContribution(item: WishlistItem): Double = when (item.frequen
     else        -> item.estimatedCost   // once / monthly / empty
 }
 
-private val WISHLIST_CATEGORIES = listOf(
-    "Электроника", "Одежда", "Путешествия", "Образование", "Здоровье",
-    "Развлечения", "Дом", "Спорт", "Красота", "Прочее"
-)
-
 private val ColourPurchased = Color(0xFF388E3C)   // right swipe: mark purchased
 private val ColourWlDelete  = Color(0xFFE53935)   // left  swipe: delete
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
 @Composable
-fun ForecastScreen(serverUrl: String, primaryColor: Color) {
+fun ForecastScreen(
+    serverUrl: String,
+    primaryColor: Color,
+    onSelectionCountChange: (Int) -> Unit = {},
+) {
+    val vm = viewModel<ForecastViewModel>(key = "forecast:$serverUrl", factory = ForecastViewModel.factory(serverUrl))
+    val uiState    by vm.uiState.collectAsState()
+    val categories by vm.categories.collectAsState()
+    val selectedIds by vm.selectedIds.collectAsState()
+    val selectionMode = selectedIds.isNotEmpty()
+
     val expenseColor = LocalExpenseColor.current
-    val service = remember(serverUrl) { RetrofitClient.getService(serverUrl) }
-    val scope   = rememberCoroutineScope()
+    var showAdd      by remember { mutableStateOf(false) }
+    var detailItem   by remember { mutableStateOf<WishlistItem?>(null) }
 
-    var forecast    by remember { mutableStateOf<ForecastData?>(null) }
-    var wishlist    by remember { mutableStateOf<List<WishlistItem>>(emptyList()) }
-    var loading     by remember { mutableStateOf(true) }
-    var error       by remember { mutableStateOf<String?>(null) }
-    var loadKey     by remember { mutableIntStateOf(0) }
-    var showAdd     by remember { mutableStateOf(false) }
-    var detailItem  by remember { mutableStateOf<WishlistItem?>(null) }
+    BackHandler(enabled = selectionMode) { vm.clearSelection() }
 
-    fun reload() { loadKey++ }
+    LaunchedEffect(selectedIds.size) { onSelectionCountChange(selectedIds.size) }
 
-    LaunchedEffect(loadKey) {
-        loading = true; error = null
-        try {
-            val f = service.getForecast()
-            val w = service.getWishlist()
-            forecast = f; wishlist = w; loading = false
-        } catch (e: Exception) {
-            error = e.localizedMessage ?: "Ошибка загрузки"; loading = false
-        }
+    // Determine label for the "Куплено" bulk button:
+    //   • Of the selectable (non-recurring) selected items, if all are already
+    //     purchased → button toggles to "Не куплено"; otherwise → "Куплено".
+    val selectedItems = remember(selectedIds, uiState.wishlist) {
+        uiState.wishlist.filter { it.id in selectedIds }
     }
+    val purchasableSelected = remember(selectedItems) {
+        selectedItems.filter { !isRecurring(it.frequency) }
+    }
+    val allPurchased = purchasableSelected.isNotEmpty() && purchasableSelected.all { it.purchased }
 
     Scaffold(
+        // FAB swap snaps without animation — see other screens for rationale.
         floatingActionButton = {
-            FloatingActionButton(onClick = { showAdd = true },
-                containerColor = primaryColor, contentColor = Color.White) {
-                Icon(Icons.Default.Add, "Добавить в список")
+            if (selectionMode) {
+                val canPurchase = purchasableSelected.isNotEmpty()
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    if (canPurchase) {
+                        FloatingActionButton(
+                            onClick = {
+                                vm.bulkSetPurchased(
+                                    ids = purchasableSelected.map { it.id },
+                                    targetPurchased = !allPurchased
+                                )
+                            },
+                            containerColor = ColourPurchased,
+                            contentColor   = Color.White,
+                        ) {
+                            Icon(
+                                if (allPurchased) Icons.Default.RadioButtonUnchecked else Icons.Default.CheckCircle,
+                                contentDescription = if (allPurchased) "Снять отметку «куплено»" else "Отметить как купленное"
+                            )
+                        }
+                    }
+                    FloatingActionButton(
+                        onClick = { vm.bulkDeleteSelected() },
+                        containerColor = Color(0xFFE53935),
+                        contentColor   = Color.White,
+                    ) { Icon(Icons.Default.Delete, "Удалить выбранные") }
+                }
+            } else {
+                FloatingActionButton(
+                    onClick = { showAdd = true },
+                    containerColor = primaryColor, contentColor = Color.White
+                ) { Icon(Icons.Default.Add, "Добавить в список") }
             }
         },
         contentWindowInsets = WindowInsets(0)
     ) { padding ->
-        when {
-            loading -> LoadingView()
-            error != null -> ErrorView(error!!, ::reload)
-            else -> {
-                val fc = forecast ?: ForecastData()
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize().padding(padding),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    // ── Summary cards ──────────────────────────────────────
-                    item {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            SummaryCard("Прогноз / мес",  fc.totalMonthly,    "", expenseColor, Modifier.weight(1f))
-                            SummaryCard("Ср. за 3 мес",   fc.historicalAvg,   "", primaryColor, Modifier.weight(1f))
+        PullToRefreshBox(
+            isRefreshing = false,
+            onRefresh = { vm.reload() },
+            modifier = Modifier.fillMaxSize().padding(padding)
+        ) {
+            // Wishlist is Room-backed and works fully offline (mirrors the
+            // income/expenses pattern). The forecast aggregation, on the other
+            // hand, is a server-side computation — when it's loading or
+            // unreachable we hide just that block while keeping the wishlist
+            // operational.
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // ── Aggregation block (loading / offline / data) ──────────
+                when {
+                    uiState.loading -> {
+                        item { ForecastSummarySkeleton() }
+                    }
+                    uiState.error != null -> {
+                        item {
+                            OfflineView(
+                                message = "Офлайн-режим. Прогноз недоступен",
+                                onRetry = { vm.reload() }
+                            )
                         }
                     }
-                    item {
-                        SummaryCard("Список желаний / мес", fc.wishlistContrib, "", primaryColor, Modifier.fillMaxWidth())
-                    }
-
-                    // ── Breakdown by category ──────────────────────────────
-                    if (fc.breakdown.isNotEmpty()) {
+                    else -> {
+                        val fc = uiState.forecast ?: website.msdnna.budget_app.data.model.ForecastData()
                         item {
-                            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                                Column(Modifier.padding(16.dp)) {
-                                    Text("Прогноз по категориям", style = MaterialTheme.typography.titleMedium)
-                                    Spacer(Modifier.height(8.dp))
-                                    fc.breakdown.sortedByDescending { it.amount }.forEach { stat ->
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                            horizontalArrangement = Arrangement.SpaceBetween
-                                        ) {
-                                            Text(stat.category, style = MaterialTheme.typography.bodyMedium)
-                                            Text("${formatMoney(stat.amount)} ₽",
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                fontWeight = FontWeight.Medium)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                SummaryCard("Прогноз / мес",  fc.totalMonthly,    "", expenseColor, Modifier.weight(1f))
+                                SummaryCard("Ср. за 3 мес",   fc.historicalAvg,   "", primaryColor, Modifier.weight(1f))
+                            }
+                        }
+                        item {
+                            SummaryCard("Список желаний / мес", fc.wishlistContrib, "", primaryColor, Modifier.fillMaxWidth())
+                        }
+                        if (fc.breakdown.isNotEmpty()) {
+                            item {
+                                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                                    Column(Modifier.padding(16.dp)) {
+                                        Text("Прогноз по категориям", style = MaterialTheme.typography.titleMedium)
+                                        Spacer(Modifier.height(8.dp))
+                                        fc.breakdown.sortedByDescending { it.amount }.forEach { stat ->
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                                horizontalArrangement = Arrangement.SpaceBetween
+                                            ) {
+                                                Text(stat.category, style = MaterialTheme.typography.bodyMedium)
+                                                Text("${formatMoney(stat.amount)} ₽",
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    fontWeight = FontWeight.Medium)
+                                            }
+                                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                                         }
-                                        Divider(color = MaterialTheme.colorScheme.outlineVariant)
                                     }
                                 }
                             }
                         }
                     }
+                }
 
-                    // ── Wishlist title ────────────────────────────────────
+                // ── Wishlist title (always shown) ─────────────────────────
+                item {
+                    Text("Список желаний", style = MaterialTheme.typography.titleMedium)
+                }
+
+                // ── Wishlist items with swipe ─────────────────────────────
+                if (uiState.wishlist.isEmpty()) {
+                    item { EmptyView("Список желаний пуст") }
+                } else {
                     item {
-                        Text("Список желаний", style = MaterialTheme.typography.titleMedium)
-                    }
-
-                    // ── Wishlist items with swipe ─────────────────────────
-                    if (wishlist.isEmpty()) {
-                        item { EmptyView("Список желаний пуст") }
-                    } else {
-                        items(wishlist, key = { it.id }) { item ->
-                            SwipeableWishlistCard(
-                                item = item,
-                                primaryColor = primaryColor,
-                                onTogglePurchased = {
-                                    scope.launch {
-                                        runCatching {
-                                            service.updateWishlistItem(item.id, mapOf("purchased" to !item.purchased))
-                                        }
-                                        reload()
-                                    }
-                                },
-                                onDelete = {
-                                    scope.launch {
-                                        runCatching { service.deleteWishlistItem(item.id) }
-                                        reload()
-                                    }
-                                },
-                                onDetails = { detailItem = item }
-                            )
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            uiState.wishlist.forEach { item ->
+                                SwipeableWishlistCard(
+                                    item = item,
+                                    primaryColor = primaryColor,
+                                    selectionMode = selectionMode,
+                                    selected = item.id in selectedIds,
+                                    onLongPress    = { vm.startSelection(item.id) },
+                                    onSelectToggle = { vm.toggleSelection(item.id) },
+                                    onTogglePurchased = { vm.togglePurchased(item.id, item.purchased) },
+                                    onDelete          = { vm.deleteWishlistItem(item.id) },
+                                    onDetails         = { detailItem = item }
+                                )
+                            }
                         }
                     }
-
-                    item { Spacer(Modifier.height(80.dp)) }
                 }
+
+                item { Spacer(Modifier.height(80.dp)) }
             }
-        }
+        } // PullToRefreshBox
     }
 
     if (showAdd) {
         AddWishlistSheet(
             primaryColor = primaryColor,
+            categories = categories,
+            onAddCategory    = { name -> vm.addCategory(name) },
+            onDeleteCategory = { id -> vm.deleteCategory(id) },
             onDismiss = { showAdd = false },
-            onSave = { req ->
-                scope.launch {
-                    runCatching { service.createWishlistItem(req) }
-                    showAdd = false; reload()
-                }
-            }
+            onSave = { req -> vm.createWishlistItem(req); showAdd = false }
         )
     }
 
@@ -205,19 +254,64 @@ fun ForecastScreen(serverUrl: String, primaryColor: Color) {
         WishlistInteractiveSheet(
             item = item,
             primaryColor = primaryColor,
-            service = service,
-            onDismiss = { detailItem = null },
-            onSaved = { detailItem = null; reload() }
+            categories = categories,
+            onAddCategory    = { name -> vm.addCategory(name) },
+            onDeleteCategory = { id -> vm.deleteCategory(id) },
+            onSave     = { req -> vm.updateWishlistItem(item.id, req) },
+            onGetUsers = { vm.getUsers() },
+            onDismiss  = { detailItem = null },
+            onSaved    = { detailItem = null; vm.reload() }
         )
+    }
+}
+
+// ─── Skeleton for the forecast aggregation block ─────────────────────────────
+
+@Composable
+private fun ForecastSummarySkeleton() {
+    SkeletonShimmer {
+        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                repeat(2) {
+                    Card(
+                        modifier = Modifier.weight(1f),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            SkeletonBox(width = 90.dp, height = 12.dp)
+                            SkeletonBox(width = 110.dp, height = 22.dp)
+                        }
+                    }
+                }
+            }
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    SkeletonBox(width = 140.dp, height = 12.dp)
+                    SkeletonBox(width = 180.dp, height = 24.dp)
+                }
+            }
+        }
     }
 }
 
 // ─── Swipeable wishlist card ──────────────────────────────────────────────────
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SwipeableWishlistCard(
     item: WishlistItem,
     primaryColor: Color,
+    modifier: Modifier = Modifier,
+    selectionMode: Boolean = false,
+    selected: Boolean = false,
+    onLongPress: () -> Unit = {},
+    onSelectToggle: () -> Unit = {},
     onTogglePurchased: () -> Unit,
     onDelete: () -> Unit,
     onDetails: () -> Unit = {}
@@ -235,66 +329,90 @@ fun SwipeableWishlistCard(
     val rightRevealPx = with(density) { rightRevealDp.toPx() }
 
     val offsetX = remember(item.id) { Animatable(0f) }
+    var pendingDelete by remember { mutableStateOf(false) }
 
     fun snapTo(target: Float) = scope.launch {
         offsetX.animateTo(target, spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
             stiffness    = Spring.StiffnessMedium
         ))
+        if (target == 0f) pendingDelete = false
+    }
+
+    LaunchedEffect(selectionMode) {
+        if (selectionMode && offsetX.value != 0f) {
+            offsetX.animateTo(0f, spring(
+                dampingRatio = Spring.DampingRatioMediumBouncy,
+                stiffness    = Spring.StiffnessMedium
+            ))
+            pendingDelete = false
+        }
     }
 
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .height(IntrinsicSize.Min)
             .clip(MaterialTheme.shapes.medium)
     ) {
-        // ── Left background: "Куплено/Не куплено" (only for once items) ──
-        if (!recurring) {
+        if (!selectionMode) {
+            // ── Left background: "Куплено/Не куплено" (only for once items) ──
+            if (!recurring) {
+                Box(
+                    modifier = Modifier
+                        .width(leftRevealDp)
+                        .fillMaxHeight()
+                        .align(Alignment.CenterStart)
+                        .background(if (item.purchased) Color(0xFF757575) else ColourPurchased)
+                        .clickable { snapTo(0f); onTogglePurchased() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(
+                            if (item.purchased) Icons.Default.RadioButtonUnchecked else Icons.Default.CheckCircle,
+                            null, tint = Color.White, modifier = Modifier.size(22.dp)
+                        )
+                        Text(
+                            if (item.purchased) "Отменить" else "Куплено",
+                            color = Color.White, fontSize = 10.sp
+                        )
+                    }
+                }
+            }
+
+            // ── Right background: Delete ──
             Box(
                 modifier = Modifier
-                    .width(leftRevealDp)
+                    .width(rightRevealDp)
                     .fillMaxHeight()
-                    .align(Alignment.CenterStart)
-                    .background(if (item.purchased) Color(0xFF757575) else ColourPurchased)
-                    .clickable { snapTo(0f); onTogglePurchased() },
+                    .align(Alignment.CenterEnd)
+                    .background(ColourWlDelete)
+                    .clickable {
+                        if (pendingDelete) {
+                            snapTo(0f)
+                            onDelete()
+                        } else {
+                            pendingDelete = true
+                        }
+                    },
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        if (item.purchased) Icons.Default.RadioButtonUnchecked else Icons.Default.CheckCircle,
-                        null, tint = Color.White, modifier = Modifier.size(22.dp)
-                    )
+                    Icon(Icons.Default.Delete, null, tint = Color.White, modifier = Modifier.size(22.dp))
                     Text(
-                        if (item.purchased) "Отменить" else "Куплено",
+                        if (pendingDelete) "Подтвердить?" else "Удалить",
                         color = Color.White, fontSize = 10.sp
                     )
                 }
             }
         }
 
-        // ── Right background: Delete ──
-        Box(
-            modifier = Modifier
-                .width(rightRevealDp)
-                .fillMaxHeight()
-                .align(Alignment.CenterEnd)
-                .background(ColourWlDelete)
-                .clickable { snapTo(0f); onDelete() },
-            contentAlignment = Alignment.Center
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(Icons.Default.Delete, null, tint = Color.White, modifier = Modifier.size(22.dp))
-                Text("Удалить", color = Color.White, fontSize = 10.sp)
-            }
-        }
-
         // ── Foreground card ──
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .offset { IntOffset(offsetX.value.roundToInt(), 0) }
-                .draggable(
+        val cardModifier = Modifier
+            .fillMaxWidth()
+            .offset { IntOffset(offsetX.value.roundToInt(), 0) }
+            .let { base ->
+                if (!selectionMode) base.draggable(
                     orientation = Orientation.Horizontal,
                     state = rememberDraggableState { delta ->
                         scope.launch {
@@ -310,20 +428,35 @@ fun SwipeableWishlistCard(
                             else -> snapTo(0f)
                         }
                     }
-                )
-                .clickable { onDetails() },
-            colors = CardDefaults.cardColors(
-                containerColor = if (item.purchased)
-                    MaterialTheme.colorScheme.surfaceVariant
-                else MaterialTheme.colorScheme.surface
+                ) else base
+            }
+            .combinedClickable(
+                onClick     = { if (selectionMode) onSelectToggle() else onDetails() },
+                onLongClick = { if (!selectionMode) onLongPress() }
             )
+
+        // compositeOver keeps the bg opaque so swipe rails don't bleed through
+        // mid-animation when selectionMode flips false on the last deselect.
+        val baseSurface = MaterialTheme.colorScheme.surface
+        val targetBg = when {
+            selected       -> primaryColor.copy(alpha = 0.16f).compositeOver(baseSurface)
+            item.purchased -> MaterialTheme.colorScheme.surfaceVariant
+            else           -> baseSurface
+        }
+        val animatedBg by androidx.compose.animation.animateColorAsState(
+            targetValue = targetBg,
+            animationSpec = tween(180),
+            label = "cardBg"
+        )
+        Card(
+            modifier = cardModifier,
+            colors = CardDefaults.cardColors(containerColor = animatedBg)
         ) {
             Row(
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp).fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // User avatar
                 item.createdBy?.let { author ->
                     UserAvatar(
                         displayName = author.displayName,
@@ -387,6 +520,13 @@ fun SwipeableWishlistCard(
                 }
             }
         }
+
+        SelectionOverlay(
+            visible = selectionMode,
+            selected = selected,
+            primaryColor = primaryColor,
+            onClick = onSelectToggle,
+        )
     }
 }
 
@@ -397,7 +537,11 @@ fun SwipeableWishlistCard(
 fun WishlistInteractiveSheet(
     item: WishlistItem,
     primaryColor: Color,
-    service: website.msdnna.budget_app.data.api.ApiService,
+    categories: List<Category> = emptyList(),
+    onAddCategory: suspend (String) -> Category? = { null },
+    onDeleteCategory: suspend (String) -> Unit = {},
+    onSave: suspend (UpdateWishlistRequest) -> Unit,
+    onGetUsers: suspend () -> List<UserInfo>,
     onDismiss: () -> Unit,
     onSaved: () -> Unit
 ) {
@@ -408,17 +552,26 @@ fun WishlistInteractiveSheet(
     var editName      by remember { mutableStateOf(item.name) }
     var editCost      by remember { mutableStateOf(item.estimatedCost.let { if (it == 0.0) "" else it.toInt().toString() }) }
     var editCategory  by remember { mutableStateOf(item.category) }
+    var editCatInput  by remember { mutableStateOf(item.category) }
     var editFrequency by remember { mutableStateOf(item.frequency) }
     var editNotes     by remember { mutableStateOf(item.notes ?: "") }
     var editPurchased by remember { mutableStateOf(item.purchased) }
     var catExpanded   by remember { mutableStateOf(false) }
     var freqExpanded  by remember { mutableStateOf(false) }
 
+    val catFiltered = remember(editCatInput, categories) {
+        if (editCatInput.isBlank()) categories else categories.filter { it.name.contains(editCatInput, ignoreCase = true) }
+    }
+    val catShowCreate = editCatInput.isNotBlank() && categories.none { it.name.equals(editCatInput.trim(), ignoreCase = true) }
+
     var showUserPicker  by remember { mutableStateOf(false) }
     var users           by remember { mutableStateOf<List<website.msdnna.budget_app.data.model.UserInfo>>(emptyList()) }
     var loadingUsers    by remember { mutableStateOf(false) }
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+    ) {
         Column(
             modifier = Modifier
                 .padding(horizontal = 20.dp)
@@ -450,21 +603,21 @@ fun WishlistInteractiveSheet(
                 }
 
                 Spacer(Modifier.height(20.dp))
-                Divider()
+                HorizontalDivider()
                 Spacer(Modifier.height(16.dp))
 
                 WishlistDetailRow("Категория", item.category)
                 WishlistDetailRow("Периодичность", frequencyLabel(item.frequency))
-                if (!isRecurring(item.frequency) && !item.purchased) {
+                if ((item.frequency == "quarterly" || item.frequency == "yearly") && !item.purchased) {
                     WishlistDetailRow("Ежемес. вклад", "≈ ${formatMoney(monthlyContribution(item))} ₽/мес")
                 }
                 WishlistDetailRow("Статус", if (item.purchased) "Куплено ✓" else "Не куплено")
                 if (!item.notes.isNullOrBlank()) {
-                    WishlistDetailRow("Заметки", item.notes!!)
+                    WishlistDetailRow("Заметки", item.notes)
                 }
 
                 Spacer(Modifier.height(4.dp))
-                Divider()
+                HorizontalDivider()
                 Spacer(Modifier.height(12.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -494,7 +647,7 @@ fun WishlistInteractiveSheet(
                         if (users.isEmpty()) {
                             loadingUsers = true
                             scope.launch {
-                                runCatching { service.getUsers() }.onSuccess { users = it }
+                                users = onGetUsers()
                                 loadingUsers = false
                             }
                         }
@@ -522,15 +675,41 @@ fun WishlistInteractiveSheet(
 
                 ExposedDropdownMenuBox(expanded = catExpanded, onExpandedChange = { catExpanded = it }) {
                     OutlinedTextField(
-                        value = editCategory, onValueChange = {}, readOnly = true,
+                        value = editCatInput,
+                        onValueChange = { editCatInput = it; catExpanded = true },
                         label = { Text("Категория") },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(catExpanded) },
-                        modifier = Modifier.menuAnchor().fillMaxWidth(),
+                        modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable).fillMaxWidth(),
+                        singleLine = true,
                         colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(focusedBorderColor = primaryColor)
                     )
                     ExposedDropdownMenu(expanded = catExpanded, onDismissRequest = { catExpanded = false }) {
-                        WISHLIST_CATEGORIES.forEach { cat ->
-                            DropdownMenuItem(text = { Text(cat) }, onClick = { editCategory = cat; catExpanded = false })
+                        catFiltered.forEach { cat ->
+                            DropdownMenuItem(
+                                text = { Text(cat.name) },
+                                onClick = { editCatInput = cat.name; editCategory = cat.name; catExpanded = false },
+                                trailingIcon = if (!cat.isDefault) {{
+                                    IconButton(
+                                        onClick = { scope.launch { onDeleteCategory(cat.id) }; if (editCategory == cat.name) { editCategory = ""; editCatInput = "" }; catExpanded = false },
+                                        modifier = Modifier.size(20.dp)
+                                    ) {
+                                        Icon(Icons.Default.Delete, contentDescription = "Удалить", modifier = Modifier.size(14.dp))
+                                    }
+                                }} else null
+                            )
+                        }
+                        if (catShowCreate) {
+                            DropdownMenuItem(
+                                text = { Text("Добавить: «${editCatInput.trim()}»", color = primaryColor) },
+                                onClick = {
+                                    val n = editCatInput.trim(); catExpanded = false
+                                    scope.launch {
+                                        val cat = onAddCategory(n)
+                                        if (cat != null) { editCatInput = cat.name; editCategory = cat.name }
+                                        else { editCategory = n; editCatInput = n }
+                                    }
+                                }
+                            )
                         }
                     }
                 }
@@ -540,7 +719,7 @@ fun WishlistInteractiveSheet(
                         value = frequencyLabel(editFrequency), onValueChange = {}, readOnly = true,
                         label = { Text("Периодичность") },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(freqExpanded) },
-                        modifier = Modifier.menuAnchor().fillMaxWidth(),
+                        modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
                         colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(focusedBorderColor = primaryColor)
                     )
                     ExposedDropdownMenu(expanded = freqExpanded, onDismissRequest = { freqExpanded = false }) {
@@ -579,16 +758,14 @@ fun WishlistInteractiveSheet(
                             if (editName.isBlank()) return@Button
                             saving = true
                             scope.launch {
-                                runCatching {
-                                    service.updateWishlistItemTyped(item.id, website.msdnna.budget_app.data.model.UpdateWishlistRequest(
-                                        name = editName,
-                                        estimatedCost = costD,
-                                        category = editCategory,
-                                        frequency = editFrequency,
-                                        notes = editNotes.ifBlank { null },
-                                        purchased = editPurchased
-                                    ))
-                                }
+                                onSave(UpdateWishlistRequest(
+                                    name = editName,
+                                    estimatedCost = costD,
+                                    category = editCatInput.trim().ifBlank { editCategory },
+                                    frequency = editFrequency,
+                                    notes = editNotes.ifBlank { null },
+                                    purchased = editPurchased
+                                ))
                                 saving = false
                                 onSaved()
                             }
@@ -617,11 +794,10 @@ fun WishlistInteractiveSheet(
                             ListItem(
                                 headlineContent = { Text(user.displayName) },
                                 leadingContent = { UserAvatar(displayName = user.displayName, avatarUrl = user.avatarUrl, size = 32.dp) },
+                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                                 modifier = Modifier.clickable {
                                     scope.launch {
-                                        runCatching {
-                                            service.updateWishlistItemTyped(item.id, website.msdnna.budget_app.data.model.UpdateWishlistRequest(createdBy = user))
-                                        }
+                                        onSave(UpdateWishlistRequest(createdBy = user))
                                         onSaved()
                                     }
                                     showUserPicker = false
@@ -667,17 +843,30 @@ private fun WishlistDetailRow(label: String, value: String) {
 @Composable
 fun AddWishlistSheet(
     primaryColor: Color,
+    categories: List<Category> = emptyList(),
+    onAddCategory: suspend (String) -> Category? = { null },
+    onDeleteCategory: suspend (String) -> Unit = {},
     onDismiss: () -> Unit,
     onSave: (CreateWishlistRequest) -> Unit
 ) {
+    val scope    = rememberCoroutineScope()
     var name     by remember { mutableStateOf("") }
     var cost     by remember { mutableStateOf("") }
-    var category by remember { mutableStateOf("Прочее") }
+    var category by remember { mutableStateOf("") }
     var frequency by remember { mutableStateOf("once") }
     var catExpanded  by remember { mutableStateOf(false) }
+    var catInput     by remember { mutableStateOf("") }
     var freqExpanded by remember { mutableStateOf(false) }
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    val catFiltered = remember(catInput, categories) {
+        if (catInput.isBlank()) categories else categories.filter { it.name.contains(catInput, ignoreCase = true) }
+    }
+    val catShowCreate = catInput.isNotBlank() && categories.none { it.name.equals(catInput.trim(), ignoreCase = true) }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+    ) {
         Column(
             modifier = Modifier
                 .padding(horizontal = 20.dp)
@@ -705,15 +894,41 @@ fun AddWishlistSheet(
 
             ExposedDropdownMenuBox(expanded = catExpanded, onExpandedChange = { catExpanded = it }) {
                 OutlinedTextField(
-                    value = category, onValueChange = {}, readOnly = true,
+                    value = catInput,
+                    onValueChange = { catInput = it; catExpanded = true },
                     label = { Text("Категория") },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(catExpanded) },
-                    modifier = Modifier.menuAnchor().fillMaxWidth(),
+                    modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable).fillMaxWidth(),
+                    singleLine = true,
                     colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(focusedBorderColor = primaryColor)
                 )
                 ExposedDropdownMenu(expanded = catExpanded, onDismissRequest = { catExpanded = false }) {
-                    WISHLIST_CATEGORIES.forEach { cat ->
-                        DropdownMenuItem(text = { Text(cat) }, onClick = { category = cat; catExpanded = false })
+                    catFiltered.forEach { cat ->
+                        DropdownMenuItem(
+                            text = { Text(cat.name) },
+                            onClick = { catInput = cat.name; category = cat.name; catExpanded = false },
+                            trailingIcon = if (!cat.isDefault) {{
+                                IconButton(
+                                    onClick = { scope.launch { onDeleteCategory(cat.id) }; if (category == cat.name) { category = ""; catInput = "" }; catExpanded = false },
+                                    modifier = Modifier.size(20.dp)
+                                ) {
+                                    Icon(Icons.Default.Delete, contentDescription = "Удалить", modifier = Modifier.size(14.dp))
+                                }
+                            }} else null
+                        )
+                    }
+                    if (catShowCreate) {
+                        DropdownMenuItem(
+                            text = { Text("Добавить: «${catInput.trim()}»", color = primaryColor) },
+                            onClick = {
+                                val n = catInput.trim(); catExpanded = false
+                                scope.launch {
+                                    val cat = onAddCategory(n)
+                                    if (cat != null) { catInput = cat.name; category = cat.name }
+                                    else { category = n; catInput = n }
+                                }
+                            }
+                        )
                     }
                 }
             }
@@ -723,7 +938,7 @@ fun AddWishlistSheet(
                     value = frequencyLabel(frequency), onValueChange = {}, readOnly = true,
                     label = { Text("Периодичность") },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(freqExpanded) },
-                    modifier = Modifier.menuAnchor().fillMaxWidth(),
+                    modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
                     colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(focusedBorderColor = primaryColor)
                 )
                 ExposedDropdownMenu(expanded = freqExpanded, onDismissRequest = { freqExpanded = false }) {
@@ -753,7 +968,8 @@ fun AddWishlistSheet(
                     val costD = cost.replace(',', '.').toDoubleOrNull() ?: return@Button
                     if (name.isBlank()) return@Button
                     onSave(CreateWishlistRequest(
-                        name = name, estimatedCost = costD, category = category,
+                        name = name, estimatedCost = costD,
+                        category = catInput.trim().ifBlank { category },
                         frequency = frequency
                     ))
                 },

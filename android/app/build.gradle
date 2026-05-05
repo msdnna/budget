@@ -1,26 +1,45 @@
 plugins {
     id 'com.android.application'
-    id 'org.jetbrains.kotlin.android'
+    id 'org.jetbrains.kotlin.plugin.compose'
+    id 'org.jetbrains.kotlin.plugin.serialization'
+    id 'com.google.devtools.ksp'
 }
+
+def appVersionName = rootProject.file("VERSION").text.trim()
+def (vmaj, vmin, vpatch) = appVersionName.tokenize('.').collect { it.toInteger() }
+def appVersionCode = vmaj * 10000 + vmin * 100 + vpatch
 
 android {
     namespace 'website.msdnna.budget_app'
-    compileSdk 34
+    compileSdk 37
 
     defaultConfig {
         applicationId "website.msdnna.budget_app"
         minSdk 24
-        targetSdk 34
-        versionCode 1
-        versionName "1.0"
+        targetSdk 36
+        versionCode appVersionCode
+        versionName appVersionName
+
+        ksp {
+            arg("room.schemaLocation", "$projectDir/schemas")
+        }
     }
 
     buildFeatures {
         compose true
+        buildConfig true
     }
 
-    composeOptions {
-        kotlinCompilerExtensionVersion '1.5.14'
+    signingConfigs {
+        release {
+            def ks = System.getenv("ANDROID_KEYSTORE_FILE") ?: ""
+            if (ks) {
+                storeFile     file(ks)
+                storePassword System.getenv("ANDROID_KEYSTORE_PASSWORD") ?: ""
+                keyAlias      System.getenv("ANDROID_KEY_ALIAS")         ?: ""
+                keyPassword   System.getenv("ANDROID_KEY_PASSWORD")      ?: ""
+            }
+        }
     }
 
     buildTypes {
@@ -28,6 +47,7 @@ android {
             applicationIdSuffix ""
         }
         release {
+            signingConfig signingConfigs.release
             minifyEnabled false
         }
     }
@@ -36,32 +56,47 @@ android {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
+}
 
-    kotlinOptions {
-        jvmTarget = '17'
-        freeCompilerArgs += ['-opt-in=androidx.compose.material3.ExperimentalMaterial3Api']
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        freeCompilerArgs.addAll(
+            '-opt-in=androidx.compose.material3.ExperimentalMaterial3Api',
+            '-opt-in=androidx.compose.foundation.ExperimentalFoundationApi'
+        )
     }
 }
 
 dependencies {
-    def composeBom = platform('androidx.compose:compose-bom:2024.06.00')
+    def composeBom = platform('androidx.compose:compose-bom:2026.04.01')
     implementation composeBom
 
     implementation 'androidx.compose.ui:ui'
     implementation 'androidx.compose.ui:ui-graphics'
     implementation 'androidx.compose.material3:material3'
     implementation 'androidx.compose.material:material-icons-extended'
-    implementation 'androidx.activity:activity-compose:1.9.0'
-    implementation 'androidx.lifecycle:lifecycle-viewmodel-compose:2.8.3'
-    implementation 'androidx.lifecycle:lifecycle-runtime-compose:2.8.3'
-    implementation 'androidx.navigation:navigation-compose:2.7.4'
-    implementation 'androidx.datastore:datastore-preferences:1.0.0'
+    implementation 'androidx.activity:activity-compose:1.13.0'
+    implementation 'androidx.lifecycle:lifecycle-viewmodel-compose:2.10.0'
+    implementation 'androidx.lifecycle:lifecycle-runtime-compose:2.10.0'
+    implementation 'androidx.navigation:navigation-compose:2.9.8'
+    implementation 'androidx.datastore:datastore-preferences:1.2.1'
+    implementation 'androidx.biometric:biometric:1.1.0'
+    implementation 'androidx.fragment:fragment-ktx:1.8.5'
 
-    implementation 'com.squareup.retrofit2:retrofit:2.9.0'
-    implementation 'com.squareup.retrofit2:converter-gson:2.9.0'
-    implementation 'com.squareup.okhttp3:okhttp:4.11.0'
+    implementation 'androidx.room:room-runtime:2.8.4'
+    implementation 'androidx.room:room-ktx:2.8.4'
+    ksp 'androidx.room:room-compiler:2.8.4'
 
-    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
+    implementation 'androidx.work:work-runtime-ktx:2.11.2'
 
-    implementation "io.coil-kt:coil-compose:2.5.0"
+    implementation 'org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0'
+
+    implementation 'com.squareup.retrofit2:retrofit:3.0.0'
+    implementation 'com.squareup.retrofit2:converter-gson:3.0.0'
+    implementation 'com.squareup.okhttp3:okhttp:5.3.2'
+
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2'
+
+    implementation "io.coil-kt:coil-compose:2.7.0"
 }

@@ -31,6 +31,9 @@ val LocalExpenseColor = staticCompositionLocalOf { ExpenseColor }
 
 fun themeByKey(key: String) = AppThemes.find { it.key == key } ?: AppThemes[0]
 
+// In Material3 1.3+, AlertDialog/NavigationBar/etc. use surfaceContainer* tokens
+// rather than `surface`. We override every variant explicitly so the dialog
+// background matches `surface` instead of M3's default tinted (pink) values.
 fun buildColorScheme(primary: Color): ColorScheme = lightColorScheme(
     primary              = primary,
     onPrimary            = Color.White,
@@ -39,9 +42,14 @@ fun buildColorScheme(primary: Color): ColorScheme = lightColorScheme(
     secondary            = primary,
     secondaryContainer   = primary.copy(alpha = 0.08f),
     onSecondaryContainer = primary,
-    background           = Color(0xFFF5F6FA),
-    surface              = Color.White,
-    surfaceVariant       = Color(0xFFF0F0F6),
+    background              = Color(0xFFF5F6FA),
+    surface                 = Color.White,
+    surfaceVariant          = Color(0xFFF0F0F6),
+    surfaceContainerLowest  = Color.White,
+    surfaceContainerLow     = Color.White,
+    surfaceContainer        = Color.White,
+    surfaceContainerHigh    = Color.White,
+    surfaceContainerHighest = Color.White,
     onBackground         = Color(0xFF1A1A2E),
     onSurface            = Color(0xFF1A1A2E),
     onSurfaceVariant     = Color(0xFF666680),
@@ -57,9 +65,14 @@ fun buildDarkColorScheme(primary: Color): ColorScheme = darkColorScheme(
     secondary            = primary,
     secondaryContainer   = primary.copy(alpha = 0.15f),
     onSecondaryContainer = primary,
-    background           = Color(0xFF121212),
-    surface              = Color(0xFF1E1E1E),
-    surfaceVariant       = Color(0xFF2C2C2C),
+    background              = Color(0xFF121212),
+    surface                 = Color(0xFF1E1E1E),
+    surfaceVariant          = Color(0xFF2C2C2C),
+    surfaceContainerLowest  = Color(0xFF161616),
+    surfaceContainerLow     = Color(0xFF1A1A1A),
+    surfaceContainer        = Color(0xFF1E1E1E),
+    surfaceContainerHigh    = Color(0xFF222222),
+    surfaceContainerHighest = Color(0xFF272727),
     onBackground         = Color(0xFFE8E8E8),
     onSurface            = Color(0xFFE8E8E8),
     onSurfaceVariant     = Color(0xFF9E9EAA),

@@ -1,5 +1,6 @@
 package website.msdnna.budget_app.data.api
 
+import okhttp3.Dispatcher
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
@@ -41,7 +42,11 @@ object RetrofitClient {
     }
 
     private fun buildService(baseUrl: String): ApiService {
+        // Single host (the budget API) so the default per-host cap of 5 is the real ceiling.
+        // Bump it so concurrent screen loads don't queue against each other.
+        val dispatcher = Dispatcher().apply { maxRequestsPerHost = 10 }
         val client = OkHttpClient.Builder()
+            .dispatcher(dispatcher)
             .addInterceptor { chain ->
                 val token = authToken
                 val request = if (token.isNotBlank()) {
@@ -57,9 +62,14 @@ object RetrofitClient {
                 }
                 response
             }
+            // connectTimeout 5s was too aggressive on cold start: the very first
+            // request often needs a fresh TCP+TLS handshake while the device is
+            // still ramping up, which manifested as Statistics never loading
+            // until the user manually retried.
             .connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(60, TimeUnit.SECONDS)
-            .writeTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(20, TimeUnit.SECONDS)
+            .writeTimeout(15, TimeUnit.SECONDS)
+            .callTimeout(30, TimeUnit.SECONDS)
             .build()
 
         return Retrofit.Builder()

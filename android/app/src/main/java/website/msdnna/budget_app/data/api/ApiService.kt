@@ -10,6 +10,9 @@ interface ApiService {
     @GET("health")
     suspend fun health(): website.msdnna.budget_app.data.model.HealthResponse
 
+    @GET("version")
+    suspend fun getVersion(): website.msdnna.budget_app.data.model.VersionResponse
+
     @POST("auth/login")
     suspend fun login(@Body body: website.msdnna.budget_app.data.model.LoginRequest): website.msdnna.budget_app.data.model.LoginResponse
 
@@ -69,6 +72,12 @@ interface ApiService {
     @GET("statistics/forecast")
     suspend fun getForecast(): ForecastData
 
+    @GET("statistics/overview")
+    suspend fun getStatisticsOverview(
+        @Query("month") month: String? = null,
+        @Query("year") year: String? = null
+    ): website.msdnna.budget_app.data.model.StatisticsOverviewResponse
+
     @GET("wishlist")
     suspend fun getWishlist(): List<WishlistItem>
 
@@ -90,8 +99,34 @@ interface ApiService {
     @GET("users")
     suspend fun getUsers(): List<website.msdnna.budget_app.data.model.UserInfo>
 
+    @GET("categories")
+    suspend fun getCategories(
+        @Query("section") section: String
+    ): List<website.msdnna.budget_app.data.model.Category>
+
+    @GET("categories/all")
+    suspend fun getAllCategories(): website.msdnna.budget_app.data.model.CategoriesAllResponse
+
+    @POST("categories")
+    suspend fun createCategory(
+        @Body body: website.msdnna.budget_app.data.model.CreateCategoryRequest
+    ): website.msdnna.budget_app.data.model.Category
+
+    @DELETE("categories/{id}")
+    suspend fun deleteCategory(@Path("id") id: String): Response<Unit>
+
     @DELETE("wishlist/{id}")
     suspend fun deleteWishlistItem(@Path("id") id: String): Response<Unit>
+
+    @GET("sync/pull")
+    suspend fun syncPull(
+        @Query("since") since: String? = null
+    ): website.msdnna.budget_app.data.model.SyncPullResponse
+
+    @POST("sync/push")
+    suspend fun syncPush(
+        @Body body: website.msdnna.budget_app.data.model.SyncPushRequest
+    ): website.msdnna.budget_app.data.model.SyncPushResponse
 
     @Streaming
     @GET("export/excel")
