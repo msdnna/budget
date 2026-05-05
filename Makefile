@@ -1,5 +1,6 @@
 BACKEND_DIR  := backend
 FRONTEND_DIR := frontend
+ANDROID_DIR  := android
 
 # Go 1.25 binary — falls back to system go if not found
 GO := $(shell command -v go1.25.9 2>/dev/null || command -v go)
@@ -13,16 +14,18 @@ MONGO_URI      ?= mongodb://$(MONGO_USERNAME):$(MONGO_PASSWORD)@localhost:27017/
 DB_NAME        ?= $(MONGO_DB)
 
 # HTTP proxy for dependency downloads — leave empty if not needed
-# Override via environment variables:  export HTTP_PROXY=http://proxy:port
 HTTP_PROXY  ?=
 HTTPS_PROXY ?=
 NO_PROXY    ?= localhost,127.0.0.1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+
+# Version bump type for bump-* targets
+BUMP ?= patch
 
 export HTTP_PROXY HTTPS_PROXY NO_PROXY
 
 .DEFAULT_GOAL := help
 
-# ─── Docker (production) ─────────────────────────────────────────────────────
+# ─── Docker (development) ────────────────────────────────────────────────────
 
 .PHONY: up
 up: ## Start all services in Docker (detached)
@@ -43,6 +46,24 @@ clean: ## Remove containers, volumes, and built images
 .PHONY: logs
 logs: ## Tail Docker logs
 	docker compose logs -f
+
+# ─── Production (Docker Compose) ─────────────────────────────────────────────
+
+.PHONY: prod-build
+prod-build: ## Build production images (distroless backend + nginx frontend)
+	docker compose -f docker-compose.prod.yml build
+
+.PHONY: prod-up
+prod-up: ## Start production environment (detached)
+	docker compose -f docker-compose.prod.yml up -d
+
+.PHONY: prod-down
+prod-down: ## Stop production environment
+	docker compose -f docker-compose.prod.yml down
+
+.PHONY: prod-logs
+prod-logs: ## Tail production logs
+	docker compose -f docker-compose.prod.yml logs -f
 
 # ─── Local development ───────────────────────────────────────────────────────
 
@@ -95,7 +116,90 @@ build-frontend: ## Build Vue app to frontend/dist/
 	cd $(FRONTEND_DIR) && npm run build
 
 .PHONY: build
-build: build-backend build-frontend ## Build everything
+build: build-backend build-frontend ## Build backend + frontend
+
+# ─── Android ─────────────────────────────────────────────────────────────────
+
+.PHONY: android
+android: ## Build debug Android APK (android/msdnna-budget-app-v<version>.apk)
+	cd $(ANDROID_DIR) && ./build.sh
+
+.PHONY: android-release
+android-release: ## Build release APK (requires ANDROID_KEYSTORE_FILE and signing env vars)
+	./tools/build-android-release.sh
+
+# ─── User management ─────────────────────────────────────────────────────────
+
+.PHONY: create_user
+create_user: ## Create a user: make create_user USER_LOGIN=alice USER_PASSWORD=secret USER_NAME="Alice"
+	@[ -n "$(USER_LOGIN)" ] || { \
+	  echo "Error: USER_LOGIN is required"; \
+	  echo "Usage: make create_user USER_LOGIN=alice USER_PASSWORD=secret USER_NAME=\"Alice Smith\""; \
+	  exit 1; }
+	@[ -n "$(USER_PASSWORD)" ] || { echo "Error: USER_PASSWORD is required"; exit 1; }
+	cd $(BACKEND_DIR) && \
+	  MONGO_URI="$(MONGO_URI)" DB_NAME=$(DB_NAME) \
+	  $(GO) run ./cmd/create_user \
+	    -login "$(USER_LOGIN)" \
+	    -password "$(USER_PASSWORD)" \
+	    -name "$(USER_NAME)"
+
+# ─── Load testing ────────────────────────────────────────────────────────────
+
+LOADTEST_DB ?= budget_loadtest
+LOADTEST_URI ?= mongodb://$(MONGO_USERNAME):$(MONGO_PASSWORD)@localhost:27017/?authSource=admin
+
+.PHONY: seed-loadtest
+seed-loadtest: ## Populate $(LOADTEST_DB) with realistic family-budget data (use CLEAR=1 to drop first)
+	cd $(BACKEND_DIR) && \
+	  $(GO) run ./cmd/seed_loadtest \
+	    -mongo-uri "$(LOADTEST_URI)" \
+	    -db $(LOADTEST_DB) \
+	    $(if $(CLEAR),-clear,) \
+	    $(if $(FROM),-from $(FROM),) \
+	    $(if $(TO),-to $(TO),) \
+	    $(if $(EXPENSES),-expenses $(EXPENSES),) \
+	    $(if $(INCOMES),-incomes $(INCOMES),) \
+	    $(if $(WISHLIST),-wishlist $(WISHLIST),)
+
+.PHONY: loadtest-up
+loadtest-up: ## Restart backend pointing at $(LOADTEST_DB) (frontend follows automatically)
+	MONGO_DB=$(LOADTEST_DB) docker compose up -d --no-deps backend
+	@echo "Backend now serving database: $(LOADTEST_DB)"
+	@echo "Run 'make loadtest-restore' to switch back to '$(MONGO_DB)'."
+
+.PHONY: loadtest-restore
+loadtest-restore: ## Restart backend pointing at the production database ($(MONGO_DB))
+	MONGO_DB=$(MONGO_DB) docker compose up -d --no-deps backend
+	@echo "Backend now serving database: $(MONGO_DB)"
+
+.PHONY: loadtest-drop
+loadtest-drop: ## Drop the $(LOADTEST_DB) database entirely
+	@docker exec budget-mongodb mongosh \
+	  --username "$(MONGO_USERNAME)" --password "$(MONGO_PASSWORD)" \
+	  --authenticationDatabase admin \
+	  --quiet --eval 'db.getSiblingDB("$(LOADTEST_DB)").dropDatabase()'
+	@echo "Dropped database: $(LOADTEST_DB)"
+
+# ─── Versioning ──────────────────────────────────────────────────────────────
+
+.PHONY: version
+version: ## Show current versions of all services
+	@printf "  API:     %s\n" "$$(cat $(BACKEND_DIR)/VERSION)"
+	@printf "  Web:     %s\n" "$$(cat $(FRONTEND_DIR)/VERSION)"
+	@printf "  Android: %s\n" "$$(cat $(ANDROID_DIR)/VERSION)"
+
+.PHONY: bump-api
+bump-api: ## Bump API version     (BUMP=patch|minor|major, default: patch)
+	@./tools/bump-version.sh api $(BUMP)
+
+.PHONY: bump-web
+bump-web: ## Bump Web version     (BUMP=patch|minor|major, default: patch)
+	@./tools/bump-version.sh web $(BUMP)
+
+.PHONY: bump-android
+bump-android: ## Bump Android version (BUMP=patch|minor|major, default: patch)
+	@./tools/bump-version.sh android $(BUMP)
 
 # ─── Help ────────────────────────────────────────────────────────────────────
 
@@ -104,6 +208,6 @@ help:
 	@echo "Usage: make <target>"
 	@echo ""
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
-	  | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
+	  | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-22s\033[0m %s\n", $$1, $$2}'
 	@echo ""
 	@echo "  Go toolchain: $(GO)"
