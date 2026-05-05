@@ -6,8 +6,8 @@ import (
 
 	"budget-go/models"
 
+	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -25,47 +25,158 @@ func NewTransactionRepository(db *mongo.Database) *TransactionRepository {
 		{Keys: bson.D{{"date", -1}}},
 		{Keys: bson.D{{"type", 1}}},
 		{Keys: bson.D{{"category", 1}}},
+		{Keys: bson.D{{"updated_at", 1}}},
+		{Keys: bson.D{{"deleted_at", 1}}},
 	})
 
 	return &TransactionRepository{col: col}
 }
 
 func (r *TransactionRepository) Create(ctx context.Context, t *models.Transaction) error {
-	t.ID = primitive.NewObjectID()
-	t.CreatedAt = time.Now()
+	now := time.Now()
+	if t.ID == "" {
+		t.ID = uuid.NewString()
+	}
+	if t.CreatedAt.IsZero() {
+		t.CreatedAt = now
+	}
+	t.UpdatedAt = now
+	t.Version = 1
+	t.DeletedAt = nil
+	t.LastModifiedBy = t.CreatedBy
 	_, err := r.col.InsertOne(ctx, t)
 	return err
 }
 
 func (r *TransactionRepository) FindByID(ctx context.Context, id string) (*models.Transaction, error) {
-	oid, err := primitive.ObjectIDFromHex(id)
-	if err != nil {
-		return nil, err
-	}
 	var t models.Transaction
-	err = r.col.FindOne(ctx, bson.M{"_id": oid}).Decode(&t)
+	err := r.col.FindOne(ctx, bson.M{"_id": id, "deleted_at": nil}).Decode(&t)
 	if err != nil {
 		return nil, err
 	}
 	return &t, nil
 }
 
-func (r *TransactionRepository) Update(ctx context.Context, id string, update bson.M) error {
-	oid, err := primitive.ObjectIDFromHex(id)
-	if err != nil {
-		return err
+// Update applies the given partial update if the current version matches
+// baseVersion; otherwise returns ErrConflict. Pass baseVersion=0 to skip the
+// version check (used by legacy CRUD handlers that don't track versions yet).
+func (r *TransactionRepository) Update(ctx context.Context, id string, update bson.M, baseVersion int, modifiedBy *models.UserInfo) (*models.Transaction, error) {
+	now := time.Now()
+	update["updated_at"] = now
+	if modifiedBy != nil {
+		update["last_modified_by"] = modifiedBy
 	}
-	_, err = r.col.UpdateOne(ctx, bson.M{"_id": oid}, bson.M{"$set": update})
-	return err
+
+	filter := bson.M{"_id": id, "deleted_at": nil}
+	if baseVersion > 0 {
+		filter["version"] = baseVersion
+	}
+
+	res := r.col.FindOneAndUpdate(
+		ctx,
+		filter,
+		bson.M{"$set": update, "$inc": bson.M{"version": 1}},
+		options.FindOneAndUpdate().SetReturnDocument(options.After),
+	)
+	if err := res.Err(); err != nil {
+		if err == mongo.ErrNoDocuments {
+			// Distinguish "not found" from "version mismatch" by re-checking.
+			var existing models.Transaction
+			if findErr := r.col.FindOne(ctx, bson.M{"_id": id}).Decode(&existing); findErr == nil {
+				return nil, ErrConflict
+			}
+			return nil, err
+		}
+		return nil, err
+	}
+	var t models.Transaction
+	if err := res.Decode(&t); err != nil {
+		return nil, err
+	}
+	return &t, nil
 }
 
-func (r *TransactionRepository) Delete(ctx context.Context, id string) error {
-	oid, err := primitive.ObjectIDFromHex(id)
-	if err != nil {
-		return err
+// Delete is a soft delete: sets deleted_at and bumps version. Returns ErrConflict
+// when baseVersion is non-zero and does not match.
+func (r *TransactionRepository) Delete(ctx context.Context, id string, baseVersion int, modifiedBy *models.UserInfo) (*models.Transaction, error) {
+	now := time.Now()
+	filter := bson.M{"_id": id, "deleted_at": nil}
+	if baseVersion > 0 {
+		filter["version"] = baseVersion
 	}
-	_, err = r.col.DeleteOne(ctx, bson.M{"_id": oid})
-	return err
+	update := bson.M{
+		"$set": bson.M{
+			"deleted_at":       now,
+			"updated_at":       now,
+			"last_modified_by": modifiedBy,
+		},
+		"$inc": bson.M{"version": 1},
+	}
+	res := r.col.FindOneAndUpdate(ctx, filter, update,
+		options.FindOneAndUpdate().SetReturnDocument(options.After))
+	if err := res.Err(); err != nil {
+		if err == mongo.ErrNoDocuments {
+			var existing models.Transaction
+			if findErr := r.col.FindOne(ctx, bson.M{"_id": id}).Decode(&existing); findErr == nil {
+				return nil, ErrConflict
+			}
+			return nil, err
+		}
+		return nil, err
+	}
+	var t models.Transaction
+	if err := res.Decode(&t); err != nil {
+		return nil, err
+	}
+	return &t, nil
+}
+
+// Upsert inserts or replaces a record from a client's create/update payload,
+// honoring optimistic concurrency. Used by the sync push handler.
+func (r *TransactionRepository) Upsert(ctx context.Context, t *models.Transaction, baseVersion int, isCreate bool) (*models.Transaction, error) {
+	now := time.Now()
+	t.UpdatedAt = now
+
+	if isCreate {
+		if t.CreatedAt.IsZero() {
+			t.CreatedAt = now
+		}
+		t.Version = 1
+		t.DeletedAt = nil
+		_, err := r.col.InsertOne(ctx, t)
+		if err != nil {
+			if mongo.IsDuplicateKeyError(err) {
+				// Another client raced us; treat as conflict.
+				existing, fErr := r.FindByID(ctx, t.ID)
+				if fErr != nil {
+					return nil, ErrConflict
+				}
+				_ = existing
+				return nil, ErrConflict
+			}
+			return nil, err
+		}
+		return t, nil
+	}
+
+	filter := bson.M{"_id": t.ID, "deleted_at": nil}
+	if baseVersion > 0 {
+		filter["version"] = baseVersion
+	}
+	t.Version = baseVersion + 1
+	res := r.col.FindOneAndReplace(ctx, filter, t,
+		options.FindOneAndReplace().SetReturnDocument(options.After))
+	if err := res.Err(); err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, ErrConflict
+		}
+		return nil, err
+	}
+	var out models.Transaction
+	if err := res.Decode(&out); err != nil {
+		return nil, err
+	}
+	return &out, nil
 }
 
 func (r *TransactionRepository) Find(ctx context.Context, f models.TransactionFilter) ([]models.Transaction, int64, error) {
@@ -95,7 +206,7 @@ func (r *TransactionRepository) Find(ctx context.Context, f models.TransactionFi
 }
 
 func (r *TransactionRepository) FindAll(ctx context.Context, from, to time.Time, txType string) ([]models.Transaction, error) {
-	filter := bson.M{}
+	filter := bson.M{"deleted_at": nil}
 	if txType != "" {
 		filter["type"] = txType
 	}
@@ -121,6 +232,28 @@ func (r *TransactionRepository) FindAll(ctx context.Context, from, to time.Time,
 		return nil, err
 	}
 	return results, nil
+}
+
+// FindModifiedSince returns every transaction (including soft-deleted) whose
+// updated_at strictly exceeds since. When since is zero, it returns the entire
+// non-deleted set so a fresh client can warm its local cache.
+func (r *TransactionRepository) FindModifiedSince(ctx context.Context, since time.Time) ([]models.Transaction, error) {
+	filter := bson.M{}
+	if !since.IsZero() {
+		filter["updated_at"] = bson.M{"$gt": since}
+	} else {
+		filter["deleted_at"] = nil
+	}
+	cur, err := r.col.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+	var out []models.Transaction
+	if err := cur.All(ctx, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (r *TransactionRepository) AggregateByCategory(ctx context.Context, txType string, from, to time.Time) ([]models.CategoryData, error) {
@@ -176,21 +309,32 @@ func (r *TransactionRepository) AggregateByCategory(ctx context.Context, txType 
 
 func (r *TransactionRepository) AggregateMonthly(ctx context.Context, year int) ([]models.MonthlyData, error) {
 	start := time.Date(year, 1, 1, 0, 0, 0, 0, time.UTC)
-	end := time.Date(year+1, 1, 1, 0, 0, 0, 0, time.UTC)
+	end := time.Date(year+1, 1, 1, 0, 0, 0, 0, time.UTC).Add(-time.Second)
+	return r.AggregateMonthlyRange(ctx, start, end)
+}
+
+// AggregateMonthlyRange buckets transactions into year-month groups within
+// [from, to]. Months without data are still emitted with zero totals so the
+// chart x-axis is contiguous. The returned slice is ordered by year, month.
+func (r *TransactionRepository) AggregateMonthlyRange(ctx context.Context, from, to time.Time) ([]models.MonthlyData, error) {
+	if from.IsZero() || to.IsZero() || !from.Before(to) {
+		return []models.MonthlyData{}, nil
+	}
 
 	pipeline := mongo.Pipeline{
 		{{"$match", bson.D{
-			{"date", bson.D{{"$gte", start}, {"$lt", end}}},
+			{"date", bson.D{{"$gte", from}, {"$lte", to}}},
 			{"hidden", bson.D{{"$ne", true}}},
+			{"deleted_at", nil},
 		}}},
 		{{"$group", bson.D{
 			{"_id", bson.D{
+				{"year", bson.D{{"$year", "$date"}}},
 				{"month", bson.D{{"$month", "$date"}}},
 				{"type", "$type"},
 			}},
 			{"total", bson.D{{"$sum", "$amount"}}},
 		}}},
-		{{"$sort", bson.D{{"_id.month", 1}}}},
 	}
 
 	cur, err := r.col.Aggregate(ctx, pipeline)
@@ -201,6 +345,7 @@ func (r *TransactionRepository) AggregateMonthly(ctx context.Context, year int) 
 
 	type aggResult struct {
 		ID struct {
+			Year  int    `bson:"year"`
 			Month int    `bson:"month"`
 			Type  string `bson:"type"`
 		} `bson:"_id"`
@@ -212,31 +357,42 @@ func (r *TransactionRepository) AggregateMonthly(ctx context.Context, year int) 
 		return nil, err
 	}
 
-	monthly := make(map[int]*models.MonthlyData)
-	for m := 1; m <= 12; m++ {
-		monthly[m] = &models.MonthlyData{Month: m}
-	}
-
+	key := func(year, month int) int { return year*100 + month }
+	bucket := make(map[int]*models.MonthlyData)
 	for _, r := range raw {
-		m := monthly[r.ID.Month]
-		if r.ID.Type == string(models.Income) {
+		k := key(r.ID.Year, r.ID.Month)
+		m, ok := bucket[k]
+		if !ok {
+			m = &models.MonthlyData{Year: r.ID.Year, Month: r.ID.Month}
+			bucket[k] = m
+		}
+		switch r.ID.Type {
+		case string(models.Income):
 			m.Income += r.Total
-		} else {
+		case string(models.InitialBalance):
+			m.InitialBalance += r.Total
+		default:
 			m.Expense += r.Total
 		}
 	}
 
-	result := make([]models.MonthlyData, 12)
-	for i := 1; i <= 12; i++ {
-		m := monthly[i]
-		m.Balance = m.Income - m.Expense
-		result[i-1] = *m
+	startYM := time.Date(from.Year(), from.Month(), 1, 0, 0, 0, 0, time.UTC)
+	endYM := time.Date(to.Year(), to.Month(), 1, 0, 0, 0, 0, time.UTC)
+	result := make([]models.MonthlyData, 0, 12)
+	for cur := startYM; !cur.After(endYM); cur = cur.AddDate(0, 1, 0) {
+		y, m := cur.Year(), int(cur.Month())
+		md, ok := bucket[key(y, m)]
+		if !ok {
+			md = &models.MonthlyData{Year: y, Month: m}
+		}
+		md.Balance = md.Income + md.InitialBalance - md.Expense
+		result = append(result, *md)
 	}
 	return result, nil
 }
 
 func (r *TransactionRepository) GetSummary(ctx context.Context, from, to time.Time) (*models.SummaryData, error) {
-	filter := bson.M{"hidden": bson.M{"$ne": true}}
+	filter := bson.M{"hidden": bson.M{"$ne": true}, "deleted_at": nil}
 	if !from.IsZero() || !to.IsZero() {
 		dateFilter := bson.M{}
 		if !from.IsZero() {
@@ -276,15 +432,19 @@ func (r *TransactionRepository) GetSummary(ctx context.Context, from, to time.Ti
 
 	summary := &models.SummaryData{}
 	for _, r := range raw {
-		if r.ID == string(models.Income) {
+		switch r.ID {
+		case string(models.Income):
 			summary.TotalIncome = r.Total
 			summary.IncomeCount = r.Count
-		} else {
+		case string(models.InitialBalance):
+			summary.InitialBalance = r.Total
+			summary.InitialBalanceCount = r.Count
+		default:
 			summary.TotalExpense = r.Total
 			summary.ExpenseCount = r.Count
 		}
 	}
-	summary.Balance = summary.TotalIncome - summary.TotalExpense
+	summary.Balance = summary.TotalIncome + summary.InitialBalance - summary.TotalExpense
 	return summary, nil
 }
 
@@ -307,7 +467,7 @@ func (r *TransactionRepository) GetAverageMonthlyCategoryExpenses(ctx context.Co
 }
 
 func buildTransactionFilter(f models.TransactionFilter) bson.M {
-	filter := bson.M{}
+	filter := bson.M{"deleted_at": nil}
 	if f.Type != "" {
 		filter["type"] = f.Type
 	}
@@ -328,7 +488,7 @@ func buildTransactionFilter(f models.TransactionFilter) bson.M {
 }
 
 func buildDateFilter(txType string, from, to time.Time) bson.M {
-	filter := bson.M{"hidden": bson.M{"$ne": true}}
+	filter := bson.M{"hidden": bson.M{"$ne": true}, "deleted_at": nil}
 	if txType != "" {
 		filter["type"] = txType
 	}

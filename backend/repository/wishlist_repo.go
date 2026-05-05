@@ -6,8 +6,8 @@ import (
 
 	"budget-go/models"
 
+	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -22,69 +22,146 @@ func NewWishlistRepository(db *mongo.Database) *WishlistRepository {
 	defer cancel()
 
 	col.Indexes().CreateMany(ctx, []mongo.IndexModel{
-		{Keys: bson.D{{"is_favorite", 1}}},
 		{Keys: bson.D{{"purchased", 1}}},
 		{Keys: bson.D{{"priority", 1}}},
+		{Keys: bson.D{{"updated_at", 1}}},
+		{Keys: bson.D{{"deleted_at", 1}}},
 	})
 
 	return &WishlistRepository{col: col}
 }
 
 func (r *WishlistRepository) Create(ctx context.Context, item *models.WishlistItem) error {
-	item.ID = primitive.NewObjectID()
-	item.CreatedAt = time.Now()
+	now := time.Now()
+	if item.ID == "" {
+		item.ID = uuid.NewString()
+	}
+	if item.CreatedAt.IsZero() {
+		item.CreatedAt = now
+	}
+	item.UpdatedAt = now
+	item.Version = 1
+	item.DeletedAt = nil
+	item.LastModifiedBy = item.CreatedBy
 	_, err := r.col.InsertOne(ctx, item)
 	return err
 }
 
 func (r *WishlistRepository) FindByID(ctx context.Context, id string) (*models.WishlistItem, error) {
-	oid, err := primitive.ObjectIDFromHex(id)
-	if err != nil {
-		return nil, err
-	}
 	var item models.WishlistItem
-	err = r.col.FindOne(ctx, bson.M{"_id": oid}).Decode(&item)
+	err := r.col.FindOne(ctx, bson.M{"_id": id, "deleted_at": nil}).Decode(&item)
 	if err != nil {
 		return nil, err
 	}
 	return &item, nil
 }
 
-func (r *WishlistRepository) Update(ctx context.Context, id string, update bson.M) error {
-	oid, err := primitive.ObjectIDFromHex(id)
-	if err != nil {
-		return err
+func (r *WishlistRepository) Update(ctx context.Context, id string, update bson.M, baseVersion int, modifiedBy *models.UserInfo) (*models.WishlistItem, error) {
+	now := time.Now()
+	update["updated_at"] = now
+	if modifiedBy != nil {
+		update["last_modified_by"] = modifiedBy
 	}
-	_, err = r.col.UpdateOne(ctx, bson.M{"_id": oid}, bson.M{"$set": update})
-	return err
+	filter := bson.M{"_id": id, "deleted_at": nil}
+	if baseVersion > 0 {
+		filter["version"] = baseVersion
+	}
+	res := r.col.FindOneAndUpdate(ctx, filter,
+		bson.M{"$set": update, "$inc": bson.M{"version": 1}},
+		options.FindOneAndUpdate().SetReturnDocument(options.After))
+	if err := res.Err(); err != nil {
+		if err == mongo.ErrNoDocuments {
+			var existing models.WishlistItem
+			if findErr := r.col.FindOne(ctx, bson.M{"_id": id}).Decode(&existing); findErr == nil {
+				return nil, ErrConflict
+			}
+			return nil, err
+		}
+		return nil, err
+	}
+	var item models.WishlistItem
+	if err := res.Decode(&item); err != nil {
+		return nil, err
+	}
+	return &item, nil
 }
 
-func (r *WishlistRepository) Delete(ctx context.Context, id string) error {
-	oid, err := primitive.ObjectIDFromHex(id)
-	if err != nil {
-		return err
+func (r *WishlistRepository) Delete(ctx context.Context, id string, baseVersion int, modifiedBy *models.UserInfo) (*models.WishlistItem, error) {
+	now := time.Now()
+	filter := bson.M{"_id": id, "deleted_at": nil}
+	if baseVersion > 0 {
+		filter["version"] = baseVersion
 	}
-	_, err = r.col.DeleteOne(ctx, bson.M{"_id": oid})
-	return err
+	update := bson.M{
+		"$set": bson.M{
+			"deleted_at":       now,
+			"updated_at":       now,
+			"last_modified_by": modifiedBy,
+		},
+		"$inc": bson.M{"version": 1},
+	}
+	res := r.col.FindOneAndUpdate(ctx, filter, update,
+		options.FindOneAndUpdate().SetReturnDocument(options.After))
+	if err := res.Err(); err != nil {
+		if err == mongo.ErrNoDocuments {
+			var existing models.WishlistItem
+			if findErr := r.col.FindOne(ctx, bson.M{"_id": id}).Decode(&existing); findErr == nil {
+				return nil, ErrConflict
+			}
+			return nil, err
+		}
+		return nil, err
+	}
+	var item models.WishlistItem
+	if err := res.Decode(&item); err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+func (r *WishlistRepository) Upsert(ctx context.Context, item *models.WishlistItem, baseVersion int, isCreate bool) (*models.WishlistItem, error) {
+	now := time.Now()
+	item.UpdatedAt = now
+
+	if isCreate {
+		if item.CreatedAt.IsZero() {
+			item.CreatedAt = now
+		}
+		item.Version = 1
+		item.DeletedAt = nil
+		_, err := r.col.InsertOne(ctx, item)
+		if err != nil {
+			if mongo.IsDuplicateKeyError(err) {
+				return nil, ErrConflict
+			}
+			return nil, err
+		}
+		return item, nil
+	}
+
+	filter := bson.M{"_id": item.ID, "deleted_at": nil}
+	if baseVersion > 0 {
+		filter["version"] = baseVersion
+	}
+	item.Version = baseVersion + 1
+	res := r.col.FindOneAndReplace(ctx, filter, item,
+		options.FindOneAndReplace().SetReturnDocument(options.After))
+	if err := res.Err(); err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, ErrConflict
+		}
+		return nil, err
+	}
+	var out models.WishlistItem
+	if err := res.Decode(&out); err != nil {
+		return nil, err
+	}
+	return &out, nil
 }
 
 func (r *WishlistRepository) FindAll(ctx context.Context) ([]models.WishlistItem, error) {
 	opts := options.Find().SetSort(bson.D{{"priority", 1}, {"created_at", -1}})
-	cur, err := r.col.Find(ctx, bson.M{}, opts)
-	if err != nil {
-		return nil, err
-	}
-	defer cur.Close(ctx)
-
-	var items []models.WishlistItem
-	if err := cur.All(ctx, &items); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-func (r *WishlistRepository) FindFavorites(ctx context.Context) ([]models.WishlistItem, error) {
-	cur, err := r.col.Find(ctx, bson.M{"is_favorite": true})
+	cur, err := r.col.Find(ctx, bson.M{"deleted_at": nil}, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -99,8 +176,7 @@ func (r *WishlistRepository) FindFavorites(ctx context.Context) ([]models.Wishli
 
 func (r *WishlistRepository) FindUnpurchased(ctx context.Context) ([]models.WishlistItem, error) {
 	opts := options.Find().SetSort(bson.D{{"priority", 1}, {"created_at", -1}})
-	// All non-purchased items regardless of is_favorite
-	cur, err := r.col.Find(ctx, bson.M{"purchased": false}, opts)
+	cur, err := r.col.Find(ctx, bson.M{"purchased": false, "deleted_at": nil}, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -111,4 +187,23 @@ func (r *WishlistRepository) FindUnpurchased(ctx context.Context) ([]models.Wish
 		return nil, err
 	}
 	return items, nil
+}
+
+func (r *WishlistRepository) FindModifiedSince(ctx context.Context, since time.Time) ([]models.WishlistItem, error) {
+	filter := bson.M{}
+	if !since.IsZero() {
+		filter["updated_at"] = bson.M{"$gt": since}
+	} else {
+		filter["deleted_at"] = nil
+	}
+	cur, err := r.col.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+	var out []models.WishlistItem
+	if err := cur.All(ctx, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
 }

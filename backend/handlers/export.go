@@ -250,9 +250,10 @@ func (h *ExportHandler) PDF(c *gin.Context) {
 			pdf.SetFillColor(255, 255, 255)
 		}
 
-		if t.Type == models.Income {
+		switch t.Type {
+		case models.Income, models.InitialBalance:
 			pdf.SetTextColor(theme.incomeR, theme.incomeG, theme.incomeB)
-		} else {
+		default:
 			pdf.SetTextColor(125, 26, 26)
 		}
 
@@ -357,14 +358,17 @@ func writeMonthlySheet(f *excelize.File, sheet string, transactions []models.Tra
 	})
 
 	type monthKey struct{ year, month int }
-	monthly := make(map[monthKey]struct{ income, expense float64 })
+	monthly := make(map[monthKey]struct{ income, initialBalance, expense float64 })
 
 	for _, t := range transactions {
 		k := monthKey{t.Date.Year(), int(t.Date.Month())}
 		e := monthly[k]
-		if t.Type == models.Income {
+		switch t.Type {
+		case models.Income:
 			e.income += t.Amount
-		} else {
+		case models.InitialBalance:
+			e.initialBalance += t.Amount
+		default:
 			e.expense += t.Amount
 		}
 		monthly[k] = e
@@ -380,7 +384,7 @@ func writeMonthlySheet(f *excelize.File, sheet string, transactions []models.Tra
 		f.SetCellValue(sheet, cellName(1, row), label)
 		f.SetCellValue(sheet, cellName(2, row), data.income)
 		f.SetCellValue(sheet, cellName(3, row), data.expense)
-		f.SetCellValue(sheet, cellName(4, row), data.income-data.expense)
+		f.SetCellValue(sheet, cellName(4, row), data.income+data.initialBalance-data.expense)
 		if fill {
 			for col := 1; col <= 4; col++ {
 				f.SetCellStyle(sheet, cellName(col, row), cellName(col, row), altStyle)
@@ -397,10 +401,14 @@ func cellName(col, row int) string {
 }
 
 func txTypeLabel(t models.TransactionType) string {
-	if t == models.Income {
+	switch t {
+	case models.Income:
 		return "Доход"
+	case models.InitialBalance:
+		return "Нач. баланс"
+	default:
+		return "Расход"
 	}
-	return "Расход"
 }
 
 func truncate(s string, max int) string {

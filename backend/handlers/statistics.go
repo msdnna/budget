@@ -9,7 +9,15 @@ import (
 	"budget-go/repository"
 
 	"github.com/gin-gonic/gin"
+	"golang.org/x/sync/errgroup"
 )
+
+type StatisticsOverviewResponse struct {
+	Summary           *models.SummaryData   `json:"summary"`
+	ExpenseByCategory []models.CategoryData `json:"expenseByCategory"`
+	IncomeByCategory  []models.CategoryData `json:"incomeByCategory"`
+	Monthly           []models.MonthlyData  `json:"monthly"`
+}
 
 type StatisticsHandler struct {
 	txRepo *repository.TransactionRepository
@@ -54,19 +62,112 @@ func (h *StatisticsHandler) ByCategory(c *gin.Context) {
 }
 
 func (h *StatisticsHandler) Monthly(c *gin.Context) {
-	yearStr := c.Query("year")
-	year, err := strconv.Atoi(yearStr)
-	if err != nil || year < 2000 {
-		year = time.Now().Year()
+	from, to := parsePeriodParams(c)
+
+	if from.IsZero() && to.IsZero() {
+		year := time.Now().Year()
+		from = time.Date(year, 1, 1, 0, 0, 0, 0, time.UTC)
+		to = time.Date(year+1, 1, 1, 0, 0, 0, 0, time.UTC).Add(-time.Second)
+	} else if from.IsZero() {
+		from = time.Date(to.Year(), 1, 1, 0, 0, 0, 0, time.UTC)
+	} else if to.IsZero() {
+		to = time.Date(from.Year()+1, 1, 1, 0, 0, 0, 0, time.UTC).Add(-time.Second)
 	}
 
-	data, err := h.txRepo.AggregateMonthly(c.Request.Context(), year)
+	// For the "month" filter (a single month), expand to the full year so the
+	// dynamics chart still shows context around the selected month.
+	if c.Query("month") != "" && c.Query("from") == "" && c.Query("to") == "" {
+		from = time.Date(from.Year(), 1, 1, 0, 0, 0, 0, time.UTC)
+		to = time.Date(from.Year()+1, 1, 1, 0, 0, 0, 0, time.UTC).Add(-time.Second)
+	}
+
+	data, err := h.txRepo.AggregateMonthlyRange(c.Request.Context(), from, to)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
 	c.JSON(http.StatusOK, data)
+}
+
+// Overview combines summary + by-category(expense) + by-category(income) + monthly
+// into a single response so the Android Stats screen can fetch everything in one
+// round-trip instead of four sequential calls. Sub-queries run in parallel.
+func (h *StatisticsHandler) Overview(c *gin.Context) {
+	from, to := parsePeriodParams(c)
+
+	year := time.Now().Year()
+	if monthStr := c.Query("month"); monthStr != "" {
+		if t, err := time.Parse("2006-01", monthStr); err == nil {
+			year = t.Year()
+		}
+	} else if yearStr := c.Query("year"); yearStr != "" {
+		if y, err := strconv.Atoi(yearStr); err == nil && y >= 2000 {
+			year = y
+		}
+	}
+
+	var (
+		summary *models.SummaryData
+		expCat  []models.CategoryData
+		incCat  []models.CategoryData
+		monthly []models.MonthlyData
+	)
+
+	g, gctx := errgroup.WithContext(c.Request.Context())
+	g.Go(func() error {
+		s, err := h.txRepo.GetSummary(gctx, from, to)
+		if err != nil {
+			return err
+		}
+		summary = s
+		return nil
+	})
+	g.Go(func() error {
+		d, err := h.txRepo.AggregateByCategory(gctx, string(models.Expense), from, to)
+		if err != nil {
+			return err
+		}
+		if d == nil {
+			d = []models.CategoryData{}
+		}
+		expCat = d
+		return nil
+	})
+	g.Go(func() error {
+		d, err := h.txRepo.AggregateByCategory(gctx, string(models.Income), from, to)
+		if err != nil {
+			return err
+		}
+		if d == nil {
+			d = []models.CategoryData{}
+		}
+		incCat = d
+		return nil
+	})
+	g.Go(func() error {
+		d, err := h.txRepo.AggregateMonthly(gctx, year)
+		if err != nil {
+			return err
+		}
+		if d == nil {
+			d = []models.MonthlyData{}
+		}
+		monthly = d
+		return nil
+	})
+
+	if err := g.Wait(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, StatisticsOverviewResponse{
+		Summary:           summary,
+		ExpenseByCategory: expCat,
+		IncomeByCategory:  incCat,
+		Monthly:           monthly,
+	})
 }
 
 func (h *StatisticsHandler) Forecast(c *gin.Context) {
@@ -115,7 +216,7 @@ func (h *StatisticsHandler) Forecast(c *gin.Context) {
 		wishlistTotal += monthly
 		if item.Frequency != models.FrequencyOnce {
 			regularItems = append(regularItems, models.RegularItemForecast{
-				ID:          item.ID.Hex(),
+				ID:          item.ID,
 				Name:        item.Name,
 				MonthlyCost: monthly,
 				Frequency:   string(item.Frequency),

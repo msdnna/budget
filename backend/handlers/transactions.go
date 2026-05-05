@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type TransactionHandler struct {
@@ -18,6 +20,18 @@ type TransactionHandler struct {
 
 func NewTransactionHandler(repo *repository.TransactionRepository) *TransactionHandler {
 	return &TransactionHandler{repo: repo}
+}
+
+func userInfoFromCtx(c *gin.Context) *models.UserInfo {
+	uid := c.GetString("user_id")
+	if uid == "" {
+		return nil
+	}
+	return &models.UserInfo{
+		UserID:      uid,
+		DisplayName: c.GetString("display_name"),
+		AvatarURL:   c.GetString("avatar_url"),
+	}
 }
 
 func (h *TransactionHandler) Create(c *gin.Context) {
@@ -41,11 +55,7 @@ func (h *TransactionHandler) Create(c *gin.Context) {
 		Source:      req.Source,
 		Purpose:     req.Purpose,
 		Description: req.Description,
-		CreatedBy: &models.UserInfo{
-			UserID:      c.GetString("user_id"),
-			DisplayName: c.GetString("display_name"),
-			AvatarURL:   c.GetString("avatar_url"),
-		},
+		CreatedBy:   userInfoFromCtx(c),
 	}
 
 	if err := h.repo.Create(c.Request.Context(), t); err != nil {
@@ -144,14 +154,13 @@ func (h *TransactionHandler) Update(c *gin.Context) {
 		update["created_by"] = req.CreatedBy
 	}
 
-	if err := h.repo.Update(c.Request.Context(), id, update); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	t, err := h.repo.FindByID(c.Request.Context(), id)
+	t, err := h.repo.Update(c.Request.Context(), id, update, 0, userInfoFromCtx(c))
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -160,7 +169,11 @@ func (h *TransactionHandler) Update(c *gin.Context) {
 
 func (h *TransactionHandler) Delete(c *gin.Context) {
 	id := c.Param("id")
-	if err := h.repo.Delete(c.Request.Context(), id); err != nil {
+	if _, err := h.repo.Delete(c.Request.Context(), id, 0, userInfoFromCtx(c)); err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

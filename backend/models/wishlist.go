@@ -2,8 +2,6 @@ package models
 
 import (
 	"time"
-
-	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type Frequency string
@@ -16,16 +14,20 @@ const (
 )
 
 type WishlistItem struct {
-	ID            primitive.ObjectID `bson:"_id,omitempty" json:"id"`
-	Name          string             `bson:"name" json:"name"`
-	EstimatedCost float64            `bson:"estimated_cost" json:"estimated_cost"`
-	Category      string             `bson:"category" json:"category"`
-	Priority      int                `bson:"priority" json:"priority"`
-	Frequency     Frequency          `bson:"frequency" json:"frequency"`
-	Purchased     bool               `bson:"purchased" json:"purchased"`
-	Notes         string             `bson:"notes,omitempty" json:"notes,omitempty"`
-	CreatedBy     *UserInfo          `bson:"created_by,omitempty" json:"created_by,omitempty"`
-	CreatedAt     time.Time          `bson:"created_at" json:"created_at"`
+	ID             string     `bson:"_id" json:"id"`
+	Name           string     `bson:"name" json:"name"`
+	EstimatedCost  float64    `bson:"estimated_cost" json:"estimated_cost"`
+	Category       string     `bson:"category" json:"category"`
+	Priority       int        `bson:"priority" json:"priority"`
+	Frequency      Frequency  `bson:"frequency" json:"frequency"`
+	Purchased      bool       `bson:"purchased" json:"purchased"`
+	Notes          string     `bson:"notes,omitempty" json:"notes,omitempty"`
+	CreatedBy      *UserInfo  `bson:"created_by,omitempty" json:"created_by,omitempty"`
+	CreatedAt      time.Time  `bson:"created_at" json:"created_at"`
+	Version        int        `bson:"version" json:"version"`
+	UpdatedAt      time.Time  `bson:"updated_at" json:"updated_at"`
+	DeletedAt      *time.Time `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
+	LastModifiedBy *UserInfo  `bson:"last_modified_by,omitempty" json:"last_modified_by,omitempty"`
 }
 
 type CreateWishlistRequest struct {
