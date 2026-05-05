@@ -2,36 +2,37 @@ services:
   mongodb:
     image: mongo:8.0
     container_name: budget-mongodb
-    restart: unless-stopped
+    restart: always
     environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME:-admin}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-password}
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
       MONGO_INITDB_DATABASE: ${MONGO_DB:-budget}
       TZ: ${TZ:-Europe/Moscow}
-    ports:
-      - "27017:27017"
     volumes:
       - mongodb_data:/data/db
+    # MongoDB is NOT exposed to the host — accessible only inside budget-network
     networks:
       - budget-network
     healthcheck:
       test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
-      interval: 10s
-      timeout: 5s
+      interval: 30s
+      timeout: 10s
       retries: 5
+      start_period: 40s
 
   backend:
     build:
       context: ./backend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.prod
       args:
         - HTTP_PROXY=${HTTP_PROXY:-}
         - HTTPS_PROXY=${HTTPS_PROXY:-}
         - NO_PROXY=${NO_PROXY:-localhost,127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}
+    image: budget-backend:${API_VERSION:-latest}
     container_name: budget-backend
-    restart: unless-stopped
+    restart: always
     environment:
-      - MONGO_URI=mongodb://${MONGO_USERNAME:-admin}:${MONGO_PASSWORD:-password}@mongodb:27017/${MONGO_DB:-budget}?authSource=admin
+      - MONGO_URI=mongodb://${MONGO_USERNAME}:${MONGO_PASSWORD}@mongodb:27017/${MONGO_DB:-budget}?authSource=admin
       - DB_NAME=${MONGO_DB:-budget}
       - PORT=8080
       - PDF_FONT_PATH=/usr/share/fonts/dejavu/DejaVuSans.ttf
@@ -39,8 +40,9 @@ services:
       - TZ=${TZ:-Europe/Moscow}
       - ANDROID_LATEST=${ANDROID_LATEST:-1.15.0}
       - ANDROID_MIN_REQUIRED=${ANDROID_MIN_REQUIRED:-1.12.0}
+    # Bound to loopback only — external Nginx proxies /api/ → 127.0.0.1:8080
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     depends_on:
       mongodb:
         condition: service_healthy
@@ -55,14 +57,14 @@ services:
         - HTTP_PROXY=${HTTP_PROXY:-}
         - HTTPS_PROXY=${HTTPS_PROXY:-}
         - NO_PROXY=${NO_PROXY:-localhost,127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}
+    image: budget-frontend:${WEB_VERSION:-latest}
     container_name: budget-frontend
-    restart: unless-stopped
+    restart: always
     environment:
       - TZ=${TZ:-Europe/Moscow}
+    # Bound to loopback only — external Nginx proxies / → 127.0.0.1:8082
     ports:
-      - "8082:80"
-    volumes:
-      - ./apks:/usr/share/nginx/html/apks:ro
+      - "127.0.0.1:8082:80"
     depends_on:
       - backend
     networks:
