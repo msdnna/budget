@@ -50,6 +50,16 @@ export const users = {
   list: () => api.get('/users'),
 }
 
+export const categories = {
+  list: (section) => api.get('/categories', { params: { section } }),
+  create: (data) => api.post('/categories', data),
+  remove: (id) => api.delete(`/categories/${id}`),
+}
+
+export const versionApi = {
+  get: () => api.get('/version'),
+}
+
 export const exportApi = {
   excel: (params) => api.get('/export/excel', { params, responseType: 'blob' }),
   pdf: (params) => api.get('/export/pdf', { params, responseType: 'blob' }),

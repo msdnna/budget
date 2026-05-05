@@ -244,6 +244,20 @@ export const useThemeStore = defineStore('theme', () => {
     localStorage.setItem('budget-dark-mode', String(isDark.value))
   }
 
+  const valuesHidden = ref(localStorage.getItem('budget-values-hidden') === 'true')
+
+  function toggleValuesHidden() {
+    valuesHidden.value = !valuesHidden.value
+    localStorage.setItem('budget-values-hidden', String(valuesHidden.value))
+  }
+
+  const pieChartUnit = ref(localStorage.getItem('budget-pie-unit') || 'percent')
+
+  function togglePieChartUnit() {
+    pieChartUnit.value = pieChartUnit.value === 'percent' ? 'ruble' : 'percent'
+    localStorage.setItem('budget-pie-unit', pieChartUnit.value)
+  }
+
   watch(isDark, dark => {
     if (dark) {
       document.documentElement.setAttribute('data-theme', 'dark')
@@ -256,5 +270,7 @@ export const useThemeStore = defineStore('theme', () => {
     activeTheme, isDark, primaryColor, chartColors, palette,
     naiveTheme, themeOverrides,
     selectTheme, toggleDarkMode,
+    valuesHidden, toggleValuesHidden,
+    pieChartUnit, togglePieChartUnit,
   }
 })

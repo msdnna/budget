@@ -8,6 +8,14 @@
   --divider-hover: #aaaaaa;
 }
 
+/* Single-panel daterange picker: the second calendar is redundant — selection
+   already happens on whichever panel is visible. Hiding it keeps the popup
+   compact and prevents the "two months side-by-side, only one is used" UX. */
+.n-date-panel--daterange .n-date-panel-calendar--end,
+.n-date-panel--daterange .n-date-panel__vertical-divider {
+  display: none !important;
+}
+
 /* Dark mode overrides via JS-controlled attribute */
 :root[data-theme="dark"] {
   --border:        #333333;

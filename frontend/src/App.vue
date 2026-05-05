@@ -116,8 +116,9 @@
                         <n-layout style="overflow-y: auto">
                             <n-layout-header
                                 bordered
+                                class="app-header"
                                 style="
-                                    padding: 12px 24px;
+                                    padding: 0 24px;
                                     display: flex;
                                     align-items: center;
                                     justify-content: space-between;
@@ -158,6 +159,55 @@
                                             </div>
                                         </div>
                                     </n-popover>
+                                    <!-- Info popover -->
+                                    <n-popover trigger="click" placement="bottom-end" :show-arrow="false">
+                                        <template #trigger>
+                                            <n-tooltip trigger="hover" placement="bottom">
+                                                <template #trigger>
+                                                    <n-button quaternary circle size="small">
+                                                        <template #icon>
+                                                            <n-icon size="16"><InformationCircleOutline /></n-icon>
+                                                        </template>
+                                                    </n-button>
+                                                </template>
+                                                О приложении
+                                            </n-tooltip>
+                                        </template>
+                                        <div class="version-popover">
+                                            <div class="version-popover-title" :style="{ color: palette.text3 }">О приложении</div>
+                                            <div class="version-row">
+                                                <span>Веб</span>
+                                                <span class="version-val">v{{ webVersion }}</span>
+                                            </div>
+                                            <div class="version-row">
+                                                <span>API</span>
+                                                <span class="version-val">{{ apiVersion ? 'v' + apiVersion : '…' }}</span>
+                                            </div>
+                                        </div>
+                                    </n-popover>
+                                    <!-- Hide/show values toggle -->
+                                    <n-tooltip trigger="hover" placement="bottom">
+                                        <template #trigger>
+                                            <n-button quaternary circle size="small" @click="toggleValuesHidden">
+                                                <template #icon>
+                                                    <n-icon size="16">
+                                                        <EyeOutline v-if="valuesHidden" />
+                                                        <EyeOffOutline v-else />
+                                                    </n-icon>
+                                                </template>
+                                            </n-button>
+                                        </template>
+                                        {{ valuesHidden ? 'Показать суммы' : 'Скрыть суммы' }}
+                                    </n-tooltip>
+                                    <!-- Pie chart unit toggle -->
+                                    <n-tooltip trigger="hover" placement="bottom">
+                                        <template #trigger>
+                                            <n-button quaternary circle size="small" @click="togglePieChartUnit">
+                                                <span style="font-size: 12px; font-weight: 700; line-height: 1">{{ pieChartUnit === 'percent' ? '%' : '₽' }}</span>
+                                            </n-button>
+                                        </template>
+                                        {{ pieChartUnit === 'percent' ? 'Диаграммы: проценты' : 'Диаграммы: рубли' }}
+                                    </n-tooltip>
                                     <!-- Dark mode toggle -->
                                     <n-tooltip trigger="hover" placement="bottom">
                                         <template #trigger>
@@ -246,6 +296,29 @@
                                         </div>
                                     </div>
                                 </n-popover>
+                                <!-- Mobile hide/show values -->
+                                <n-tooltip trigger="hover" placement="bottom">
+                                    <template #trigger>
+                                        <n-button quaternary circle size="small" @click="toggleValuesHidden">
+                                            <template #icon>
+                                                <n-icon size="16">
+                                                    <EyeOutline v-if="valuesHidden" />
+                                                    <EyeOffOutline v-else />
+                                                </n-icon>
+                                            </template>
+                                        </n-button>
+                                    </template>
+                                    {{ valuesHidden ? 'Показать суммы' : 'Скрыть суммы' }}
+                                </n-tooltip>
+                                <!-- Mobile pie chart unit toggle -->
+                                <n-tooltip trigger="hover" placement="bottom">
+                                    <template #trigger>
+                                        <n-button quaternary circle size="small" @click="togglePieChartUnit">
+                                            <span style="font-size: 12px; font-weight: 700; line-height: 1">{{ pieChartUnit === 'percent' ? '%' : '₽' }}</span>
+                                        </n-button>
+                                    </template>
+                                    {{ pieChartUnit === 'percent' ? 'Диаграммы: проценты' : 'Диаграммы: рубли' }}
+                                </n-tooltip>
                                 <n-tooltip trigger="hover" placement="bottom">
                                     <template #trigger>
                                         <n-button quaternary circle size="small" @click="toggleDarkMode">
@@ -259,6 +332,27 @@
                                     </template>
                                     {{ isDark ? 'Светлая тема' : 'Тёмная тема' }}
                                 </n-tooltip>
+                                <!-- Mobile info popover -->
+                                <n-popover trigger="click" placement="bottom-end" :show-arrow="false">
+                                    <template #trigger>
+                                        <n-button quaternary circle size="small">
+                                            <template #icon>
+                                                <n-icon size="16"><InformationCircleOutline /></n-icon>
+                                            </template>
+                                        </n-button>
+                                    </template>
+                                        <div class="version-popover">
+                                            <div class="version-popover-title" :style="{ color: palette.text3 }">О приложении</div>
+                                            <div class="version-row">
+                                                <span>Веб</span>
+                                                <span class="version-val">v{{ webVersion }}</span>
+                                            </div>
+                                            <div class="version-row">
+                                                <span>API</span>
+                                                <span class="version-val">{{ apiVersion ? 'v' + apiVersion : '…' }}</span>
+                                            </div>
+                                        </div>
+                                </n-popover>
                                 <n-text depth="3" style="font-size: 12px">{{ today }}</n-text>
                             </n-space>
                         </n-layout-header>
@@ -304,17 +398,23 @@ import {
     TrendingUpOutline, TrendingDownOutline, BarChartOutline,
     BulbOutline, CloudDownloadOutline, ColorPaletteOutline,
     LogInOutline, LogOutOutline, SunnyOutline, MoonOutline,
+    InformationCircleOutline, EyeOutline, EyeOffOutline,
 } from "@vicons/ionicons5";
 import { useThemeStore, COLOR_THEMES } from "@/stores/theme";
 import { useAuthStore } from "@/stores/auth";
+import { versionApi } from "@/api/index.js";
 import LoginModal from "@/components/LoginModal.vue";
 import UserAvatar from "@/components/UserAvatar.vue";
 import AuthGate from "@/components/AuthGate.vue";
 
+// ── Version info ──────────────────────────────────────────────────
+const webVersion = __APP_VERSION__
+const apiVersion = ref(null)
+
 // ── Theme ─────────────────────────────────────────────────────────
 const themeStore = useThemeStore();
-const { activeTheme, primaryColor, palette, naiveTheme, themeOverrides, isDark } = storeToRefs(themeStore);
-const { selectTheme, toggleDarkMode } = themeStore;
+const { activeTheme, primaryColor, palette, naiveTheme, themeOverrides, isDark, valuesHidden, pieChartUnit } = storeToRefs(themeStore);
+const { selectTheme, toggleDarkMode, toggleValuesHidden, togglePieChartUnit } = themeStore;
 
 function dotStyle(t) {
     const isActive = activeTheme.value.key === t.key
@@ -350,6 +450,7 @@ onMounted(async () => {
     window.addEventListener("resize", onResize);
     window.addEventListener("auth:expired", onAuthExpired);
     await auth.verify();
+    versionApi.get().then(r => { apiVersion.value = r.data.api }).catch(() => {});
 });
 onUnmounted(() => {
     window.removeEventListener("resize", onResize);
@@ -395,15 +496,22 @@ const mobileNavItems = [
     height: 100%;
 }
 
+/* ── App header / sider logo (same height for visual alignment) ─── */
+.app-header {
+    min-height: var(--app-header-h, 64px);
+}
+
 /* ── Logo ──────────────────────────────────────────────────────── */
 .logo {
     display: flex; align-items: center; gap: 10px;
-    padding: 16px 18px;
+    padding: 0 18px;
+    min-height: var(--app-header-h, 64px);
+    box-sizing: border-box;
     border-bottom: 1px solid var(--border);
     margin-bottom: 8px;
     transition: padding 0.3s, border-color 0.3s;
 }
-.logo.collapsed { padding: 16px; justify-content: center; }
+.logo.collapsed { padding: 0; justify-content: center; }
 .logo-icon {
     display: flex; align-items: baseline; gap: 0;
     font-family: 'Nunito', sans-serif;
@@ -442,6 +550,23 @@ const mobileNavItems = [
     white-space: nowrap;
     opacity: 0.75;
 }
+
+/* ── Version popover ──────────────────────────────────────────── */
+.version-popover { padding: 6px 2px; min-width: 150px; }
+.version-popover-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 10px;
+}
+.version-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 24px;
+    font-size: 13px;
+    margin-bottom: 4px;
+}
+.version-val { opacity: 0.6; font-variant-numeric: tabular-nums; }
 
 /* ── Color picker dots ─────────────────────────────────────────── */
 .theme-dots { display: flex; flex-wrap: wrap; gap: 8px; }

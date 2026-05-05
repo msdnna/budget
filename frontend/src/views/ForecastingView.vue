@@ -74,7 +74,16 @@
               </n-grid-item>
               <n-grid-item span="2 s:1">
                 <n-form-item label="Категория" path="category">
-                  <n-select v-model:value="form.category" :options="categoryOptions" placeholder="Категория" />
+                  <n-select
+                    v-model:value="form.category"
+                    :options="categoryOptions"
+                    filterable
+                    tag
+                    :on-create="handleCategoryCreate"
+                    :render-option="renderCategoryOption"
+                    to="body"
+                    placeholder="Выберите или введите категорию"
+                  />
                 </n-form-item>
               </n-grid-item>
               <n-grid-item span="2 s:1">
@@ -102,15 +111,64 @@
 
       <!-- Wishlist table -->
       <n-grid-item span="2 m:1">
-        <n-card title="Список желаний">
+        <n-card>
+          <template #header>
+            <n-space align="center" justify="space-between" style="width:100%">
+              <n-text strong>Список желаний</n-text>
+              <n-space align="center" :size="8">
+                <template v-if="!bulkMode">
+                  <n-button size="small" :disabled="!wlStore.items.length" @click="enterBulkMode">
+                    Пакетное редактирование
+                  </n-button>
+                </template>
+                <template v-else>
+                  <n-text v-if="selectedIds.size" depth="2" style="font-size:12px">
+                    Выбрано: {{ selectedIds.size }}
+                  </n-text>
+                  <template v-if="selectedIds.size">
+                    <ConfirmActionButton
+                      v-if="purchasableSelectedCount > 0"
+                      :label="allPurchasableSelectedPurchased ? 'Не куплено' : 'Куплено'"
+                      :type="allPurchasableSelectedPurchased ? 'default' : 'success'"
+                      :loading="bulkBusy"
+                      @confirm="bulkTogglePurchased"
+                    />
+                    <ConfirmActionButton
+                      label="Удалить"
+                      type="error"
+                      :loading="bulkBusy"
+                      @confirm="bulkDelete"
+                    />
+                  </template>
+                  <n-button size="small" quaternary @click="exitBulkMode">Отмена</n-button>
+                </template>
+              </n-space>
+            </n-space>
+          </template>
           <n-spin :show="wlStore.loading">
             <n-empty v-if="!wlStore.items.length" description="Список пуст" style="padding: 40px 0;" />
             <n-list v-else>
-              <n-list-item v-for="item in wlStore.items" :key="item.id">
+              <n-list-item
+                v-for="item in wlStore.items"
+                :key="item.id"
+                :style="bulkMode && selectedIds.has(item.id) ? `background:${primaryColor}1f` : ''"
+              >
                 <n-thing :title="item.name" :description="item.category">
-                  <!-- Avatar / assign user -->
+                  <!-- Avatar / assign user / selection checkbox -->
                   <template #avatar>
-                    <n-tooltip :delay="300">
+                    <template v-if="bulkMode">
+                      <div
+                        class="bulk-checkbox"
+                        :class="{ checked: selectedIds.has(item.id) }"
+                        :style="checkboxStyle(selectedIds.has(item.id))"
+                        @click="toggleSelect(item.id)"
+                      >
+                        <svg v-if="selectedIds.has(item.id)" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                      </div>
+                    </template>
+                    <n-tooltip v-else :delay="300">
                       <template #trigger>
                         <div
                           class="user-assign-btn"
@@ -138,7 +196,7 @@
                       <n-tag v-if="item.purchased" type="success" size="small">Куплено</n-tag>
 
                       <!-- Inline cost edit -->
-                      <template v-if="editingId === item.id">
+                      <template v-if="editingId === item.id && !bulkMode">
                         <n-input-number
                           v-model:value="editValue"
                           :min="1"
@@ -154,7 +212,7 @@
                         <n-text strong :style="{ color: item.purchased ? palette.text3 : primaryColor, whiteSpace: 'nowrap', textDecoration: item.purchased ? 'line-through' : 'none' }">
                           {{ item.estimated_cost.toLocaleString('ru-RU') }} ₽
                         </n-text>
-                        <span class="inline-edit-icon" @click="startEdit(item)" title="Редактировать стоимость">
+                        <span v-if="!bulkMode" class="inline-edit-icon" @click="startEdit(item)" title="Редактировать стоимость">
                           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
                             <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
@@ -164,7 +222,7 @@
                     </n-space>
                   </template>
 
-                  <template #action>
+                  <template v-if="!bulkMode" #action>
                     <n-space size="small">
                       <n-button v-if="item.frequency === 'once'" size="tiny" @click="wlStore.togglePurchased(item)">
                         {{ item.purchased ? 'Не куплено' : 'Куплено' }}
@@ -202,7 +260,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, h } from 'vue'
 import { useMessage } from 'naive-ui'
 import { use } from 'echarts/core'
 import { PieChart } from 'echarts/charts'
@@ -215,14 +273,17 @@ import {
   NInputNumber, NSelect, NSwitch, NModal, NTooltip
 } from 'naive-ui'
 import { useWishlistStore } from '@/stores/wishlist'
-import { statistics, users as usersApi } from '@/api'
+import { useCategoriesStore } from '@/stores/categories'
+import { statistics, users as usersApi, wishlist as wlApi } from '@/api'
 import { storeToRefs } from 'pinia'
 import { useThemeStore } from '@/stores/theme'
 import UserAvatar from '@/components/UserAvatar.vue'
+import ConfirmActionButton from '@/components/ConfirmActionButton.vue'
 
 use([PieChart, TooltipComponent, LegendComponent, CanvasRenderer])
 
-const { chartColors, primaryColor, palette } = storeToRefs(useThemeStore())
+const themeStore = useThemeStore()
+const { chartColors, primaryColor, palette } = storeToRefs(themeStore)
 
 const wlStore = useWishlistStore()
 const message = useMessage()
@@ -268,6 +329,75 @@ async function confirmEdit(item) {
   }
 }
 
+// ── Bulk edit ─────────────────────────────────────────────────────────────────
+
+const bulkMode = ref(false)
+const selectedIds = ref(new Set())
+const bulkBusy = ref(false)
+
+function enterBulkMode() {
+  bulkMode.value = true
+  selectedIds.value = new Set()
+  cancelEdit()
+}
+
+function exitBulkMode() {
+  bulkMode.value = false
+  selectedIds.value = new Set()
+}
+
+function toggleSelect(id) {
+  const s = new Set(selectedIds.value)
+  if (s.has(id)) s.delete(id); else s.add(id)
+  selectedIds.value = s
+}
+
+const purchasableSelected = computed(() =>
+  wlStore.items.filter(it => selectedIds.value.has(it.id) && (!it.frequency || it.frequency === 'once'))
+)
+const purchasableSelectedCount = computed(() => purchasableSelected.value.length)
+const allPurchasableSelectedPurchased = computed(() => {
+  const list = purchasableSelected.value
+  return list.length > 0 && list.every(it => it.purchased)
+})
+
+async function bulkTogglePurchased() {
+  const list = purchasableSelected.value
+  if (!list.length) return
+  const target = !allPurchasableSelectedPurchased.value
+  bulkBusy.value = true
+  try {
+    await Promise.all(list.map(it => wlApi.update(it.id, { purchased: target })))
+    exitBulkMode()
+    await Promise.all([wlStore.fetch(), loadForecast()])
+    message.success(target ? 'Отмечено как куплено' : 'Отмечено как не куплено')
+  } catch (e) {
+    message.error(e.message)
+  } finally {
+    bulkBusy.value = false
+  }
+}
+
+async function bulkDelete() {
+  bulkBusy.value = true
+  try {
+    await Promise.all(Array.from(selectedIds.value).map(id => wlApi.remove(id)))
+    exitBulkMode()
+    await Promise.all([wlStore.fetch(), loadForecast()])
+    message.success('Записи удалены')
+  } catch (e) {
+    message.error(e.message)
+  } finally {
+    bulkBusy.value = false
+  }
+}
+
+function checkboxStyle(checked) {
+  const ringColor = checked ? primaryColor.value : palette.value.text3
+  const bg = checked ? primaryColor.value : 'transparent'
+  return `cursor:pointer;display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;border:2px solid ${ringColor};background:${bg};color:#fff;transition:background .15s,border-color .15s;box-sizing:border-box`
+}
+
 // ── Reassign user ─────────────────────────────────────────────────────────────
 
 const showReassign = ref(false)
@@ -304,11 +434,44 @@ async function doReassign(user) {
 
 // ── Options ───────────────────────────────────────────────────────────────────
 
-const categoryOptions = [
-  'Продукты','Транспорт','Жильё/ЖКХ','Рестораны','Развлечения',
-  'Здоровье','Образование','Одежда','Электроника','Путешествия',
-  'Связь','Красота','Спорт','Прочее'
-].map(v => ({ label: v, value: v }))
+const catStore = useCategoriesStore()
+const categoryOptions = computed(() => catStore.options('wishlist'))
+
+function handleCategoryCreate(value) {
+  return { label: value, value, id: null, is_default: false }
+}
+
+const trashIcon = () => h('svg', {
+  width: 13, height: 13, viewBox: '0 0 24 24', fill: 'none',
+  stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round',
+  style: 'display:block'
+}, [
+  h('polyline', { points: '3 6 5 6 21 6' }),
+  h('path', { d: 'M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6' }),
+  h('path', { d: 'M10 11v6' }),
+  h('path', { d: 'M14 11v6' }),
+  h('path', { d: 'M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2' }),
+])
+
+function renderCategoryOption({ node, option }) {
+  if (option.is_default || !option.id) return node
+  return h('div', { style: 'display:flex;align-items:center;width:100%' }, [
+    h('span', { style: 'flex:1;min-width:0' }, [node]),
+    h('span', {
+      style: `opacity:0.55;cursor:pointer;flex-shrink:0;padding:2px 4px;margin-right:14px;display:inline-flex;align-items:center;transition:opacity .15s;color:${palette.value.text2}`,
+      title: 'Удалить категорию',
+      onClick: async (e) => {
+        e.stopPropagation()
+        try {
+          await catStore.remove(option.id, 'wishlist')
+          if (form.value.category === option.value) form.value.category = ''
+        } catch { message.error('Не удалось удалить категорию') }
+      },
+      onMouseenter: e => { e.currentTarget.style.opacity = '1' },
+      onMouseleave: e => { e.currentTarget.style.opacity = '0.55' },
+    }, [trashIcon()]),
+  ])
+}
 
 const frequencyOptions = [
   { label: 'Однократно', value: 'once' },
@@ -332,6 +495,10 @@ async function submit() {
   try { await formRef.value?.validate() } catch { return }
   saving.value = true
   try {
+    const cat = form.value.category
+    if (cat && !catStore.bySection.wishlist.find(c => c.name === cat)) {
+      await catStore.add('wishlist', cat).catch(() => {})
+    }
     await wlStore.create({ ...form.value })
     await loadForecast()
     message.success('Добавлено в список желаний')
@@ -376,6 +543,7 @@ const forecastPieOption = computed(() => {
 })
 
 onMounted(async () => {
+  catStore.load('wishlist')
   await Promise.all([wlStore.fetch(), loadForecast()])
 })
 </script>

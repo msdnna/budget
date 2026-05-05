@@ -2,6 +2,34 @@
   <div>
     <SplitPane storage-key="income-split" :default-left="45" :min-left="20" :max-left="75">
       <template #left>
+        <!-- Initial balance card -->
+        <n-card style="margin-bottom:12px">
+          <template #header>
+            <n-space align="center" justify="space-between" style="width:100%">
+              <n-text strong>Баланс на начало месяца</n-text>
+              <TilePeriodPicker
+                v-model:value="ibMonth"
+                type="month"
+                size="small"
+                width="170px"
+                @update:value="loadInitialBalance"
+              />
+            </n-space>
+          </template>
+          <n-space align="center" justify="space-between">
+            <n-text v-if="ibRecord" :style="`color:${incomeColor};font-weight:600;font-size:18px${valuesHidden ? ';filter:blur(7px);user-select:none' : ''}`">
+              {{ ibRecord.amount.toLocaleString('ru-RU') }} ₽
+            </n-text>
+            <n-text v-else type="tertiary">Не задан</n-text>
+            <n-space>
+              <n-button v-if="ibRecord" size="small" quaternary type="error" @click="deleteIb">✕</n-button>
+              <n-button size="small" type="primary" @click="showIbForm = true">
+                {{ ibRecord ? 'Изменить' : 'Задать' }}
+              </n-button>
+            </n-space>
+          </n-space>
+        </n-card>
+
         <n-card title="Добавить доход">
           <n-form ref="formRef" :model="form" :rules="rules" label-placement="top">
             <n-grid :cols="2" :x-gap="12" :item-responsive="true">
@@ -17,7 +45,16 @@
               </n-grid-item>
               <n-grid-item span="2 s:1">
                 <n-form-item label="Категория" path="category">
-                  <n-select v-model:value="form.category" :options="categoryOptions" placeholder="Выберите категорию" />
+                  <n-select
+                    v-model:value="form.category"
+                    :options="categoryOptions"
+                    filterable
+                    tag
+                    :on-create="handleCategoryCreate"
+                    :render-option="renderCategoryOption"
+                    to="body"
+                    placeholder="Выберите или введите категорию"
+                  />
                 </n-form-item>
               </n-grid-item>
               <n-grid-item span="2 s:1">
@@ -40,9 +77,36 @@
 
       <template #right>
         <n-card title="История доходов">
-          <n-space style="margin-bottom:12px" wrap>
-            <n-date-picker v-model:value="filterRange" type="daterange" clearable size="small" @update:value="applyFilters" />
-            <n-select v-model:value="filterCategory" :options="[{label:'Все',value:''},...categoryOptions]" size="small" style="width:150px" @update:value="applyFilters" />
+          <n-space style="margin-bottom:12px" wrap align="center" justify="space-between">
+            <n-space wrap>
+              <n-date-picker v-model:value="filterRange" type="daterange" clearable size="small" @update:value="applyFilters" />
+              <n-select v-model:value="filterCategory" :options="[{label:'Все',value:''},...categoryOptions]" size="small" style="width:150px" clearable @update:value="applyFilters" />
+            </n-space>
+            <n-space align="center" :size="8">
+              <template v-if="!bulkMode">
+                <n-button size="small" @click="enterBulkMode">Пакетное редактирование</n-button>
+              </template>
+              <template v-else>
+                <n-text v-if="selectedIds.size" depth="2" style="font-size:12px">
+                  Выбрано: {{ selectedIds.size }}
+                </n-text>
+                <template v-if="selectedIds.size">
+                  <ConfirmActionButton
+                    :label="allSelectedHidden ? 'Показать' : 'Скрыть'"
+                    :type="allSelectedHidden ? 'default' : 'warning'"
+                    :loading="bulkBusy"
+                    @confirm="bulkToggleHidden"
+                  />
+                  <ConfirmActionButton
+                    label="Удалить"
+                    type="error"
+                    :loading="bulkBusy"
+                    @confirm="bulkDelete"
+                  />
+                </template>
+                <n-button size="small" quaternary @click="exitBulkMode">Отмена</n-button>
+              </template>
+            </n-space>
           </n-space>
           <n-data-table
             :columns="columns"
@@ -57,6 +121,21 @@
         </n-card>
       </template>
     </SplitPane>
+
+    <!-- Initial balance modal -->
+    <n-modal v-model:show="showIbForm" preset="card" title="Баланс на начало месяца" style="max-width:320px">
+      <n-form label-placement="top">
+        <n-form-item label="Сумма (₽)">
+          <n-input-number v-model:value="ibAmount" :min="0.01" :precision="2" style="width:100%" placeholder="0.00" />
+        </n-form-item>
+      </n-form>
+      <template #footer>
+        <n-space justify="end">
+          <n-button @click="showIbForm = false">Отмена</n-button>
+          <n-button type="primary" :loading="ibSaving" :disabled="!ibAmount" @click="saveIb">Сохранить</n-button>
+        </n-space>
+      </template>
+    </n-modal>
 
     <!-- Reassign user modal -->
     <n-modal v-model:show="showReassign" preset="card" title="Изменить автора" style="max-width:320px">
@@ -89,13 +168,16 @@ import {
 } from 'naive-ui'
 import { useTransactionsStore } from '@/stores/transactions'
 import { useThemeStore } from '@/stores/theme'
+import { useCategoriesStore } from '@/stores/categories'
 import { storeToRefs } from 'pinia'
 import SplitPane from '@/components/SplitPane.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
-import { users as usersApi } from '@/api'
+import TilePeriodPicker from '@/components/TilePeriodPicker.vue'
+import ConfirmActionButton from '@/components/ConfirmActionButton.vue'
+import { users as usersApi, transactions as txApi } from '@/api'
 
-const store = useTransactionsStore()
-const { palette } = storeToRefs(useThemeStore())
+const store = useTransactionsStore('income')
+const { palette, valuesHidden, primaryColor } = storeToRefs(useThemeStore())
 const incomeColor = computed(() => palette.value.income)
 const message = useMessage()
 const formRef = ref(null)
@@ -105,9 +187,97 @@ const filterCategory = ref('')
 
 const form = ref({ amount: null, date: Date.now(), category: '', source: '', description: '' })
 
-const categoryOptions = [
-  'Зарплата','Фриланс','Инвестиции','Бонус','Подарок','Аренда','Прочее'
-].map(v => ({ label: v, value: v }))
+// ── Initial balance ───────────────────────────────────────────────────────────
+
+const ibMonth = ref(Date.now())
+const ibRecord = ref(null)
+const showIbForm = ref(false)
+const ibAmount = ref(null)
+const ibSaving = ref(false)
+
+async function loadInitialBalance() {
+  const d = new Date(ibMonth.value)
+  const from = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
+  const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
+  const to = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+  try {
+    const { data } = await txApi.list({ type: 'initial_balance', from, to, limit: 1 })
+    ibRecord.value = (data.data || [])[0] || null
+  } catch { ibRecord.value = null }
+}
+
+async function saveIb() {
+  if (!ibAmount.value) return
+  ibSaving.value = true
+  try {
+    const d = new Date(ibMonth.value)
+    const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
+    if (ibRecord.value) {
+      await txApi.update(ibRecord.value.id, { amount: ibAmount.value })
+    } else {
+      await txApi.create({ type: 'initial_balance', amount: ibAmount.value, date, category: 'Начальный баланс' })
+    }
+    await loadInitialBalance()
+    showIbForm.value = false
+    ibAmount.value = null
+    message.success('Начальный баланс сохранён')
+  } catch (e) {
+    message.error(e.message)
+  } finally {
+    ibSaving.value = false
+  }
+}
+
+async function deleteIb() {
+  if (!ibRecord.value) return
+  try {
+    await txApi.remove(ibRecord.value.id)
+    ibRecord.value = null
+    message.success('Начальный баланс удалён')
+  } catch (e) {
+    message.error(e.message)
+  }
+}
+
+const catStore = useCategoriesStore()
+const categoryOptions = computed(() => catStore.options('income'))
+
+function handleCategoryCreate(value) {
+  return { label: value, value, id: null, is_default: false }
+}
+
+const trashIcon = () => h('svg', {
+  width: 13, height: 13, viewBox: '0 0 24 24', fill: 'none',
+  stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round',
+  style: 'display:block'
+}, [
+  h('polyline', { points: '3 6 5 6 21 6' }),
+  h('path', { d: 'M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6' }),
+  h('path', { d: 'M10 11v6' }),
+  h('path', { d: 'M14 11v6' }),
+  h('path', { d: 'M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2' }),
+])
+
+function renderCategoryOption({ node, option }) {
+  if (option.is_default || !option.id) return node
+  return h('div', { style: 'display:flex;align-items:center;width:100%' }, [
+    h('span', { style: 'flex:1;min-width:0' }, [node]),
+    h('span', {
+      style: `opacity:0.55;cursor:pointer;flex-shrink:0;padding:2px 4px;margin-right:14px;display:inline-flex;align-items:center;transition:opacity .15s;color:${palette.value.text2}`,
+      title: 'Удалить категорию',
+      onClick: async (e) => {
+        e.stopPropagation()
+        try {
+          await catStore.remove(option.id, 'income')
+          if (form.value.category === option.value) form.value.category = ''
+          if (filterCategory.value === option.value) filterCategory.value = ''
+        } catch { message.error('Не удалось удалить категорию') }
+      },
+      onMouseenter: e => { e.currentTarget.style.opacity = '1' },
+      onMouseleave: e => { e.currentTarget.style.opacity = '0.55' },
+    }, [trashIcon()]),
+  ])
+}
 
 const rules = {
   amount: [{ required: true, type: 'number', message: 'Введите сумму', trigger: 'blur' }],
@@ -119,11 +289,15 @@ async function submit() {
   try { await formRef.value?.validate() } catch { return }
   saving.value = true
   try {
+    const cat = form.value.category
+    if (cat && !catStore.bySection.income.find(c => c.name === cat)) {
+      await catStore.add('income', cat).catch(() => {})
+    }
     await store.create({
       type: 'income',
       amount: form.value.amount,
       date: toLocalDateString(form.value.date).split('T')[0],
-      category: form.value.category,
+      category: cat,
       source: form.value.source,
       description: form.value.description,
     })
@@ -137,7 +311,12 @@ async function submit() {
 }
 
 function getRowProps(row) {
-  return { style: row.hidden ? 'opacity:0.4' : '' }
+  const styles = []
+  if (row.hidden) styles.push('opacity:0.4')
+  if (bulkMode.value && selectedIds.value.has(row.id)) {
+    styles.push(`background:${primaryColor.value}1f`)
+  }
+  return { style: styles.join(';') }
 }
 
 function fillFromTemplate(row) {
@@ -145,11 +324,16 @@ function fillFromTemplate(row) {
   message.info('Форма заполнена по шаблону')
 }
 
+function fmtLocalDate(ts) {
+  const d = new Date(ts)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 function applyFilters() {
   const f = { type: 'income', category: filterCategory.value }
   if (filterRange.value) {
-    f.from = new Date(filterRange.value[0]).toISOString().split('T')[0]
-    f.to = new Date(filterRange.value[1]).toISOString().split('T')[0]
+    f.from = fmtLocalDate(filterRange.value[0])
+    f.to = fmtLocalDate(filterRange.value[1])
   }
   store.setFilters(f)
 }
@@ -261,12 +445,82 @@ const userPlaceholder = (onClick) => h('div', {
   ])
 ])
 
+// ── Bulk edit ─────────────────────────────────────────────────────────────────
+
+const bulkMode = ref(false)
+const selectedIds = ref(new Set())
+const bulkBusy = ref(false)
+
+function enterBulkMode() {
+  bulkMode.value = true
+  selectedIds.value = new Set()
+}
+
+function exitBulkMode() {
+  bulkMode.value = false
+  selectedIds.value = new Set()
+}
+
+function toggleSelect(id) {
+  const s = new Set(selectedIds.value)
+  if (s.has(id)) s.delete(id); else s.add(id)
+  selectedIds.value = s
+}
+
+const allSelectedHidden = computed(() => {
+  if (!selectedIds.value.size) return false
+  const sel = store.items.filter(r => selectedIds.value.has(r.id))
+  return sel.length > 0 && sel.every(r => r.hidden)
+})
+
+async function bulkToggleHidden() {
+  const target = !allSelectedHidden.value
+  bulkBusy.value = true
+  try {
+    await Promise.all(Array.from(selectedIds.value).map(id => txApi.update(id, { hidden: target })))
+    exitBulkMode()
+    await store.fetch()
+    message.success(target ? 'Записи скрыты' : 'Записи показаны')
+  } catch (e) {
+    message.error(e.message)
+  } finally {
+    bulkBusy.value = false
+  }
+}
+
+async function bulkDelete() {
+  bulkBusy.value = true
+  try {
+    await Promise.all(Array.from(selectedIds.value).map(id => txApi.remove(id)))
+    exitBulkMode()
+    await store.fetch()
+    message.success('Записи удалены')
+  } catch (e) {
+    message.error(e.message)
+  } finally {
+    bulkBusy.value = false
+  }
+}
+
+const selectionCheckbox = (row) => {
+  const sel = selectedIds.value.has(row.id)
+  return h('div', {
+    style: `cursor:pointer;display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;border:2px solid ${sel ? primaryColor.value : palette.value.text3};background:${sel ? primaryColor.value : 'transparent'};color:#fff;transition:background .15s,border-color .15s;box-sizing:border-box`,
+    onClick: () => toggleSelect(row.id),
+  }, sel ? [h('svg', {
+    width: 12, height: 12, viewBox: '0 0 24 24', fill: 'none',
+    stroke: 'currentColor', 'stroke-width': '3', 'stroke-linecap': 'round', 'stroke-linejoin': 'round',
+    style: 'display:block',
+  }, [h('polyline', { points: '20 6 9 17 4 12' })])] : [])
+}
+
 // ── Columns ───────────────────────────────────────────────────────────────────
 
-const columns = [
+const columns = computed(() => [
   {
     title: '', key: 'created_by', width: 36, align: 'center',
     render: row => {
+      if (bulkMode.value) return selectionCheckbox(row)
       if (!row.created_by) {
         return h(NTooltip, null, {
           trigger: () => userPlaceholder(() => openReassign(row)),
@@ -294,10 +548,17 @@ const columns = [
           default: () => [
             h(NSelect, {
               value: editCellValue.value,
-              options: categoryOptions,
+              options: categoryOptions.value,
+              filterable: true, tag: true,
+              renderOption: renderCategoryOption,
+              onCreate: (val) => ({ label: val, value: val, id: null, is_default: false }),
               size: 'small', to: 'body',
               style: 'width:110px',
-              'onUpdate:value': v => { editCellValue.value = v },
+              'onUpdate:value': async (v) => {
+                editCellValue.value = v
+                const isNew = v && !catStore.bySection.income.find(c => c.name === v)
+                if (isNew) await catStore.add('income', v)
+              },
             }),
             okBtn(() => confirmCellEdit(row, 'category')),
             cancelBtn(cancelCellEdit),
@@ -381,8 +642,9 @@ const columns = [
       }
       return h(NSpace, { size: 2, wrap: false, align: 'center', justify: 'end' }, {
         default: () => [
-          h(NText, { style: `color:${incomeColor.value};font-weight:600` },
-            { default: () => `+${row.amount.toLocaleString('ru-RU')} ₽` }),
+          h(NText, {
+            style: `color:${incomeColor.value};font-weight:600;transition:filter .25s${valuesHidden.value ? ';filter:blur(7px);user-select:none' : ''}`
+          }, { default: () => `+${row.amount.toLocaleString('ru-RU')} ₽` }),
           pencilBtn(() => startCellEdit(row.id, 'amount', row.amount)),
         ]
       })
@@ -414,7 +676,7 @@ const columns = [
       ]
     })
   }
-]
+])
 
 const pagination = computed(() => ({
   page: store.page, pageSize: store.limit, itemCount: store.total, showSizePicker: false
@@ -422,5 +684,7 @@ const pagination = computed(() => ({
 
 onMounted(() => {
   store.setFilters({ type: 'income' })
+  catStore.load('income')
+  loadInitialBalance()
 })
 </script>
