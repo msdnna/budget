@@ -5,6 +5,10 @@
 # ─── Go ──────────────────────────────────────────────────────────────────────
 backend/bin/
 backend/*.exe
+# Local builds of cmd/* tools (e.g. `go build ./cmd/migrate` produces ./backend/migrate)
+backend/migrate
+backend/seed_loadtest
+backend/create_user
 
 # ─── Frontend ────────────────────────────────────────────────────────────────
 frontend/node_modules/
@@ -14,10 +18,14 @@ frontend/dist/
 android/build/
 android/app/build/
 android/.gradle/
+android/.kotlin/
 android/local.properties
 android/local.env
 android/*.apk
 android/*.aab
+
+# Self-distributed APK store (served by frontend nginx at /apks/)
+apks/*.apk
 
 # ─── IDE ─────────────────────────────────────────────────────────────────────
 .idea/
