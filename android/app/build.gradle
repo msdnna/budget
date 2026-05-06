@@ -47,8 +47,16 @@ android {
             applicationIdSuffix ""
         }
         release {
-            signingConfig signingConfigs.release
-            minifyEnabled false
+            // Prefer the production keystore when the env vars are set;
+            // fall back to the auto-generated debug keystore so an ad-hoc
+            // `./gradlew assembleRelease` (e.g. perf testing) doesn't have
+            // to set up signing. `make android-release` still requires the
+            // real keystore env vars via build-android-release.sh.
+            def hasReleaseKs = (System.getenv("ANDROID_KEYSTORE_FILE") ?: "").trim() != ""
+            signingConfig hasReleaseKs ? signingConfigs.release : signingConfigs.debug
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
 
