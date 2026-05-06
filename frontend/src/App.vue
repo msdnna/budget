@@ -18,9 +18,7 @@
                             <div class="sider-inner">
                             <!-- Logo -->
                             <div class="logo" :class="{ collapsed }">
-                                <div class="logo-icon">
-                                    <span>m</span><span class="logo-b">b</span>
-                                </div>
+                                <MbLogo :color="primaryColor" :size="26" aria-label="msdnna budget" />
                                 <div v-if="!collapsed" class="logo-name">
                                     <span class="logo-name-main">msdnna budget</span>
                                     <span class="logo-name-sub">Система ведения бюджета</span>
@@ -243,7 +241,7 @@
                                 justify-content: space-between;
                             "
                         >
-                            <span class="mobile-logo"><span>m</span><span class="logo-b">b</span></span>
+                            <MbLogo :color="primaryColor" :size="22" aria-label="msdnna budget" />
                             <n-space align="center" :size="6">
                                 <!-- Mobile login/user -->
                                 <template v-if="auth.isAuthenticated">
@@ -406,6 +404,7 @@ import { versionApi } from "@/api/index.js";
 import LoginModal from "@/components/LoginModal.vue";
 import UserAvatar from "@/components/UserAvatar.vue";
 import AuthGate from "@/components/AuthGate.vue";
+import MbLogo from "@/components/MbLogo.vue";
 
 // ── Version info ──────────────────────────────────────────────────
 const webVersion = __APP_VERSION__
@@ -512,37 +511,15 @@ const mobileNavItems = [
     transition: padding 0.3s, border-color 0.3s;
 }
 .logo.collapsed { padding: 0; justify-content: center; }
-.logo-icon {
-    display: flex; align-items: baseline; gap: 0;
-    font-family: 'Nunito', sans-serif;
-    font-size: 22px; font-weight: 900;
-    letter-spacing: -1px;
-    color: v-bind(primaryColor);
-    line-height: 1;
-    flex-shrink: 0;
-}
-.logo-b {
-    position: relative;
-    display: inline-block;
-}
-.logo-b::after {
-    content: '';
-    position: absolute;
-    bottom: -2px; left: 0;
-    width: 100%; height: 2.5px;
-    border-radius: 2px;
-    background: v-bind(primaryColor);
-    opacity: 0.45;
-}
 .logo-name {
     display: flex; flex-direction: column;
     line-height: 1.25; overflow: hidden;
 }
 .logo-name-main {
-    font-family: 'Nunito', sans-serif;
     font-size: 12px; font-weight: 800;
     color: v-bind(primaryColor);
     white-space: nowrap;
+    letter-spacing: -0.2px;
 }
 .logo-name-sub {
     font-size: 9.5px; font-weight: 400;
@@ -594,16 +571,6 @@ const mobileNavItems = [
     transition: opacity 0.15s;
 }
 .user-avatar-btn:hover { opacity: 0.8; }
-
-/* ── Mobile header logo ────────────────────────────────────────── */
-.mobile-logo {
-    display: inline-flex; align-items: baseline; gap: 0;
-    font-family: 'Nunito', sans-serif;
-    font-size: 20px; font-weight: 900;
-    letter-spacing: -1px;
-    color: v-bind(primaryColor);
-    line-height: 1;
-}
 
 /* ── Mobile bottom nav ─────────────────────────────────────────── */
 .mobile-nav {
