@@ -175,7 +175,7 @@ fun ConnectScreen(
                 modifier = Modifier.padding(32.dp).verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                MbLogo(primaryColor = primaryColor, fontSize = 80.sp)
+                MbLogo(primaryColor = primaryColor, size = 100.dp)
 
                 Spacer(Modifier.height(40.dp))
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)

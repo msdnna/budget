@@ -105,7 +105,7 @@ fun LockScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Spacer(Modifier.height(48.dp))
-            MbLogo(primaryColor = primaryColor, fontSize = 64.sp)
+            MbLogo(primaryColor = primaryColor, size = 80.dp)
             Spacer(Modifier.height(24.dp))
             Text(
                 "Введите PIN-код",

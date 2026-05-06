@@ -92,7 +92,7 @@ fun PinSetupScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Spacer(Modifier.height(32.dp))
-            MbLogo(primaryColor = primaryColor, fontSize = 56.sp)
+            MbLogo(primaryColor = primaryColor, size = 70.dp)
             Spacer(Modifier.height(20.dp))
             Text(
                 title,

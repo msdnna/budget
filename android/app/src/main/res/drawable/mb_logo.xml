@@ -1,23 +1,20 @@
 <!--
-  Notification small icon. Per Android guidelines the small icon must be
-  alpha-only — the system tints it monochrome white in the status bar / shade,
-  so any RGB channel content is ignored. We therefore use white fills with
-  varying fillAlpha (letters 1.0, underline 0.45). Content is scaled to fit a
-  22dp keyline area inside the 24dp icon.
+  In-app "mb" logo (Nunito ExtraBold "m" + "b" with accent underline under "b").
+  Single tintable drawable: paths use white fill so a ColorFilter.tint(primary)
+  in Compose paints letters at full opacity and the underline at 45% (fillAlpha).
+  Tight viewBox (304x184) matches the content bbox + ~5px padding on every side.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="24dp"
-    android:height="24dp"
-    android:viewportWidth="24"
-    android:viewportHeight="24" >
+    android:width="304dp"
+    android:height="184dp"
+    android:viewportWidth="304"
+    android:viewportHeight="184" >
 
     <group
-        android:scaleX="0.0748"
-        android:scaleY="0.0748"
-        android:translateX="-7.642"
-        android:translateY="-8.185" >
+        android:translateX="-110.531"
+        android:translateY="-177.96" >
 
-        <!-- accent underline beneath "b" -->
+        <!-- accent underline beneath "b" (stadium / pill shape, height = 2*radius) -->
         <path
             android:fillAlpha="0.45"
             android:fillColor="#FFFFFF"

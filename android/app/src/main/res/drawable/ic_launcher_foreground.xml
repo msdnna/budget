@@ -1,26 +1,25 @@
 <!--
-  Notification small icon. Per Android guidelines the small icon must be
-  alpha-only — the system tints it monochrome white in the status bar / shade,
-  so any RGB channel content is ignored. We therefore use white fills with
-  varying fillAlpha (letters 1.0, underline 0.45). Content is scaled to fit a
-  22dp keyline area inside the 24dp icon.
+  Adaptive launcher icon foreground (108dp viewport).
+  Content fits the 66dp center safe zone so the logo survives masking into
+  circles / squircles / rounded squares on different launchers.
+  Colors are hard-coded (no runtime theming on the home screen): brand blue for
+  the letters, neutral grey for the accent underline.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="24dp"
-    android:height="24dp"
-    android:viewportWidth="24"
-    android:viewportHeight="24" >
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108" >
 
     <group
-        android:scaleX="0.0748"
-        android:scaleY="0.0748"
-        android:translateX="-7.642"
-        android:translateY="-8.185" >
+        android:scaleX="0.2245"
+        android:scaleY="0.2245"
+        android:translateX="-4.94"
+        android:translateY="-6.605" >
 
         <!-- accent underline beneath "b" -->
         <path
-            android:fillAlpha="0.45"
-            android:fillColor="#FFFFFF"
+            android:fillColor="#CED4E1"
             android:pathData="M290.007,343.767 L402.647,343.767 A6.4753,6.4753 0 0 1 402.647,356.718 L290.007,356.718 A6.4753,6.4753 0 0 1 290.007,343.767 Z" />
 
         <group
@@ -31,12 +30,12 @@
 
             <!-- letter "m" -->
             <path
-                android:fillColor="#FFFFFF"
+                android:fillColor="#2563EB"
                 android:pathData="m125.0902,356.92658 q-7.14855,0 -11.01263,-3.86408 -3.67088,-3.86408 -3.67088,-11.01263 v-68.58742 q0,-7.14854 3.67088,-10.81942 3.86408,-3.86408 10.62622,-3.86408 6.95534,0 10.62622,3.86408 3.67087,3.67088 3.67087,10.81942 v12.36506 l-2.12524,-7.72816 q3.86408,-8.88738 11.97865,-14.2971 8.11457,-5.40971 19.12719,-5.40971 11.01263,0 18.35438,5.21651 7.34175,5.21651 10.43302,16.03593 h-2.70486 q4.25049,-9.8534 12.94467,-15.45632 8.88738,-5.79612 20.28642,-5.79612 11.01263,0 17.96797,4.44369 7.14855,4.25049 10.62622,13.13788 3.47767,8.69418 3.47767,22.21846 v43.8573 q0,7.14855 -3.86408,11.01263 -3.67087,3.86408 -10.62622,3.86408 -7.14854,0 -11.01262,-3.86408 -3.67088,-3.86408 -3.67088,-11.01263 v-42.89128 q0,-9.467 -3.09126,-13.71749 -2.89806,-4.44369 -10.04661,-4.44369 -8.30777,0 -12.94467,5.79612 -4.6369,5.79612 -4.6369,16.42234 v38.834 q0,7.14855 -3.86408,11.01263 -3.67087,3.86408 -10.62622,3.86408 -6.95534,0 -10.81942,-3.86408 -3.86408,-3.86408 -3.86408,-11.01263 v-42.89128 q0,-9.467 -3.09126,-13.71749 -2.89806,-4.44369 -10.04661,-4.44369 -8.30777,0 -12.94467,5.79612 -4.63689,5.79612 -4.63689,16.42234 v38.834 q0,14.87671 -14.4903,14.87671 z" />
 
             <!-- letter "b" -->
             <path
-                android:fillColor="#FFFFFF"
+                android:fillColor="#2563EB"
                 android:pathData="m340.31946,357.31299 q-11.39904,0 -20.28642,-5.60292 -8.69418,-5.79612 -11.59224,-15.26311 l2.12524,-6.37574 v11.97865 q0,7.14855 -3.67087,11.01263 -3.67088,3.86408 -10.62622,3.86408 -6.95535,0 -10.81943,-3.86408 -3.67087,-3.86408 -3.67087,-11.01263 V232.1168 q0,-7.34175 3.67087,-11.01263 3.86408,-3.86408 11.01263,-3.86408 6.95534,0 10.62622,3.86408 3.86408,3.67088 3.86408,11.01263 v45.78935 H308.634 q3.09127,-8.69418 11.78545,-14.1039 8.69418,-5.40971 19.90001,-5.40971 12.55826,0 21.83205,5.98933 9.27379,5.98932 14.4903,17.00195 5.21651,11.01263 5.21651,26.27574 0,15.26312 -5.21651,26.46895 -5.21651,11.20583 -14.68351,17.19515 -9.27379,5.98933 -21.63884,5.98933 z m-8.69418,-21.83205 q6.18253,0 10.81942,-3.09127 4.8301,-3.09126 7.34175,-9.08058 2.70486,-6.18253 2.70486,-15.64953 0,-14.10389 -5.79612,-20.67283 -5.79612,-6.76214 -15.06991,-6.76214 -6.18253,0 -11.01263,2.89806 -4.6369,2.89806 -7.34175,9.08059 -2.70486,5.98933 -2.70486,15.45632 0,14.10389 5.79612,21.05924 5.79612,6.76214 15.26312,6.76214 z" />
         </group>
     </group>

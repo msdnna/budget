@@ -28,21 +28,18 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.Image
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.onFocusEvent
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import website.msdnna.budget_app.R
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -252,55 +249,27 @@ fun Modifier.bringIntoViewOnFocus(): Modifier = composed {
         }
 }
 
-private val NunitoExtraBold = FontFamily(Font(R.font.nunito_extrabold, FontWeight.ExtraBold))
-
 /**
- * "mb" logo matching the web sidebar: bold letters, accent underline under "b".
- * The underline color is the primary color at 45% opacity.
+ * "mb" logo: bold letters with an accent underline under "b".
+ * Renders the [R.drawable.mb_logo] vector drawable tinted with [primaryColor];
+ * the drawable encodes the underline at fillAlpha=0.45, so a single tint paints
+ * the letters at full opacity and the underline at 45%. [size] is the rendered
+ * height; the drawable's intrinsic 304:184 aspect ratio is preserved.
  */
 @Composable
 fun MbLogo(
     primaryColor: Color,
-    fontSize: TextUnit,
+    size: Dp,
     modifier: Modifier = Modifier
 ) {
-    val underlineColor = primaryColor.copy(alpha = 0.45f)
-    val lineThickness = if (fontSize.value >= 40f) 4.dp else 2.5.dp
-    val lineGap = if (fontSize.value >= 40f) 5.dp else 3.dp
-
-    Row(modifier = modifier, verticalAlignment = Alignment.Bottom) {
-        Text(
-            "m",
-            modifier = Modifier.padding(bottom = lineThickness + lineGap),
-            fontSize = fontSize,
-            fontFamily = NunitoExtraBold,
-            fontWeight = FontWeight.ExtraBold,
-            color = primaryColor,
-            letterSpacing = (-1).sp,
-            lineHeight = fontSize
-        )
-        Text(
-            "b",
-            modifier = Modifier
-                .drawWithContent {
-                    drawContent()
-                    val y = size.height - lineThickness.toPx() / 2
-                    drawLine(
-                        color = underlineColor,
-                        start = Offset(0f, y),
-                        end = Offset(size.width, y),
-                        strokeWidth = lineThickness.toPx(),
-                        cap = StrokeCap.Round
-                    )
-                }
-                .padding(bottom = lineThickness + lineGap),
-            fontSize = fontSize,
-            fontFamily = NunitoExtraBold,
-            fontWeight = FontWeight.ExtraBold,
-            color = primaryColor,
-            lineHeight = fontSize
-        )
-    }
+    Image(
+        painter = painterResource(R.drawable.mb_logo),
+        contentDescription = null,
+        modifier = modifier
+            .height(size)
+            .aspectRatio(304f / 184f),
+        colorFilter = ColorFilter.tint(primaryColor)
+    )
 }
 
 private val AVATAR_PALETTE = listOf(

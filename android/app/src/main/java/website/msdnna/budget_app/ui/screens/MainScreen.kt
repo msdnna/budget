@@ -164,7 +164,7 @@ fun MainScreen(
             TopAppBar(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        MbLogo(primaryColor = primaryColor, fontSize = 20.sp)
+                        MbLogo(primaryColor = primaryColor, size = 28.dp)
                         androidx.compose.animation.Crossfade(
                             targetState = activeSelectionCount > 0,
                             animationSpec = androidx.compose.animation.core.tween(180),
