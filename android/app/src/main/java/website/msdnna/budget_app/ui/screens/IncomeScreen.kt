@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.IntOffset
@@ -702,11 +703,11 @@ fun TransactionDetailSheet(
                     colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = primaryColor)
                 )
 
-                OutlinedTextField(
-                    value = editDate, onValueChange = { editDate = it },
-                    label = { Text("Дата (ГГГГ-ММ-ДД)") },
-                    modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(), singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = primaryColor)
+                DateField(
+                    value = editDate,
+                    onChange = { editDate = it },
+                    label = "Дата",
+                    primaryColor = primaryColor,
                 )
 
                 ExposedDropdownMenuBox(expanded = catExpanded, onExpandedChange = { catExpanded = it }) {
@@ -717,6 +718,7 @@ fun TransactionDetailSheet(
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(catExpanded) },
                         modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable).fillMaxWidth(),
                         singleLine = true,
+                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                         colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(focusedBorderColor = primaryColor)
                     )
                     ExposedDropdownMenu(expanded = catExpanded, onDismissRequest = { catExpanded = false }) {
@@ -756,6 +758,7 @@ fun TransactionDetailSheet(
                         value = editSource, onValueChange = { editSource = it },
                         label = { Text("Источник") },
                         modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(), singleLine = true,
+                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                         colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = primaryColor)
                     )
                 } else {
@@ -763,6 +766,7 @@ fun TransactionDetailSheet(
                         value = editPurpose, onValueChange = { editPurpose = it },
                         label = { Text("Назначение") },
                         modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(), singleLine = true,
+                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                         colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = primaryColor)
                     )
                 }
@@ -771,6 +775,7 @@ fun TransactionDetailSheet(
                     value = editDesc, onValueChange = { editDesc = it },
                     label = { Text("Описание (необязательно)") },
                     modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                     colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = primaryColor)
                 )
 
@@ -879,6 +884,7 @@ fun AddIncomeSheet(
     val scope   = rememberCoroutineScope()
     val today   = remember { SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date()) }
     var amount  by remember { mutableStateOf(template?.amount?.let { if (it == 0.0) "" else it.toInt().toString() } ?: "") }
+    var date    by remember { mutableStateOf(today) }
     var category by remember { mutableStateOf(template?.category ?: "") }
     var source  by remember { mutableStateOf(template?.source ?: "") }
     var desc    by remember { mutableStateOf(template?.description ?: "") }
@@ -916,6 +922,13 @@ fun AddIncomeSheet(
                 colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = primaryColor)
             )
 
+            DateField(
+                value = date,
+                onChange = { date = it },
+                label = "Дата",
+                primaryColor = primaryColor,
+            )
+
             ExposedDropdownMenuBox(
                 expanded = catExpanded,
                 onExpandedChange = { catExpanded = it }
@@ -927,6 +940,7 @@ fun AddIncomeSheet(
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(catExpanded) },
                     modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable).fillMaxWidth(),
                     singleLine = true,
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                     colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(focusedBorderColor = primaryColor)
                 )
                 ExposedDropdownMenu(expanded = catExpanded, onDismissRequest = { catExpanded = false }) {
@@ -965,12 +979,14 @@ fun AddIncomeSheet(
                 value = source, onValueChange = { source = it },
                 label = { Text("Источник") },
                 modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(), singleLine = true,
+                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                 colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = primaryColor)
             )
             OutlinedTextField(
                 value = desc, onValueChange = { desc = it },
                 label = { Text("Описание (необязательно)") },
                 modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
+                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                 colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = primaryColor)
             )
 
@@ -980,7 +996,7 @@ fun AddIncomeSheet(
                     val amtD = amount.replace(',', '.').toDoubleOrNull() ?: return@Button
                     val cat = catInput.trim().ifBlank { category }
                     onSave(CreateTransactionRequest(
-                        type = "income", amount = amtD, date = today,
+                        type = "income", amount = amtD, date = date,
                         category = cat,
                         source = source.ifBlank { null },
                         description = desc.ifBlank { null }

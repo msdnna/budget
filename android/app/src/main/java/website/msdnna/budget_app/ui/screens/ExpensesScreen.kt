@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
@@ -222,6 +223,7 @@ fun AddExpenseSheet(
     val scope    = rememberCoroutineScope()
     val today    = remember { SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date()) }
     var amount   by remember { mutableStateOf(template?.amount?.let { if (it == 0.0) "" else it.toInt().toString() } ?: "") }
+    var date     by remember { mutableStateOf(today) }
     var category by remember { mutableStateOf(template?.category ?: "") }
     var purpose  by remember { mutableStateOf(template?.purpose ?: "") }
     var desc     by remember { mutableStateOf(template?.description ?: "") }
@@ -259,6 +261,13 @@ fun AddExpenseSheet(
                 colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = primaryColor)
             )
 
+            DateField(
+                value = date,
+                onChange = { date = it },
+                label = "Дата",
+                primaryColor = primaryColor,
+            )
+
             ExposedDropdownMenuBox(
                 expanded = catExpanded,
                 onExpandedChange = { catExpanded = it }
@@ -270,6 +279,7 @@ fun AddExpenseSheet(
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(catExpanded) },
                     modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable).fillMaxWidth(),
                     singleLine = true,
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                     colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(focusedBorderColor = primaryColor)
                 )
                 ExposedDropdownMenu(expanded = catExpanded, onDismissRequest = { catExpanded = false }) {
@@ -308,12 +318,14 @@ fun AddExpenseSheet(
                 value = purpose, onValueChange = { purpose = it },
                 label = { Text("Назначение") },
                 modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(), singleLine = true,
+                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                 colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = primaryColor)
             )
             OutlinedTextField(
                 value = desc, onValueChange = { desc = it },
                 label = { Text("Описание (необязательно)") },
                 modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
+                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                 colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = primaryColor)
             )
 
@@ -323,7 +335,7 @@ fun AddExpenseSheet(
                     val amtD = amount.replace(',', '.').toDoubleOrNull() ?: return@Button
                     val cat = catInput.trim().ifBlank { category }
                     onSave(CreateTransactionRequest(
-                        type = "expense", amount = amtD, date = today,
+                        type = "expense", amount = amtD, date = date,
                         category = cat,
                         purpose = purpose.ifBlank { null },
                         description = desc.ifBlank { null }

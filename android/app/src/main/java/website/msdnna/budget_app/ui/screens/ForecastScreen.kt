@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.IntOffset
@@ -662,6 +663,7 @@ fun WishlistInteractiveSheet(
                     value = editName, onValueChange = { editName = it },
                     label = { Text("Название") },
                     modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(), singleLine = true,
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                     colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = primaryColor)
                 )
 
@@ -681,6 +683,7 @@ fun WishlistInteractiveSheet(
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(catExpanded) },
                         modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable).fillMaxWidth(),
                         singleLine = true,
+                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                         colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(focusedBorderColor = primaryColor)
                     )
                     ExposedDropdownMenu(expanded = catExpanded, onDismissRequest = { catExpanded = false }) {
@@ -744,6 +747,7 @@ fun WishlistInteractiveSheet(
                     value = editNotes, onValueChange = { editNotes = it },
                     label = { Text("Заметки (необязательно)") },
                     modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                     colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = primaryColor)
                 )
 
@@ -881,6 +885,7 @@ fun AddWishlistSheet(
                 value = name, onValueChange = { name = it },
                 label = { Text("Название") },
                 modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(), singleLine = true,
+                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                 colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = primaryColor)
             )
 
@@ -900,6 +905,7 @@ fun AddWishlistSheet(
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(catExpanded) },
                     modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable).fillMaxWidth(),
                     singleLine = true,
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                     colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(focusedBorderColor = primaryColor)
                 )
                 ExposedDropdownMenu(expanded = catExpanded, onDismissRequest = { catExpanded = false }) {
