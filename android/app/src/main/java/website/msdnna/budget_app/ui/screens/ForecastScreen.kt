@@ -105,6 +105,12 @@ fun ForecastScreen(
     }
     val allPurchased = purchasableSelected.isNotEmpty() && purchasableSelected.all { it.purchased }
 
+    // Stable per-row callback hoisted out of `items {}` so identity doesn't
+    // flip on each list emit (id-typed callbacks use VM method references).
+    val onShowDetails: (WishlistItem) -> Unit = remember {
+        { wl -> detailItem = wl }
+    }
+
     Scaffold(
         // FAB swap snaps without animation — see other screens for rationale.
         floatingActionButton = {
@@ -217,11 +223,11 @@ fun ForecastScreen(
                             primaryColor = primaryColor,
                             selectionMode = selectionMode,
                             selected = item.id in selectedIds,
-                            onLongPress    = { vm.startSelection(item.id) },
-                            onSelectToggle = { vm.toggleSelection(item.id) },
-                            onTogglePurchased = { vm.togglePurchased(item.id, item.purchased) },
-                            onDelete          = { vm.deleteWishlistItem(item.id) },
-                            onDetails         = { detailItem = item }
+                            onLongPress       = vm::startSelection,
+                            onSelectToggle    = vm::toggleSelection,
+                            onTogglePurchased = vm::togglePurchased,
+                            onDelete          = vm::deleteWishlistItem,
+                            onDetails         = onShowDetails,
                         )
                     }
                 }
@@ -294,6 +300,10 @@ private fun ForecastSummarySkeleton() {
 
 // ─── Swipeable wishlist card ──────────────────────────────────────────────────
 
+/**
+ * Callbacks accept ids / the item itself so callers can pass `vm::method`
+ * references and avoid allocating fresh closures per row on every list emit.
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SwipeableWishlistCard(
@@ -302,11 +312,11 @@ fun SwipeableWishlistCard(
     modifier: Modifier = Modifier,
     selectionMode: Boolean = false,
     selected: Boolean = false,
-    onLongPress: () -> Unit = {},
-    onSelectToggle: () -> Unit = {},
-    onTogglePurchased: () -> Unit,
-    onDelete: () -> Unit,
-    onDetails: () -> Unit = {}
+    onLongPress: (id: String) -> Unit = {},
+    onSelectToggle: (id: String) -> Unit = {},
+    onTogglePurchased: (id: String, currentPurchased: Boolean) -> Unit,
+    onDelete: (id: String) -> Unit,
+    onDetails: (WishlistItem) -> Unit = {}
 ) {
     val scope      = rememberCoroutineScope()
     val density    = LocalDensity.current
@@ -356,7 +366,7 @@ fun SwipeableWishlistCard(
                         .fillMaxHeight()
                         .align(Alignment.CenterStart)
                         .background(if (item.purchased) Color(0xFF757575) else ColourPurchased)
-                        .clickable { snapTo(0f); onTogglePurchased() },
+                        .clickable { snapTo(0f); onTogglePurchased(item.id, item.purchased) },
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -382,7 +392,7 @@ fun SwipeableWishlistCard(
                     .clickable {
                         if (pendingDelete) {
                             snapTo(0f)
-                            onDelete()
+                            onDelete(item.id)
                         } else {
                             pendingDelete = true
                         }
@@ -423,8 +433,8 @@ fun SwipeableWishlistCard(
                 ) else base
             }
             .combinedClickable(
-                onClick     = { if (selectionMode) onSelectToggle() else onDetails() },
-                onLongClick = { if (!selectionMode) onLongPress() }
+                onClick     = { if (selectionMode) onSelectToggle(item.id) else onDetails(item) },
+                onLongClick = { if (!selectionMode) onLongPress(item.id) }
             )
 
         // compositeOver keeps the bg opaque so swipe rails don't bleed through.
@@ -514,7 +524,7 @@ fun SwipeableWishlistCard(
             visible = selectionMode,
             selected = selected,
             primaryColor = primaryColor,
-            onClick = onSelectToggle,
+            onClick = { onSelectToggle(item.id) },
         )
     }
 }

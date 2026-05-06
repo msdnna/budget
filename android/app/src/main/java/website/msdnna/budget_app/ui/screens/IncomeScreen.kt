@@ -89,6 +89,16 @@ fun IncomeScreen(
     }
     val allHidden = selectedTxs.isNotEmpty() && selectedTxs.all { it.hidden }
 
+    // Stable `Transaction`-typed callbacks hoisted out of `items {}` so the
+    // LazyColumn passes the same identity to every row across recompositions
+    // (method-reference style for VM ops handles the id-typed callbacks).
+    val onCreateTemplate: (Transaction) -> Unit = remember {
+        { tx -> template = tx; showAdd = true }
+    }
+    val onShowDetails: (Transaction) -> Unit = remember {
+        { tx -> detailTx = tx }
+    }
+
     Scaffold(
         // FAB swap snaps with no transition: AnimatedContent's cross-fade
         // composed both FABs simultaneously, and their elevation shadows
@@ -232,12 +242,12 @@ fun IncomeScreen(
                             valuesHidden = valuesHidden,
                             selectionMode = selectionMode,
                             selected = t.id in selectedIds,
-                            onLongPress    = { vm.startSelection(t.id) },
-                            onSelectToggle = { vm.toggleSelection(t.id) },
-                            onDelete             = { vm.deleteTransaction(t.id) },
-                            onToggleHidden       = { vm.toggleHidden(t.id, t.hidden) },
-                            onCreateFromTemplate = { template = t; showAdd = true },
-                            onDetails            = { detailTx = t }
+                            onLongPress    = vm::startSelection,
+                            onSelectToggle = vm::toggleSelection,
+                            onDelete             = vm::deleteTransaction,
+                            onToggleHidden       = vm::toggleHidden,
+                            onCreateFromTemplate = onCreateTemplate,
+                            onDetails            = onShowDetails,
                         )
                     }
                     if (uiState.transactions.size < uiState.total) {
@@ -294,6 +304,12 @@ fun IncomeScreen(
 
 // ─── Swipeable card ──────────────────────────────────────────────────────────
 
+/**
+ * Callbacks take ids / the transaction itself rather than no-arg lambdas so
+ * callers can pass stable `vm::method` references — closure-style lambdas
+ * created inside `items {}` allocate a fresh identity on every list emit and
+ * forced needless card recompositions during scroll.
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SwipeableTransactionCard(
@@ -305,12 +321,12 @@ fun SwipeableTransactionCard(
     valuesHidden: Boolean = false,
     selectionMode: Boolean = false,
     selected: Boolean = false,
-    onLongPress: () -> Unit = {},
-    onSelectToggle: () -> Unit = {},
-    onDelete: () -> Unit,
-    onToggleHidden: () -> Unit,
-    onCreateFromTemplate: () -> Unit,
-    onDetails: () -> Unit = {}
+    onLongPress: (id: String) -> Unit = {},
+    onSelectToggle: (id: String) -> Unit = {},
+    onDelete: (id: String) -> Unit,
+    onToggleHidden: (id: String, currentHidden: Boolean) -> Unit,
+    onCreateFromTemplate: (Transaction) -> Unit,
+    onDetails: (Transaction) -> Unit = {}
 ) {
     val scope   = rememberCoroutineScope()
     val density = LocalDensity.current
@@ -365,7 +381,7 @@ fun SwipeableTransactionCard(
                         .weight(1f)
                         .fillMaxHeight()
                         .background(ColourHide)
-                        .clickable { snapTo(0f); onToggleHidden() },
+                        .clickable { snapTo(0f); onToggleHidden(transaction.id, transaction.hidden) },
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -385,7 +401,7 @@ fun SwipeableTransactionCard(
                         .weight(1f)
                         .fillMaxHeight()
                         .background(ColourTemplate)
-                        .clickable { snapTo(0f); onCreateFromTemplate() },
+                        .clickable { snapTo(0f); onCreateFromTemplate(transaction) },
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -405,7 +421,7 @@ fun SwipeableTransactionCard(
                     .clickable {
                         if (pendingDelete) {
                             snapTo(0f)
-                            onDelete()
+                            onDelete(transaction.id)
                         } else {
                             pendingDelete = true
                         }
@@ -445,8 +461,8 @@ fun SwipeableTransactionCard(
                 ) else base
             }
             .combinedClickable(
-                onClick     = { if (selectionMode) onSelectToggle() else onDetails() },
-                onLongClick = { if (!selectionMode) onLongPress() }
+                onClick     = { if (selectionMode) onSelectToggle(transaction.id) else onDetails(transaction) },
+                onLongClick = { if (!selectionMode) onLongPress(transaction.id) }
             )
 
         // `compositeOver` keeps the container opaque so swipe rails behind the
@@ -531,7 +547,7 @@ fun SwipeableTransactionCard(
             visible = selectionMode,
             selected = selected,
             primaryColor = primaryColor,
-            onClick = onSelectToggle,
+            onClick = { onSelectToggle(transaction.id) },
         )
     }
 }

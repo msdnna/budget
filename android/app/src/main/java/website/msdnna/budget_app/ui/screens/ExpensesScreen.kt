@@ -65,6 +65,15 @@ fun ExpensesScreen(
     }
     val allHidden = selectedTxs.isNotEmpty() && selectedTxs.all { it.hidden }
 
+    // Hoisted out of `items {}` and remembered so identity is stable across
+    // recompositions — method references on `vm` cover the id-typed callbacks.
+    val onCreateTemplate: (Transaction) -> Unit = remember {
+        { tx -> template = tx; showAdd = true }
+    }
+    val onShowDetails: (Transaction) -> Unit = remember {
+        { tx -> detailTx = tx }
+    }
+
     Scaffold(
         // FAB swap snaps without animation — AnimatedContent's cross-fade made
         // the FAB shadows overlap at intermediate alphas, leaving a muddy
@@ -141,12 +150,12 @@ fun ExpensesScreen(
                             valuesHidden = valuesHidden,
                             selectionMode = selectionMode,
                             selected = t.id in selectedIds,
-                            onLongPress    = { vm.startSelection(t.id) },
-                            onSelectToggle = { vm.toggleSelection(t.id) },
-                            onDelete          = { vm.deleteTransaction(t.id) },
-                            onToggleHidden    = { vm.toggleHidden(t.id, t.hidden) },
-                            onCreateFromTemplate = { template = t; showAdd = true },
-                            onDetails         = { detailTx = t }
+                            onLongPress    = vm::startSelection,
+                            onSelectToggle = vm::toggleSelection,
+                            onDelete             = vm::deleteTransaction,
+                            onToggleHidden       = vm::toggleHidden,
+                            onCreateFromTemplate = onCreateTemplate,
+                            onDetails            = onShowDetails,
                         )
                     }
                     if (uiState.transactions.size < uiState.total) {
