@@ -153,85 +153,76 @@ fun ForecastScreen(
             // hand, is a server-side computation — when it's loading or
             // unreachable we hide just that block while keeping the wishlist
             // operational.
+            // Aggregation block + title compose in one `item { Column }` so the
+            // wishlist below can be flat `items()` and benefit from LazyColumn
+            // recycling — wrapping the wishlist in a single `item { Column }`
+            // would compose every row eagerly (broken on 1000+ records).
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                // ── Aggregation block (loading / offline / data) ──────────
-                when {
-                    uiState.loading -> {
-                        item { ForecastSummarySkeleton() }
-                    }
-                    uiState.error != null -> {
-                        item {
-                            OfflineView(
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        when {
+                            uiState.loading -> ForecastSummarySkeleton()
+                            uiState.error != null -> OfflineView(
                                 message = "Офлайн-режим. Прогноз недоступен",
                                 onRetry = { vm.reload() }
                             )
-                        }
-                    }
-                    else -> {
-                        val fc = uiState.forecast ?: website.msdnna.budget_app.data.model.ForecastData()
-                        item {
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                SummaryCard("Прогноз / мес",  fc.totalMonthly,    "", expenseColor, Modifier.weight(1f))
-                                SummaryCard("Ср. за 3 мес",   fc.historicalAvg,   "", primaryColor, Modifier.weight(1f))
-                            }
-                        }
-                        item {
-                            SummaryCard("Список желаний / мес", fc.wishlistContrib, "", primaryColor, Modifier.fillMaxWidth())
-                        }
-                        if (fc.breakdown.isNotEmpty()) {
-                            item {
-                                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                                    Column(Modifier.padding(16.dp)) {
-                                        Text("Прогноз по категориям", style = MaterialTheme.typography.titleMedium)
-                                        Spacer(Modifier.height(8.dp))
-                                        fc.breakdown.sortedByDescending { it.amount }.forEach { stat ->
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                                horizontalArrangement = Arrangement.SpaceBetween
-                                            ) {
-                                                Text(stat.category, style = MaterialTheme.typography.bodyMedium)
-                                                Text("${formatMoney(stat.amount)} ₽",
-                                                    style = MaterialTheme.typography.bodyMedium,
-                                                    fontWeight = FontWeight.Medium)
+                            else -> {
+                                val fc = uiState.forecast ?: website.msdnna.budget_app.data.model.ForecastData()
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    SummaryCard("Прогноз / мес",  fc.totalMonthly,    "", expenseColor, Modifier.weight(1f))
+                                    SummaryCard("Ср. за 3 мес",   fc.historicalAvg,   "", primaryColor, Modifier.weight(1f))
+                                }
+                                SummaryCard("Список желаний / мес", fc.wishlistContrib, "", primaryColor, Modifier.fillMaxWidth())
+                                if (fc.breakdown.isNotEmpty()) {
+                                    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                                        Column(Modifier.padding(16.dp)) {
+                                            Text("Прогноз по категориям", style = MaterialTheme.typography.titleMedium)
+                                            Spacer(Modifier.height(8.dp))
+                                            fc.breakdown.sortedByDescending { it.amount }.forEach { stat ->
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                                    horizontalArrangement = Arrangement.SpaceBetween
+                                                ) {
+                                                    Text(stat.category, style = MaterialTheme.typography.bodyMedium)
+                                                    Text("${formatMoney(stat.amount)} ₽",
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        fontWeight = FontWeight.Medium)
+                                                }
+                                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                                             }
-                                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                                         }
                                     }
                                 }
                             }
                         }
+                        Text(
+                            "Список желаний",
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
                     }
                 }
 
-                // ── Wishlist title (always shown) ─────────────────────────
-                item {
-                    Text("Список желаний", style = MaterialTheme.typography.titleMedium)
-                }
-
-                // ── Wishlist items with swipe ─────────────────────────────
                 if (uiState.wishlist.isEmpty()) {
                     item { EmptyView("Список желаний пуст") }
                 } else {
-                    item {
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            uiState.wishlist.forEach { item ->
-                                SwipeableWishlistCard(
-                                    item = item,
-                                    primaryColor = primaryColor,
-                                    selectionMode = selectionMode,
-                                    selected = item.id in selectedIds,
-                                    onLongPress    = { vm.startSelection(item.id) },
-                                    onSelectToggle = { vm.toggleSelection(item.id) },
-                                    onTogglePurchased = { vm.togglePurchased(item.id, item.purchased) },
-                                    onDelete          = { vm.deleteWishlistItem(item.id) },
-                                    onDetails         = { detailItem = item }
-                                )
-                            }
-                        }
+                    items(uiState.wishlist, key = { it.id }) { item ->
+                        SwipeableWishlistCard(
+                            modifier = Modifier.animateItem(),
+                            item = item,
+                            primaryColor = primaryColor,
+                            selectionMode = selectionMode,
+                            selected = item.id in selectedIds,
+                            onLongPress    = { vm.startSelection(item.id) },
+                            onSelectToggle = { vm.toggleSelection(item.id) },
+                            onTogglePurchased = { vm.togglePurchased(item.id, item.purchased) },
+                            onDelete          = { vm.deleteWishlistItem(item.id) },
+                            onDetails         = { detailItem = item }
+                        )
                     }
                 }
 
