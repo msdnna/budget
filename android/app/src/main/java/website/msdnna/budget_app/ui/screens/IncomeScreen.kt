@@ -449,25 +449,21 @@ fun SwipeableTransactionCard(
                 onLongClick = { if (!selectionMode) onLongPress() }
             )
 
-        // Animate the card background tint smoothly between normal/selected.
-        // We `compositeOver` the surface so the resulting color is opaque —
-        // a translucent containerColor would let the swipe rails behind the
-        // card bleed through during the deselect → "selectionMode flips
-        // false" transition (rails get composed again, fade hasn't finished).
+        // `compositeOver` keeps the container opaque so swipe rails behind the
+        // card don't bleed through. animateColorAsState used to sit here for a
+        // 180 ms cross-fade between normal/selected; removed because every
+        // visible card spun up a per-card Animatable + scope on each
+        // recomposition, which the SelectionOverlay already cross-fades over
+        // anyway.
         val baseSurface = MaterialTheme.colorScheme.surface
         val targetBg = when {
             selected           -> primaryColor.copy(alpha = 0.16f).compositeOver(baseSurface)
             transaction.hidden -> MaterialTheme.colorScheme.surfaceVariant
             else               -> baseSurface
         }
-        val animatedBg by androidx.compose.animation.animateColorAsState(
-            targetValue = targetBg,
-            animationSpec = tween(180),
-            label = "cardBg"
-        )
         Card(
             modifier = cardModifier,
-            colors = CardDefaults.cardColors(containerColor = animatedBg)
+            colors = CardDefaults.cardColors(containerColor = targetBg)
         ) {
             Row(
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp).fillMaxWidth(),

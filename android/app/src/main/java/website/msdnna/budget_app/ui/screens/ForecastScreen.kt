@@ -427,22 +427,19 @@ fun SwipeableWishlistCard(
                 onLongClick = { if (!selectionMode) onLongPress() }
             )
 
-        // compositeOver keeps the bg opaque so swipe rails don't bleed through
-        // mid-animation when selectionMode flips false on the last deselect.
+        // compositeOver keeps the bg opaque so swipe rails don't bleed through.
+        // animateColorAsState removed (one Animatable per visible card on each
+        // recomposition was an unnecessary tax during scroll); the
+        // SelectionOverlay already cross-fades on top.
         val baseSurface = MaterialTheme.colorScheme.surface
         val targetBg = when {
             selected       -> primaryColor.copy(alpha = 0.16f).compositeOver(baseSurface)
             item.purchased -> MaterialTheme.colorScheme.surfaceVariant
             else           -> baseSurface
         }
-        val animatedBg by androidx.compose.animation.animateColorAsState(
-            targetValue = targetBg,
-            animationSpec = tween(180),
-            label = "cardBg"
-        )
         Card(
             modifier = cardModifier,
-            colors = CardDefaults.cardColors(containerColor = animatedBg)
+            colors = CardDefaults.cardColors(containerColor = targetBg)
         ) {
             Row(
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp).fillMaxWidth(),
