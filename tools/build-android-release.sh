@@ -55,3 +55,13 @@ rm -f "$ANDROID_DIR/semejnyj-byudzhet-release.apk"
 
 cp "$OUTPUT" "$DEST"
 echo "APK: $DEST"
+
+# Drop into the repo-level /apks store, which the frontend nginx container
+# bind-mounts at /apks/ for in-app self-update. Stale APKs purged so only
+# the current version is reachable over HTTP.
+APKS_DIR="$(cd "$ANDROID_DIR/.." && pwd)/apks"
+if [ -d "$APKS_DIR" ]; then
+  find "$APKS_DIR" -maxdepth 1 -name 'msdnna-budget-app-v*.apk' -delete
+  cp "$DEST" "$APKS_DIR/msdnna-budget-app-v${VERSION}.apk"
+  echo "Served at: /apks/msdnna-budget-app-v${VERSION}.apk"
+fi
