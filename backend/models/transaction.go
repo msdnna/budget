@@ -52,12 +52,13 @@ type UpdateTransactionRequest struct {
 }
 
 type TransactionFilter struct {
-	Type     string
-	From     *time.Time
-	To       *time.Time
-	Category string
-	Limit    int64
-	Skip     int64
+	Type       string
+	From       *time.Time
+	To         *time.Time
+	Category   string
+	Categories []string
+	Limit      int64
+	Skip       int64
 }
 
 type CategoryData struct {

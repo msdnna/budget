@@ -80,7 +80,18 @@
           <n-space style="margin-bottom:12px" wrap align="center" justify="space-between">
             <n-space wrap>
               <n-date-picker v-model:value="filterRange" type="daterange" clearable size="small" @update:value="applyFilters" />
-              <n-select v-model:value="filterCategory" :options="[{label:'Все',value:''},...categoryOptions]" size="small" style="width:150px" clearable @update:value="applyFilters" />
+              <n-select
+                v-model:value="filterCategories"
+                :options="categoryOptions"
+                multiple
+                clearable
+                size="small"
+                style="width:230px"
+                placeholder="Все категории"
+                :max-tag-count="1"
+                to="body"
+                @update:value="applyFilters"
+              />
             </n-space>
             <n-space align="center" :size="8">
               <template v-if="!bulkMode">
@@ -183,7 +194,7 @@ const message = useMessage()
 const formRef = ref(null)
 const saving = ref(false)
 const filterRange = ref(null)
-const filterCategory = ref('')
+const filterCategories = ref([])
 
 const form = ref({ amount: null, date: Date.now(), category: '', source: '', description: '' })
 
@@ -270,7 +281,10 @@ function renderCategoryOption({ node, option }) {
         try {
           await catStore.remove(option.id, 'income')
           if (form.value.category === option.value) form.value.category = ''
-          if (filterCategory.value === option.value) filterCategory.value = ''
+          if (filterCategories.value.includes(option.value)) {
+            filterCategories.value = filterCategories.value.filter(v => v !== option.value)
+            applyFilters()
+          }
         } catch { message.error('Не удалось удалить категорию') }
       },
       onMouseenter: e => { e.currentTarget.style.opacity = '1' },
@@ -301,6 +315,7 @@ async function submit() {
       source: form.value.source,
       description: form.value.description,
     })
+    catStore.recordUse('income', cat)
     message.success('Доход добавлен')
     form.value = { amount: null, date: Date.now(), category: '', source: '', description: '' }
   } catch (e) {
@@ -330,7 +345,7 @@ function fmtLocalDate(ts) {
 }
 
 function applyFilters() {
-  const f = { type: 'income', category: filterCategory.value }
+  const f = { type: 'income', categories: filterCategories.value }
   if (filterRange.value) {
     f.from = fmtLocalDate(filterRange.value[0])
     f.to = fmtLocalDate(filterRange.value[1])
@@ -357,6 +372,7 @@ async function confirmCellEdit(row, field) {
   const payload = { [field]: editCellValue.value }
   try {
     await store.update(row.id, payload)
+    if (field === 'category') catStore.recordUse('income', editCellValue.value)
     message.success('Сохранено')
   } catch (e) {
     message.error(e.message)

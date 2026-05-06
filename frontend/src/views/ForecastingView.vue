@@ -500,6 +500,7 @@ async function submit() {
       await catStore.add('wishlist', cat).catch(() => {})
     }
     await wlStore.create({ ...form.value })
+    catStore.recordUse('wishlist', cat)
     await loadForecast()
     message.success('Добавлено в список желаний')
     form.value = { name: '', estimated_cost: null, category: '', frequency: 'once', purchased: false, notes: '' }

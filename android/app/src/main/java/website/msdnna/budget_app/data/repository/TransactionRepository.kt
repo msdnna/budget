@@ -26,8 +26,17 @@ object TransactionRepository {
     fun observeAll(): Flow<List<Transaction>> =
         dao.observeAll().map { list -> list.map { it.toModel() } }
 
-    fun observeFiltered(type: String? = null, category: String? = null, from: String? = null, to: String? = null): Flow<List<Transaction>> =
-        dao.observeFiltered(type, category, from, to).map { list -> list.map { it.toModel() } }
+    fun observeFiltered(
+        type: String? = null,
+        categories: Set<String>? = null,
+        from: String? = null,
+        to: String? = null,
+    ): Flow<List<Transaction>> =
+        dao.observeFiltered(type, from, to).map { list ->
+            val filtered = if (categories.isNullOrEmpty()) list
+            else list.filter { it.category in categories }
+            filtered.map { it.toModel() }
+        }
 
     fun observeConflicts(): Flow<List<Transaction>> =
         dao.observeConflicts().map { list -> list.map { it.toModel() } }

@@ -471,7 +471,9 @@ func buildTransactionFilter(f models.TransactionFilter) bson.M {
 	if f.Type != "" {
 		filter["type"] = f.Type
 	}
-	if f.Category != "" {
+	if len(f.Categories) > 0 {
+		filter["category"] = bson.M{"$in": f.Categories}
+	} else if f.Category != "" {
 		filter["category"] = f.Category
 	}
 	if f.From != nil || f.To != nil {

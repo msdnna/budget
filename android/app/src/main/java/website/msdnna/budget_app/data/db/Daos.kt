@@ -16,14 +16,12 @@ interface TransactionDao {
         SELECT * FROM transactions
         WHERE deleted_at IS NULL AND sync_status != :pendingDelete
           AND (:type IS NULL OR type = :type)
-          AND (:category IS NULL OR category = :category)
           AND (:from IS NULL OR date >= :from)
           AND (:to IS NULL OR date <= :to)
         ORDER BY date DESC
     """)
     fun observeFiltered(
         type: String?,
-        category: String?,
         from: String?,
         to: String?,
         pendingDelete: String = SyncStatus.PENDING_DELETE,

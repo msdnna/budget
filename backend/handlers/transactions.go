@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"budget-go/models"
@@ -72,6 +73,14 @@ func (h *TransactionHandler) List(c *gin.Context) {
 		Category: c.Query("category"),
 		Limit:    20,
 		Skip:     0,
+	}
+
+	if cats := c.Query("categories"); cats != "" {
+		for _, raw := range strings.Split(cats, ",") {
+			if name := strings.TrimSpace(raw); name != "" {
+				filter.Categories = append(filter.Categories, name)
+			}
+		}
 	}
 
 	if p := c.Query("page"); p != "" {

@@ -9,6 +9,8 @@ import kotlinx.coroutines.launch
 import website.msdnna.budget_app.data.AppContainer
 import website.msdnna.budget_app.data.api.RetrofitClient
 import website.msdnna.budget_app.data.model.*
+import website.msdnna.budget_app.data.preferences.CategoryUsage
+import website.msdnna.budget_app.data.preferences.sortedByRecentUse
 import website.msdnna.budget_app.data.repository.CategoryRepository
 import website.msdnna.budget_app.data.repository.TransactionRepository
 import website.msdnna.budget_app.data.sync.SyncWorker
@@ -24,23 +26,27 @@ data class IncomeUiState(
 class IncomeViewModel(private val serverUrl: String) : ViewModel() {
     private val now = Calendar.getInstance()
 
-    private val _filterCat   = MutableStateFlow("")
+    private val _filterCats  = MutableStateFlow<Set<String>>(emptySet())
     private val _ibYear      = MutableStateFlow(now.get(Calendar.YEAR))
     private val _ibMonth     = MutableStateFlow(now.get(Calendar.MONTH) + 1)
     private val _selectedIds = MutableStateFlow<Set<String>>(emptySet())
 
-    val filterCat   = _filterCat.asStateFlow()
+    val filterCats  = _filterCats.asStateFlow()
     val selectedIds = _selectedIds.asStateFlow()
-    val categories  = CategoryRepository.income
+    val categories: StateFlow<List<Category>> = combine(
+        CategoryRepository.income,
+        CategoryUsage.usage,
+    ) { cats, usage -> cats.sortedByRecentUse(usage["income"].orEmpty()) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val ibYear      = _ibYear.asStateFlow()
     val ibMonth     = _ibMonth.asStateFlow()
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    val uiState: StateFlow<IncomeUiState> = _filterCat
-        .flatMapLatest { cat ->
+    val uiState: StateFlow<IncomeUiState> = _filterCats
+        .flatMapLatest { cats ->
             TransactionRepository.observeFiltered(
                 type = "income",
-                category = cat.ifBlank { null },
+                categories = cats.takeIf { it.isNotEmpty() },
             ).map { txs -> IncomeUiState(transactions = txs, total = txs.size, loading = false) }
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, IncomeUiState(loading = true))
@@ -66,7 +72,12 @@ class IncomeViewModel(private val serverUrl: String) : ViewModel() {
 
     fun reload() { SyncWorker.enqueue(AppContainer.appContext) }
 
-    fun setFilter(cat: String) { _filterCat.value = cat; _page.value = 1 }
+    fun toggleFilterCategory(name: String) {
+        val cur = _filterCats.value
+        _filterCats.value = if (name in cur) cur - name else cur + name
+        _page.value = 1
+    }
+    fun clearFilterCategories() { _filterCats.value = emptySet(); _page.value = 1 }
     fun loadMore() { /* no-op: Room observes full list */ }
 
     fun ibNavigateBack() {
@@ -143,6 +154,7 @@ class IncomeViewModel(private val serverUrl: String) : ViewModel() {
                 purpose = req.purpose,
                 description = req.description,
             )
+            if (req.type == "income") CategoryUsage.recordUse("income", req.category)
         }
     }
 
@@ -157,6 +169,7 @@ class IncomeViewModel(private val serverUrl: String) : ViewModel() {
             description = req.description,
             createdBy = req.createdBy,
         )
+        if (!req.category.isNullOrBlank()) CategoryUsage.recordUse("income", req.category)
     }
 
     suspend fun getUsers(): List<UserInfo> = runCatching {
@@ -169,7 +182,7 @@ class IncomeViewModel(private val serverUrl: String) : ViewModel() {
     suspend fun deleteCategory(id: String) {
         val deleted = categories.value.find { it.id == id }
         CategoryRepository.deleteCategory(serverUrl, "income", id)
-        if (deleted != null && _filterCat.value == deleted.name) _filterCat.value = ""
+        if (deleted != null) _filterCats.value = _filterCats.value - deleted.name
     }
 
     companion object {

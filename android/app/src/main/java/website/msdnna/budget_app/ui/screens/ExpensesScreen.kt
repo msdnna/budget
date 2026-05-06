@@ -44,7 +44,7 @@ fun ExpensesScreen(
 ) {
     val vm = viewModel<ExpensesViewModel>(key = "expenses:$serverUrl", factory = ExpensesViewModel.factory(serverUrl))
     val uiState    by vm.uiState.collectAsState()
-    val filterCat  by vm.filterCat.collectAsState()
+    val filterCats by vm.filterCats.collectAsState()
     val categories by vm.categories.collectAsState()
     val selectedIds by vm.selectedIds.collectAsState()
     val selectionMode = selectedIds.isNotEmpty()
@@ -108,32 +108,15 @@ fun ExpensesScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                var expanded by remember { mutableStateOf(false) }
-                ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
-                    OutlinedTextField(
-                        value = filterCat.ifBlank { "Все категории" }, onValueChange = {},
-                        readOnly = true, modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable).width(195.dp),
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
-                        colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(focusedBorderColor = primaryColor),
-                        label = { Text("Категория") }
-                    )
-                    ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                        DropdownMenuItem(text = { Text("Все категории") }, onClick = {
-                            vm.setFilter(""); expanded = false
-                        })
-                        categories.forEach { cat ->
-                            DropdownMenuItem(
-                                text = { Text(cat.name) },
-                                onClick = { vm.setFilter(cat.name); expanded = false },
-                                trailingIcon = if (!cat.isDefault) {{
-                                    IconButton(onClick = { scope.launch { vm.deleteCategory(cat.id) }; expanded = false }, modifier = Modifier.size(20.dp)) {
-                                        Icon(Icons.Default.Delete, contentDescription = "Удалить", modifier = Modifier.size(14.dp))
-                                    }
-                                }} else null
-                            )
-                        }
-                    }
-                }
+                CategoryFilterField(
+                    selected = filterCats,
+                    categories = categories,
+                    primaryColor = primaryColor,
+                    onToggle = { vm.toggleFilterCategory(it) },
+                    onClear = { vm.clearFilterCategories() },
+                    onDelete = { id -> scope.launch { vm.deleteCategory(id) } },
+                    modifier = Modifier.weight(1f),
+                )
                 Text("Всего: ${uiState.total}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)

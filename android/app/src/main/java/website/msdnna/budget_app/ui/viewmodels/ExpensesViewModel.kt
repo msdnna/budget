@@ -8,6 +8,8 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import website.msdnna.budget_app.data.api.RetrofitClient
 import website.msdnna.budget_app.data.model.*
+import website.msdnna.budget_app.data.preferences.CategoryUsage
+import website.msdnna.budget_app.data.preferences.sortedByRecentUse
 import website.msdnna.budget_app.data.repository.CategoryRepository
 import website.msdnna.budget_app.data.repository.TransactionRepository
 import website.msdnna.budget_app.data.sync.SyncWorker
@@ -28,19 +30,23 @@ data class ExpensesUiState(
  */
 class ExpensesViewModel(private val serverUrl: String) : ViewModel() {
 
-    private val _filterCat   = MutableStateFlow("")
+    private val _filterCats  = MutableStateFlow<Set<String>>(emptySet())
     private val _selectedIds = MutableStateFlow<Set<String>>(emptySet())
 
-    val filterCat   = _filterCat.asStateFlow()
+    val filterCats  = _filterCats.asStateFlow()
     val selectedIds = _selectedIds.asStateFlow()
-    val categories  = CategoryRepository.expense
+    val categories: StateFlow<List<Category>> = combine(
+        CategoryRepository.expense,
+        CategoryUsage.usage,
+    ) { cats, usage -> cats.sortedByRecentUse(usage["expense"].orEmpty()) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    val uiState: StateFlow<ExpensesUiState> = _filterCat
-        .flatMapLatest { cat ->
+    val uiState: StateFlow<ExpensesUiState> = _filterCats
+        .flatMapLatest { cats ->
             TransactionRepository.observeFiltered(
                 type = "expense",
-                category = cat.ifBlank { null },
+                categories = cats.takeIf { it.isNotEmpty() },
             ).map { txs -> ExpensesUiState(transactions = txs, total = txs.size, loading = false) }
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, ExpensesUiState(loading = true))
@@ -55,7 +61,12 @@ class ExpensesViewModel(private val serverUrl: String) : ViewModel() {
         SyncWorker.enqueue(AppContainer.appContext)
     }
 
-    fun setFilter(cat: String) { _filterCat.value = cat; _page.value = 1 }
+    fun toggleFilterCategory(name: String) {
+        val cur = _filterCats.value
+        _filterCats.value = if (name in cur) cur - name else cur + name
+        _page.value = 1
+    }
+    fun clearFilterCategories() { _filterCats.value = emptySet(); _page.value = 1 }
     fun loadMore() { /* no-op: full list is always loaded from Room */ }
 
     fun deleteTransaction(id: String) {
@@ -107,6 +118,7 @@ class ExpensesViewModel(private val serverUrl: String) : ViewModel() {
                 purpose = req.purpose,
                 description = req.description,
             )
+            CategoryUsage.recordUse("expense", req.category)
         }
     }
 
@@ -121,6 +133,7 @@ class ExpensesViewModel(private val serverUrl: String) : ViewModel() {
             description = req.description,
             createdBy = req.createdBy,
         )
+        if (!req.category.isNullOrBlank()) CategoryUsage.recordUse("expense", req.category)
     }
 
     suspend fun getUsers(): List<UserInfo> = runCatching {
@@ -133,7 +146,7 @@ class ExpensesViewModel(private val serverUrl: String) : ViewModel() {
     suspend fun deleteCategory(id: String) {
         val deleted = categories.value.find { it.id == id }
         CategoryRepository.deleteCategory(serverUrl, "expense", id)
-        if (deleted != null && _filterCat.value == deleted.name) _filterCat.value = ""
+        if (deleted != null) _filterCats.value = _filterCats.value - deleted.name
     }
 
     companion object {

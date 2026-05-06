@@ -9,6 +9,8 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import website.msdnna.budget_app.data.api.RetrofitClient
 import website.msdnna.budget_app.data.model.*
+import website.msdnna.budget_app.data.preferences.CategoryUsage
+import website.msdnna.budget_app.data.preferences.sortedByRecentUse
 import website.msdnna.budget_app.data.repository.CategoryRepository
 import website.msdnna.budget_app.data.repository.WishlistRepository
 
@@ -34,7 +36,11 @@ class ForecastViewModel(private val serverUrl: String) : ViewModel() {
     private val _selectedIds     = MutableStateFlow<Set<String>>(emptySet())
 
     val selectedIds = _selectedIds.asStateFlow()
-    val categories  = CategoryRepository.wishlist
+    val categories: StateFlow<List<Category>> = combine(
+        CategoryRepository.wishlist,
+        CategoryUsage.usage,
+    ) { cats, usage -> cats.sortedByRecentUse(usage["wishlist"].orEmpty()) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     @OptIn(ExperimentalCoroutinesApi::class)
     private val forecastJob = _refreshTick
@@ -119,6 +125,7 @@ class ForecastViewModel(private val serverUrl: String) : ViewModel() {
                 frequency = req.frequency,
                 notes = req.notes,
             )
+            CategoryUsage.recordUse("wishlist", req.category)
         }
     }
 
@@ -133,6 +140,7 @@ class ForecastViewModel(private val serverUrl: String) : ViewModel() {
             notes = req.notes,
             createdBy = req.createdBy,
         )
+        if (!req.category.isNullOrBlank()) CategoryUsage.recordUse("wishlist", req.category)
     }
 
     suspend fun getUsers(): List<UserInfo> =
