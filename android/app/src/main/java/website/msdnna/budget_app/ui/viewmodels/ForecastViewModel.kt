@@ -98,7 +98,7 @@ class ForecastViewModel(private val serverUrl: String) : ViewModel() {
         val ids = _selectedIds.value
         if (ids.isEmpty()) return
         viewModelScope.launch {
-            ids.forEach { WishlistRepository.delete(it) }
+            WishlistRepository.bulkDelete(ids)
             _selectedIds.value = emptySet()
         }
     }
@@ -110,7 +110,7 @@ class ForecastViewModel(private val serverUrl: String) : ViewModel() {
      */
     fun bulkSetPurchased(ids: Collection<String>, targetPurchased: Boolean) {
         viewModelScope.launch {
-            ids.forEach { WishlistRepository.update(it, purchased = targetPurchased) }
+            WishlistRepository.bulkSetPurchased(ids, targetPurchased)
             _selectedIds.value = emptySet()
         }
     }

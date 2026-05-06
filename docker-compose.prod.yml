@@ -38,7 +38,7 @@ services:
       - PDF_FONT_PATH=/usr/share/fonts/dejavu/DejaVuSans.ttf
       - JWT_SECRET=${JWT_SECRET}
       - TZ=${TZ:-Europe/Moscow}
-      - ANDROID_LATEST=${ANDROID_LATEST:-1.18.1}
+      - ANDROID_LATEST=${ANDROID_LATEST:-1.18.3}
       - ANDROID_MIN_REQUIRED=${ANDROID_MIN_REQUIRED:-1.12.0}
     # Bound to loopback only — external Nginx proxies /api/ → 127.0.0.1:8080
     ports:

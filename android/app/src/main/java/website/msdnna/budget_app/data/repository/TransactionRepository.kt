@@ -135,6 +135,32 @@ object TransactionRepository {
         SyncWorker.enqueue(AppContainer.appContext)
     }
 
+    /**
+     * Flip `hidden` on every id in [ids] in a single SQL statement, then
+     * enqueue one sync. Avoids the N-emit thrash when multi-select toggled
+     * 4–5 cards at once.
+     */
+    suspend fun bulkSetHidden(ids: Collection<String>, hidden: Boolean) {
+        if (ids.isEmpty()) return
+        val user = currentUser()
+        dao.bulkSetHidden(
+            ids = ids.toList(),
+            hidden = hidden,
+            updatedAt = Instant.now().toString(),
+            userId = user?.userId,
+            userName = user?.displayName,
+            userAvatar = user?.avatarUrl,
+        )
+        SyncWorker.enqueue(AppContainer.appContext)
+    }
+
+    /** Bulk soft-delete in one Room transaction → one Flow emission. */
+    suspend fun bulkDelete(ids: Collection<String>) {
+        if (ids.isEmpty()) return
+        dao.bulkDelete(ids = ids.toList(), updatedAt = Instant.now().toString())
+        SyncWorker.enqueue(AppContainer.appContext)
+    }
+
     /** Replace the local row from the server-fetched [Transaction]. Used by ad-hoc refreshers. */
     suspend fun upsertFromRemote(t: Transaction) {
         dao.upsert(t.toEntity(SyncStatus.SYNCED))

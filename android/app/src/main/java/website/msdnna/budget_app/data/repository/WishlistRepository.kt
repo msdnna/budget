@@ -112,6 +112,27 @@ object WishlistRepository {
         SyncWorker.enqueue(AppContainer.appContext)
     }
 
+    /** Bulk-flip `purchased` in one SQL statement → one Flow emission. */
+    suspend fun bulkSetPurchased(ids: Collection<String>, purchased: Boolean) {
+        if (ids.isEmpty()) return
+        val user = currentUser()
+        dao.bulkSetPurchased(
+            ids = ids.toList(),
+            purchased = purchased,
+            updatedAt = Instant.now().toString(),
+            userId = user?.userId,
+            userName = user?.displayName,
+            userAvatar = user?.avatarUrl,
+        )
+        SyncWorker.enqueue(AppContainer.appContext)
+    }
+
+    suspend fun bulkDelete(ids: Collection<String>) {
+        if (ids.isEmpty()) return
+        dao.bulkDelete(ids = ids.toList(), updatedAt = Instant.now().toString())
+        SyncWorker.enqueue(AppContainer.appContext)
+    }
+
     suspend fun upsertFromRemote(w: WishlistItem) {
         dao.upsert(w.toEntity(SyncStatus.SYNCED))
     }

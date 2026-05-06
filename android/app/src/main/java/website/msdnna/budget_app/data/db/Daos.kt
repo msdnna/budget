@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
@@ -54,6 +55,59 @@ interface TransactionDao {
 
     @Query("DELETE FROM transactions WHERE id = :id")
     suspend fun deleteHard(id: String)
+
+    // ── Bulk mutations ─────────────────────────────────────────────────────
+    // Single SQL statement → Room emits invalidation once for the whole batch
+    // instead of once per row, which kept the LazyColumn from recomposing N
+    // times when a multi-select hide/delete was applied.
+
+    @Query("""
+        UPDATE transactions
+        SET hidden = :hidden,
+            sync_status = CASE WHEN sync_status = :pendingCreate THEN sync_status ELSE :pendingUpdate END,
+            updated_at = :updatedAt,
+            last_modified_by_id = :userId,
+            last_modified_by_name = :userName,
+            last_modified_by_avatar = :userAvatar
+        WHERE id IN (:ids)
+    """)
+    suspend fun bulkSetHidden(
+        ids: List<String>,
+        hidden: Boolean,
+        updatedAt: String,
+        userId: String?,
+        userName: String?,
+        userAvatar: String?,
+        pendingCreate: String = SyncStatus.PENDING_CREATE,
+        pendingUpdate: String = SyncStatus.PENDING_UPDATE,
+    )
+
+    @Query("DELETE FROM transactions WHERE id IN (:ids) AND sync_status = :pendingCreate")
+    suspend fun bulkPurgePendingCreate(
+        ids: List<String>,
+        pendingCreate: String = SyncStatus.PENDING_CREATE,
+    )
+
+    @Query("""
+        UPDATE transactions
+        SET sync_status = :pendingDelete,
+            updated_at = :updatedAt
+        WHERE id IN (:ids) AND sync_status != :pendingCreate
+    """)
+    suspend fun bulkMarkDeleted(
+        ids: List<String>,
+        updatedAt: String,
+        pendingDelete: String = SyncStatus.PENDING_DELETE,
+        pendingCreate: String = SyncStatus.PENDING_CREATE,
+    )
+
+    @Transaction
+    suspend fun bulkDelete(ids: List<String>, updatedAt: String) {
+        // PENDING_CREATE rows never made it to the server → purge locally; the
+        // rest get a tombstone for SyncWorker to push.
+        bulkPurgePendingCreate(ids)
+        bulkMarkDeleted(ids, updatedAt)
+    }
 }
 
 @Dao
@@ -88,6 +142,52 @@ interface WishlistDao {
 
     @Query("DELETE FROM wishlist WHERE id = :id")
     suspend fun deleteHard(id: String)
+
+    @Query("""
+        UPDATE wishlist
+        SET purchased = :purchased,
+            sync_status = CASE WHEN sync_status = :pendingCreate THEN sync_status ELSE :pendingUpdate END,
+            updated_at = :updatedAt,
+            last_modified_by_id = :userId,
+            last_modified_by_name = :userName,
+            last_modified_by_avatar = :userAvatar
+        WHERE id IN (:ids)
+    """)
+    suspend fun bulkSetPurchased(
+        ids: List<String>,
+        purchased: Boolean,
+        updatedAt: String,
+        userId: String?,
+        userName: String?,
+        userAvatar: String?,
+        pendingCreate: String = SyncStatus.PENDING_CREATE,
+        pendingUpdate: String = SyncStatus.PENDING_UPDATE,
+    )
+
+    @Query("DELETE FROM wishlist WHERE id IN (:ids) AND sync_status = :pendingCreate")
+    suspend fun bulkPurgePendingCreate(
+        ids: List<String>,
+        pendingCreate: String = SyncStatus.PENDING_CREATE,
+    )
+
+    @Query("""
+        UPDATE wishlist
+        SET sync_status = :pendingDelete,
+            updated_at = :updatedAt
+        WHERE id IN (:ids) AND sync_status != :pendingCreate
+    """)
+    suspend fun bulkMarkDeleted(
+        ids: List<String>,
+        updatedAt: String,
+        pendingDelete: String = SyncStatus.PENDING_DELETE,
+        pendingCreate: String = SyncStatus.PENDING_CREATE,
+    )
+
+    @Transaction
+    suspend fun bulkDelete(ids: List<String>, updatedAt: String) {
+        bulkPurgePendingCreate(ids)
+        bulkMarkDeleted(ids, updatedAt)
+    }
 }
 
 @Dao

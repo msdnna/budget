@@ -92,7 +92,7 @@ class ExpensesViewModel(private val serverUrl: String) : ViewModel() {
         val ids = _selectedIds.value
         if (ids.isEmpty()) return
         viewModelScope.launch {
-            ids.forEach { TransactionRepository.delete(it) }
+            TransactionRepository.bulkDelete(ids)
             _selectedIds.value = emptySet()
         }
     }
@@ -102,7 +102,7 @@ class ExpensesViewModel(private val serverUrl: String) : ViewModel() {
         val ids = _selectedIds.value
         if (ids.isEmpty()) return
         viewModelScope.launch {
-            ids.forEach { TransactionRepository.update(it, hidden = targetHidden) }
+            TransactionRepository.bulkSetHidden(ids, targetHidden)
             _selectedIds.value = emptySet()
         }
     }
