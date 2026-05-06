@@ -1,15 +1,20 @@
 package website.msdnna.budget_app.ui.components
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -24,6 +29,7 @@ import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -422,40 +428,73 @@ fun SummaryCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(Modifier.height(6.dp))
-            if (hidden) {
-                Box(
-                    modifier = Modifier
-                        .height(26.dp)
-                        .width(88.dp)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(amountColor.copy(alpha = 0.22f))
-                )
-            } else {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (prefix.isNotEmpty()) {
-                        Text(
-                            text = prefix,
+            Crossfade(targetState = hidden, animationSpec = tween(220), label = "summaryHidden") { isHidden ->
+                if (isHidden) {
+                    Box(
+                        modifier = Modifier
+                            .height(26.dp)
+                            .width(88.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(amountColor.copy(alpha = 0.22f))
+                    )
+                } else {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (prefix.isNotEmpty()) {
+                            Text(
+                                text = prefix,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = amountColor
+                            )
+                            Spacer(Modifier.width(2.dp))
+                        }
+                        AnimatedAmountText(
+                            amount = amount,
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
                             color = amountColor
                         )
-                        Spacer(Modifier.width(2.dp))
+                        Text(
+                            text = " ₽",
+                            fontSize = 14.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
-                    Text(
-                        text = formatMoney(amount),
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = amountColor
-                    )
-                    Text(
-                        text = " ₽",
-                        fontSize = 14.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
                 }
             }
         }
     }
+}
+
+/**
+ * Smoothly animates between successive amount values. Used for monetary
+ * displays where a stepped change (e.g. user edits the initial balance, or
+ * statistics period changes) should glide rather than snap.
+ */
+@Composable
+fun AnimatedAmountText(
+    amount: Double,
+    modifier: Modifier = Modifier,
+    fontSize: androidx.compose.ui.unit.TextUnit = androidx.compose.ui.unit.TextUnit.Unspecified,
+    fontWeight: FontWeight? = null,
+    color: Color = Color.Unspecified,
+    style: androidx.compose.ui.text.TextStyle = LocalTextStyle.current,
+) {
+    val animated = remember { Animatable(amount.toFloat()) }
+    LaunchedEffect(amount) {
+        animated.animateTo(
+            targetValue = amount.toFloat(),
+            animationSpec = tween(durationMillis = 360, easing = FastOutSlowInEasing)
+        )
+    }
+    Text(
+        text = formatMoney(animated.value.toDouble()),
+        modifier = modifier,
+        fontSize = fontSize,
+        fontWeight = fontWeight,
+        color = color,
+        style = style,
+    )
 }
 
 fun formatMoney(amount: Double): String {

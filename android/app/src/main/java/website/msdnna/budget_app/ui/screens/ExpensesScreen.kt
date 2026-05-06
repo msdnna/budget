@@ -1,6 +1,14 @@
 package website.msdnna.budget_app.ui.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -75,9 +83,8 @@ fun ExpensesScreen(
     }
 
     Scaffold(
-        // FAB swap snaps without animation — AnimatedContent's cross-fade made
-        // the FAB shadows overlap at intermediate alphas, leaving a muddy
-        // residue.
+        // Bulk-mode FAB swap snaps — see IncomeScreen comment for why no
+        // outer animation. Inner icon Crossfade stays.
         floatingActionButton = {
             if (selectionMode) {
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -86,10 +93,16 @@ fun ExpensesScreen(
                         containerColor = MaterialTheme.colorScheme.surface,
                         contentColor   = MaterialTheme.colorScheme.onSurface,
                     ) {
-                        Icon(
-                            if (allHidden) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                            contentDescription = if (allHidden) "Показать выбранные" else "Скрыть выбранные"
-                        )
+                        Crossfade(
+                            targetState = allHidden,
+                            animationSpec = tween(180),
+                            label = "bulkHideIcon",
+                        ) { hidden ->
+                            Icon(
+                                if (hidden) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                contentDescription = if (hidden) "Показать выбранные" else "Скрыть выбранные"
+                            )
+                        }
                     }
                     FloatingActionButton(
                         onClick = { vm.bulkDeleteSelected() },

@@ -1,5 +1,12 @@
 package website.msdnna.budget_app.ui.screens
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -10,6 +17,8 @@ import androidx.compose.material.icons.automirrored.filled.Backspace
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -43,31 +52,49 @@ fun PinSetupScreen(
     var second by remember { mutableStateOf("") }
     var enableBiometric by remember { mutableStateOf(showBiometricOption && biometricAvailable) }
     var error by remember { mutableStateOf<String?>(null) }
+    // Holds the loader animation between full-PIN entry and the actual
+    // step / save transition so the user gets visible feedback.
+    var verifying by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     val current = if (step == 1) first else second
 
     fun setDigit(d: String) {
+        if (verifying) return
         if (current.length >= PIN_LENGTH) return
         error = null
         if (step == 1) {
             first += d
-            if (first.length == PIN_LENGTH) step = 2
+            if (first.length == PIN_LENGTH) {
+                verifying = true
+                scope.launch {
+                    delay(520)
+                    verifying = false
+                    step = 2
+                }
+            }
         } else {
             second += d
             if (second.length == PIN_LENGTH) {
-                if (first == second) {
-                    onPinSet(first, enableBiometric && biometricAvailable)
-                } else {
-                    error = "PIN-коды не совпадают"
-                    first = ""
-                    second = ""
-                    step = 1
+                verifying = true
+                scope.launch {
+                    delay(620)
+                    verifying = false
+                    if (first == second) {
+                        onPinSet(first, enableBiometric && biometricAvailable)
+                    } else {
+                        error = "PIN-коды не совпадают"
+                        first = ""
+                        second = ""
+                        step = 1
+                    }
                 }
             }
         }
     }
 
     fun backspace() {
+        if (verifying) return
         error = null
         if (step == 1 && first.isNotEmpty()) first = first.dropLast(1)
         else if (step == 2) {
@@ -100,19 +127,31 @@ fun PinSetupScreen(
                 textAlign = TextAlign.Center,
             )
             Spacer(Modifier.height(6.dp))
-            Text(
-                if (step == 1) subtitle else "Повторите PIN-код для подтверждения",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-            )
+            AnimatedContent(
+                targetState = step,
+                transitionSpec = {
+                    (slideInHorizontally(animationSpec = tween(260), initialOffsetX = { it / 4 }) +
+                        fadeIn(animationSpec = tween(260))) togetherWith
+                        (slideOutHorizontally(animationSpec = tween(220), targetOffsetX = { -it / 4 }) +
+                            fadeOut(animationSpec = tween(220)))
+                },
+                label = "pinSetupStep",
+            ) { s ->
+                Text(
+                    if (s == 1) subtitle else "Повторите PIN-код для подтверждения",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+            }
             Spacer(Modifier.height(28.dp))
 
-            PinDotsRow(
+            AnimatedPinDotsRow(
                 length = PIN_LENGTH,
                 filled = current.length,
                 primaryColor = primaryColor,
                 error = error != null,
+                verifying = verifying,
             )
 
             Spacer(Modifier.height(12.dp))
@@ -174,26 +213,6 @@ fun PinSetupScreen(
                     }
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun PinDotsRow(length: Int, filled: Int, primaryColor: Color, error: Boolean) {
-    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        repeat(length) { i ->
-            val isFilled = i < filled
-            val color = when {
-                error -> MaterialTheme.colorScheme.error
-                isFilled -> primaryColor
-                else -> MaterialTheme.colorScheme.outlineVariant
-            }
-            Box(
-                modifier = Modifier
-                    .size(16.dp)
-                    .clip(CircleShape)
-                    .background(color),
-            )
         }
     }
 }

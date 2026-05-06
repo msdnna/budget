@@ -1,5 +1,8 @@
 package website.msdnna.budget_app.ui.components
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -8,6 +11,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -31,6 +37,18 @@ fun DonutChart(
     modifier: Modifier = Modifier,
     centerText: String = ""
 ) {
+    // Progressive sweep — 0..1. Re-animates whenever the slice list identity
+    // changes (e.g. period change), so the chart re-draws in.
+    val sweep = remember { Animatable(0f) }
+    LaunchedEffect(slices) {
+        sweep.snapTo(0f)
+        sweep.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(durationMillis = 700, easing = FastOutSlowInEasing),
+        )
+    }
+    val progress = sweep.value
+
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             val total = slices.sumOf { it.value.toDouble() }.toFloat()
@@ -46,17 +64,17 @@ fun DonutChart(
 
             var startAngle = -90f
             slices.forEach { slice ->
-                val sweep = (slice.value / total) * 360f
+                val sweepAngle = (slice.value / total) * 360f * progress
                 drawArc(
                     color = slice.color,
                     startAngle = startAngle,
-                    sweepAngle = sweep.coerceAtLeast(0.5f) - 1.2f,
+                    sweepAngle = sweepAngle.coerceAtLeast(0.5f) - 1.2f,
                     useCenter = false,
                     topLeft = topLeft,
                     size = arcSize,
                     style = Stroke(width = stroke)
                 )
-                startAngle += sweep
+                startAngle += sweepAngle
             }
         }
         if (centerText.isNotEmpty()) {
@@ -98,20 +116,26 @@ fun ChartLegend(
                     modifier = Modifier.weight(1f)
                 )
                 if (pieUnitRuble) {
-                    if (valuesHidden) {
-                        Box(
-                            modifier = Modifier
-                                .height(14.dp)
-                                .width(48.dp)
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.22f))
-                        )
-                    } else {
-                        Text(
-                            text = "%.0f ₽".format(slice.value),
-                            style = MaterialTheme.typography.bodySmall,
-                            fontWeight = FontWeight.Medium
-                        )
+                    androidx.compose.animation.Crossfade(
+                        targetState = valuesHidden,
+                        animationSpec = tween(220),
+                        label = "legendValue",
+                    ) { isHidden ->
+                        if (isHidden) {
+                            Box(
+                                modifier = Modifier
+                                    .height(14.dp)
+                                    .width(48.dp)
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.22f))
+                            )
+                        } else {
+                            Text(
+                                text = "%.0f ₽".format(slice.value),
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
                     }
                 } else {
                     val pct = if (total > 0f) slice.value / total * 100f else 0f
@@ -132,6 +156,18 @@ data class BarEntry(val label: String, val income: Float, val expense: Float)
 fun BarChart(entries: List<BarEntry>, modifier: Modifier = Modifier) {
     val incomeColor  = LocalIncomeColor.current
     val expenseColor = LocalExpenseColor.current
+
+    // Progressive grow — bars rise from baseline. Re-animates on data change.
+    val grow = remember { Animatable(0f) }
+    LaunchedEffect(entries) {
+        grow.snapTo(0f)
+        grow.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(durationMillis = 600, easing = FastOutSlowInEasing),
+        )
+    }
+    val progress = grow.value
+
     Canvas(modifier = modifier) {
         if (entries.isEmpty()) return@Canvas
         val maxVal = entries.maxOf { maxOf(it.income, it.expense) }.coerceAtLeast(1f)
@@ -143,7 +179,7 @@ fun BarChart(entries: List<BarEntry>, modifier: Modifier = Modifier) {
         entries.forEachIndexed { i, entry ->
             val cx = i * barGroupW + barGroupW / 2f
 
-            val incH = (entry.income / maxVal) * chartH
+            val incH = (entry.income / maxVal) * chartH * progress
             if (incH > 0)
                 drawRect(
                     color = incomeColor,
@@ -151,7 +187,7 @@ fun BarChart(entries: List<BarEntry>, modifier: Modifier = Modifier) {
                     size = Size(barW, incH)
                 )
 
-            val expH = (entry.expense / maxVal) * chartH
+            val expH = (entry.expense / maxVal) * chartH * progress
             if (expH > 0)
                 drawRect(
                     color = expenseColor,

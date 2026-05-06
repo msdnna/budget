@@ -16,6 +16,7 @@ import androidx.fragment.app.FragmentActivity
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
+import androidx.compose.animation.togetherWith
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -179,16 +180,40 @@ class MainActivity : FragmentActivity() {
                 onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
             }
 
+            // Identifier for AnimatedContent so transitions between phases
+            // (splash → connect → pin setup / lock → main) cross-fade rather
+            // than snap. Each branch reads the same state vars in its closure.
+            val phase = when {
+                serverUrl == null || !prefsReady                            -> "splash"
+                serverUrl.isNullOrBlank() || authToken.isNullOrBlank()      -> "connect"
+                hasPin && !isUnlocked                                       -> "lock"
+                !hasPin && !pinSetupPrompted                                -> "pin_setup"
+                else                                                        -> "main"
+            }
+
             BudgetTheme(primary = primaryColor, isDark = isDark) {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    when {
-                        serverUrl == null || !prefsReady -> {
+                    androidx.compose.animation.AnimatedContent(
+                        targetState = phase,
+                        transitionSpec = {
+                            (androidx.compose.animation.fadeIn(
+                                animationSpec = androidx.compose.animation.core.tween(280)
+                            ) + androidx.compose.animation.scaleIn(
+                                initialScale = 0.96f,
+                                animationSpec = androidx.compose.animation.core.tween(280)
+                            )) togetherWith androidx.compose.animation.fadeOut(
+                                animationSpec = androidx.compose.animation.core.tween(180)
+                            )
+                        },
+                        label = "appPhase",
+                    ) { p -> when (p) {
+                        "splash" -> {
                             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                 MbLogo(primaryColor = primaryColor, size = 88.dp)
                             }
                         }
 
-                        serverUrl.isNullOrBlank() || authToken.isNullOrBlank() -> {
+                        "connect" -> {
                             val serverHistory by prefs.serverHistory.collectAsStateWithLifecycle(initialValue = emptyList())
                             // Not connected or not logged in → show connect/login wizard.
                             ConnectScreen(
@@ -213,7 +238,7 @@ class MainActivity : FragmentActivity() {
                             )
                         }
 
-                        hasPin && !isUnlocked -> {
+                        "lock" -> {
                             LockScreen(
                                 primaryColor     = primaryColor,
                                 pinSalt          = pinSalt!!,
@@ -231,7 +256,7 @@ class MainActivity : FragmentActivity() {
                             )
                         }
 
-                        !hasPin && !pinSetupPrompted -> {
+                        "pin_setup" -> {
                             // First post-login launch — offer to protect the app.
                             PinSetupScreen(
                                 primaryColor = primaryColor,
@@ -281,7 +306,7 @@ class MainActivity : FragmentActivity() {
                                 }
                             }
                         )
-                    }
+                    } }
                 }
             }
         }

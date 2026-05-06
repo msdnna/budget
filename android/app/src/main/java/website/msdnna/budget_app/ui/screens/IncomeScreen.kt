@@ -1,8 +1,16 @@
 package website.msdnna.budget_app.ui.screens
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -100,10 +108,12 @@ fun IncomeScreen(
     }
 
     Scaffold(
-        // FAB swap snaps with no transition: AnimatedContent's cross-fade
-        // composed both FABs simultaneously, and their elevation shadows
-        // overlapped at intermediate alphas — visibly muddy. A snap is the
-        // cleanest workaround.
+        // Bulk-mode FAB swap snaps without animation. Tried AnimatedContent
+        // with scale+fade and pure sequenced fade — both produced a hard
+        // rectangular shadow silhouette around the FAB during the
+        // transition (Compose layer-rasterization artifact). The inner
+        // icon Crossfade for "Скрыть/Показать" stays — it's a single-FAB
+        // content swap with no shadow involvement.
         floatingActionButton = {
             if (selectionMode) {
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -112,10 +122,16 @@ fun IncomeScreen(
                         containerColor = MaterialTheme.colorScheme.surface,
                         contentColor   = MaterialTheme.colorScheme.onSurface,
                     ) {
-                        Icon(
-                            if (allHidden) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                            contentDescription = if (allHidden) "Показать выбранные" else "Скрыть выбранные"
-                        )
+                        Crossfade(
+                            targetState = allHidden,
+                            animationSpec = tween(180),
+                            label = "bulkHideIcon",
+                        ) { hidden ->
+                            Icon(
+                                if (hidden) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                contentDescription = if (hidden) "Показать выбранные" else "Скрыть выбранные"
+                            )
+                        }
                     }
                     FloatingActionButton(
                         onClick = { vm.bulkDeleteSelected() },
@@ -171,25 +187,42 @@ fun IncomeScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        if (ibRecord != null) {
-                            if (valuesHidden) {
+                        // Three-state crossfade: not-set / hidden / value.
+                        // Animating both the placeholder swap and the amount
+                        // itself so set/change feels continuous.
+                        AnimatedContent(
+                            targetState = Triple(ibRecord != null, valuesHidden, ibRecord?.amount),
+                            transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(180)) },
+                            label = "ibValue",
+                        ) { (hasValue, hidden, _) ->
+                            if (!hasValue) {
+                                Text(
+                                    "Не задан",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            } else if (hidden) {
                                 Box(
                                     Modifier.height(18.dp).width(70.dp)
                                         .clip(androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
                                         .background(primaryColor.copy(alpha = 0.22f))
                                 )
                             } else {
-                                Text(
-                                    "${formatMoney(ibRecord!!.amount)} ₽",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = primaryColor
-                                )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    AnimatedAmountText(
+                                        amount = ibRecord?.amount ?: 0.0,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = primaryColor,
+                                    )
+                                    Text(
+                                        " ₽",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = primaryColor,
+                                    )
+                                }
                             }
-                        } else {
-                            Text("Не задан",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         Button(
                             onClick = { showIbForm = true },
@@ -197,7 +230,13 @@ fun IncomeScreen(
                             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                             modifier = Modifier.height(32.dp)
                         ) {
-                            Text(if (ibRecord != null) "Изменить" else "Задать", fontSize = 12.sp)
+                            Crossfade(
+                                targetState = ibRecord != null,
+                                animationSpec = tween(180),
+                                label = "ibBtn",
+                            ) { hasIb ->
+                                Text(if (hasIb) "Изменить" else "Задать", fontSize = 12.sp)
+                            }
                         }
                     }
                 }
@@ -430,10 +469,19 @@ fun SwipeableTransactionCard(
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(Icons.Default.Delete, null, tint = Color.White, modifier = Modifier.size(20.dp))
-                    Text(
-                        if (pendingDelete) "Подтвердить?" else "Удалить",
-                        color = Color.White, fontSize = 10.sp
-                    )
+                    AnimatedContent(
+                        targetState = pendingDelete,
+                        transitionSpec = {
+                            (fadeIn(tween(160)) + scaleIn(initialScale = 0.85f, animationSpec = tween(160))) togetherWith
+                                (fadeOut(tween(140)) + scaleOut(targetScale = 0.85f, animationSpec = tween(140)))
+                        },
+                        label = "deleteConfirm",
+                    ) { pending ->
+                        Text(
+                            if (pending) "Подтвердить?" else "Удалить",
+                            color = Color.White, fontSize = 10.sp
+                        )
+                    }
                 }
             }
         }
@@ -466,20 +514,25 @@ fun SwipeableTransactionCard(
             )
 
         // `compositeOver` keeps the container opaque so swipe rails behind the
-        // card don't bleed through. animateColorAsState used to sit here for a
-        // 180 ms cross-fade between normal/selected; removed because every
-        // visible card spun up a per-card Animatable + scope on each
-        // recomposition, which the SelectionOverlay already cross-fades over
-        // anyway.
+        // card don't bleed through. The selected branch stays a hard swap
+        // (the SelectionOverlay already cross-fades on top); the hidden
+        // branch animates because hidden flips at user-action frequency, not
+        // per-scroll-frame, so the per-card Animatable cost is acceptable.
         val baseSurface = MaterialTheme.colorScheme.surface
+        val hiddenBg = MaterialTheme.colorScheme.surfaceVariant
         val targetBg = when {
             selected           -> primaryColor.copy(alpha = 0.16f).compositeOver(baseSurface)
-            transaction.hidden -> MaterialTheme.colorScheme.surfaceVariant
+            transaction.hidden -> hiddenBg
             else               -> baseSurface
         }
+        val animatedBg by animateColorAsState(
+            targetValue = targetBg,
+            animationSpec = tween(durationMillis = 260),
+            label = "cardBg",
+        )
         Card(
             modifier = cardModifier,
-            colors = CardDefaults.cardColors(containerColor = targetBg)
+            colors = CardDefaults.cardColors(containerColor = animatedBg)
         ) {
             Row(
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp).fillMaxWidth(),
@@ -524,21 +577,27 @@ fun SwipeableTransactionCard(
                         )
                     }
                 }
-                if (valuesHidden) {
-                    Box(
-                        modifier = Modifier
-                            .height(18.dp)
-                            .width(60.dp)
-                            .clip(androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
-                            .background(amountColor.copy(alpha = 0.22f))
-                    )
-                } else {
-                    Text(
-                        "$amountPrefix${formatMoney(transaction.amount)} ₽",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = amountColor
-                    )
+                Crossfade(
+                    targetState = valuesHidden,
+                    animationSpec = tween(220),
+                    label = "txAmount",
+                ) { hidden ->
+                    if (hidden) {
+                        Box(
+                            modifier = Modifier
+                                .height(18.dp)
+                                .width(60.dp)
+                                .clip(androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
+                                .background(amountColor.copy(alpha = 0.22f))
+                        )
+                    } else {
+                        Text(
+                            "$amountPrefix${formatMoney(transaction.amount)} ₽",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = amountColor
+                        )
+                    }
                 }
             }
         }
@@ -604,7 +663,21 @@ fun TransactionDetailSheet(
                 .padding(bottom = 40.dp),
             verticalArrangement = Arrangement.spacedBy(0.dp)
         ) {
-            if (!isEditing) {
+            AnimatedContent(
+                targetState = isEditing,
+                transitionSpec = {
+                    if (targetState) {
+                        (fadeIn(tween(220)) + scaleIn(initialScale = 0.97f, animationSpec = tween(220))) togetherWith
+                            (fadeOut(tween(160)) + scaleOut(targetScale = 0.97f, animationSpec = tween(160)))
+                    } else {
+                        (fadeIn(tween(220)) + scaleIn(initialScale = 0.97f, animationSpec = tween(220))) togetherWith
+                            (fadeOut(tween(160)) + scaleOut(targetScale = 0.97f, animationSpec = tween(160)))
+                    }
+                },
+                label = "txDetailMode",
+            ) { editing ->
+                if (!editing) {
+                    Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
                 // ── View mode ──────────────────────────────────────────────
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -685,7 +758,9 @@ fun TransactionDetailSheet(
                         }
                     }) { Text(if (transaction.createdBy != null) "Сменить" else "Назначить") }
                 }
-            } else {
+                    } // close inner Column for view mode
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
                 // ── Edit mode ──────────────────────────────────────────────
                 Text("Редактировать", style = MaterialTheme.typography.titleLarge)
                 Spacer(Modifier.height(16.dp))
@@ -801,7 +876,9 @@ fun TransactionDetailSheet(
                         enabled = !saving && editAmount.isNotBlank()
                     ) { Text(if (saving) "…" else "Сохранить", fontWeight = FontWeight.SemiBold) }
                 }
-            }
+                    } // close inner Column for edit mode
+                } // AnimatedContent branch
+            } // AnimatedContent
         }
     }
 

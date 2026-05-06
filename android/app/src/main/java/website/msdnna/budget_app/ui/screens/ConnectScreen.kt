@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.*
+import androidx.compose.animation.togetherWith
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -181,7 +182,42 @@ fun ConnectScreen(
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 Spacer(Modifier.height(28.dp))
 
-                if (step == 1) {
+                androidx.compose.animation.AnimatedContent(
+                    targetState = step,
+                    transitionSpec = {
+                        if (targetState > initialState) {
+                            (androidx.compose.animation.slideInHorizontally(
+                                animationSpec = androidx.compose.animation.core.tween(280),
+                                initialOffsetX = { it / 4 }
+                            ) + androidx.compose.animation.fadeIn(
+                                animationSpec = androidx.compose.animation.core.tween(280)
+                            )) togetherWith (androidx.compose.animation.slideOutHorizontally(
+                                animationSpec = androidx.compose.animation.core.tween(220),
+                                targetOffsetX = { -it / 4 }
+                            ) + androidx.compose.animation.fadeOut(
+                                animationSpec = androidx.compose.animation.core.tween(220)
+                            ))
+                        } else {
+                            (androidx.compose.animation.slideInHorizontally(
+                                animationSpec = androidx.compose.animation.core.tween(280),
+                                initialOffsetX = { -it / 4 }
+                            ) + androidx.compose.animation.fadeIn(
+                                animationSpec = androidx.compose.animation.core.tween(280)
+                            )) togetherWith (androidx.compose.animation.slideOutHorizontally(
+                                animationSpec = androidx.compose.animation.core.tween(220),
+                                targetOffsetX = { it / 4 }
+                            ) + androidx.compose.animation.fadeOut(
+                                animationSpec = androidx.compose.animation.core.tween(220)
+                            ))
+                        }
+                    },
+                    label = "connectStep",
+                ) { currentStep ->
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                    if (currentStep == 1) {
                     // ── Step 1: Server URL ────────────────────────────
                     Text("Подключение к серверу", style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center)
                     Spacer(Modifier.height(6.dp))
@@ -364,6 +400,8 @@ fun ConnectScreen(
                         }
                     }
                 }
+                    } // Column wrapper
+                } // AnimatedContent
 
                 Spacer(Modifier.height(16.dp))
             }
@@ -393,7 +431,10 @@ private fun DiscoverySection(
     Column(modifier = Modifier.fillMaxWidth()) {
         OutlinedButton(
             onClick = if (active) onCancel else onStart,
-            modifier = Modifier.fillMaxWidth().height(44.dp),
+            // heightIn(min) instead of a hard height so the button can grow
+            // by one line if a future label outgrows the row instead of
+            // clipping the second line under the bottom border.
+            modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp),
             enabled = enabled,
             colors = ButtonDefaults.outlinedButtonColors(contentColor = primaryColor),
         ) {
@@ -404,14 +445,21 @@ private fun DiscoverySection(
                     strokeWidth = 2.dp,
                 )
                 Spacer(Modifier.width(10.dp))
-                Text("Сканирование… Отменить", fontWeight = FontWeight.Medium)
+                Text(
+                    "Сканирование… Отменить",
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                )
             } else {
                 Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    if (finished && results.isEmpty()) "Поиск не дал результатов — повторить"
+                    if (finished && results.isEmpty()) "Ничего не найдено — повторить"
                     else "Поиск в локальной сети",
                     fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                 )
             }
         }

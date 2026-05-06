@@ -325,11 +325,19 @@ fun MainScreen(
         )
     }
 
-    if (showConflicts) {
+    androidx.compose.animation.AnimatedVisibility(
+        visible = showConflicts,
+        enter = androidx.compose.animation.slideInHorizontally(initialOffsetX = { it }) + androidx.compose.animation.fadeIn(),
+        exit  = androidx.compose.animation.slideOutHorizontally(targetOffsetX  = { it }) + androidx.compose.animation.fadeOut(),
+    ) {
         ConflictsScreen(serverUrl = serverUrl, onClose = { showConflicts = false })
     }
 
-    if (showNotifications) {
+    androidx.compose.animation.AnimatedVisibility(
+        visible = showNotifications,
+        enter = androidx.compose.animation.slideInHorizontally(initialOffsetX = { it }) + androidx.compose.animation.fadeIn(),
+        exit  = androidx.compose.animation.slideOutHorizontally(targetOffsetX  = { it }) + androidx.compose.animation.fadeOut(),
+    ) {
         NotificationsScreen(
             primaryColor = primaryColor,
             notifPrefs = notifPrefs,
@@ -384,7 +392,11 @@ fun MainScreen(
         )
     }
 
-    if (showSecurity) {
+    androidx.compose.animation.AnimatedVisibility(
+        visible = showSecurity,
+        enter = androidx.compose.animation.slideInHorizontally(initialOffsetX = { it }) + androidx.compose.animation.fadeIn(),
+        exit  = androidx.compose.animation.slideOutHorizontally(targetOffsetX  = { it }) + androidx.compose.animation.fadeOut(),
+    ) {
         SecurityScreen(
             primaryColor = primaryColor,
             prefs        = prefs,

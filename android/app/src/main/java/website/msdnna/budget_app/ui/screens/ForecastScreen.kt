@@ -1,10 +1,18 @@
 package website.msdnna.budget_app.ui.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -112,7 +120,8 @@ fun ForecastScreen(
     }
 
     Scaffold(
-        // FAB swap snaps without animation — see other screens for rationale.
+        // Bulk-mode FAB swap snaps — see IncomeScreen comment for why no
+        // outer animation. Inner icon Crossfade stays.
         floatingActionButton = {
             if (selectionMode) {
                 val canPurchase = purchasableSelected.isNotEmpty()
@@ -128,10 +137,16 @@ fun ForecastScreen(
                             containerColor = ColourPurchased,
                             contentColor   = Color.White,
                         ) {
-                            Icon(
-                                if (allPurchased) Icons.Default.RadioButtonUnchecked else Icons.Default.CheckCircle,
-                                contentDescription = if (allPurchased) "Снять отметку «куплено»" else "Отметить как купленное"
-                            )
+                            Crossfade(
+                                targetState = allPurchased,
+                                animationSpec = tween(180),
+                                label = "bulkPurchaseIcon",
+                            ) { purchased ->
+                                Icon(
+                                    if (purchased) Icons.Default.RadioButtonUnchecked else Icons.Default.CheckCircle,
+                                    contentDescription = if (purchased) "Снять отметку «куплено»" else "Отметить как купленное"
+                                )
+                            }
                         }
                     }
                     FloatingActionButton(
@@ -401,10 +416,19 @@ fun SwipeableWishlistCard(
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(Icons.Default.Delete, null, tint = Color.White, modifier = Modifier.size(22.dp))
-                    Text(
-                        if (pendingDelete) "Подтвердить?" else "Удалить",
-                        color = Color.White, fontSize = 10.sp
-                    )
+                    AnimatedContent(
+                        targetState = pendingDelete,
+                        transitionSpec = {
+                            (fadeIn(tween(160)) + scaleIn(initialScale = 0.85f, animationSpec = tween(160))) togetherWith
+                                (fadeOut(tween(140)) + scaleOut(targetScale = 0.85f, animationSpec = tween(140)))
+                        },
+                        label = "wlDeleteConfirm",
+                    ) { pending ->
+                        Text(
+                            if (pending) "Подтвердить?" else "Удалить",
+                            color = Color.White, fontSize = 10.sp
+                        )
+                    }
                 }
             }
         }
@@ -438,18 +462,24 @@ fun SwipeableWishlistCard(
             )
 
         // compositeOver keeps the bg opaque so swipe rails don't bleed through.
-        // animateColorAsState removed (one Animatable per visible card on each
-        // recomposition was an unnecessary tax during scroll); the
-        // SelectionOverlay already cross-fades on top.
+        // animateColorAsState is fine here for the purchased branch — that
+        // flag flips at user-action frequency, not per-scroll-frame; the
+        // selected branch stays a hard swap (SelectionOverlay cross-fades
+        // on top of it anyway).
         val baseSurface = MaterialTheme.colorScheme.surface
         val targetBg = when {
             selected       -> primaryColor.copy(alpha = 0.16f).compositeOver(baseSurface)
             item.purchased -> MaterialTheme.colorScheme.surfaceVariant
             else           -> baseSurface
         }
+        val animatedBg by animateColorAsState(
+            targetValue = targetBg,
+            animationSpec = tween(durationMillis = 260),
+            label = "wlCardBg",
+        )
         Card(
             modifier = cardModifier,
-            colors = CardDefaults.cardColors(containerColor = targetBg)
+            colors = CardDefaults.cardColors(containerColor = animatedBg)
         ) {
             Row(
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp).fillMaxWidth(),
@@ -579,7 +609,16 @@ fun WishlistInteractiveSheet(
                 .padding(bottom = 40.dp),
             verticalArrangement = Arrangement.spacedBy(0.dp)
         ) {
-            if (!isEditing) {
+            AnimatedContent(
+                targetState = isEditing,
+                transitionSpec = {
+                    (fadeIn(tween(220)) + scaleIn(initialScale = 0.97f, animationSpec = tween(220))) togetherWith
+                        (fadeOut(tween(160)) + scaleOut(targetScale = 0.97f, animationSpec = tween(160)))
+                },
+                label = "wlDetailMode",
+            ) { editing ->
+                if (!editing) {
+                    Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
                 // ── View mode ──────────────────────────────────────────────
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -652,7 +691,9 @@ fun WishlistInteractiveSheet(
                         }
                     }) { Text(if (item.createdBy != null) "Сменить" else "Назначить") }
                 }
-            } else {
+                    } // close inner Column for view mode
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
                 // ── Edit mode ──────────────────────────────────────────────
                 Text("Редактировать", style = MaterialTheme.typography.titleLarge)
                 Spacer(Modifier.height(16.dp))
@@ -777,7 +818,9 @@ fun WishlistInteractiveSheet(
                         enabled = !saving && editName.isNotBlank() && editCost.isNotBlank()
                     ) { Text(if (saving) "…" else "Сохранить", fontWeight = FontWeight.SemiBold) }
                 }
-            }
+                    } // close inner Column for edit mode
+                } // AnimatedContent branch
+            } // AnimatedContent
         }
     }
 

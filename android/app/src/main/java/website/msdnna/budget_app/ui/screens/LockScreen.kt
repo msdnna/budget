@@ -1,7 +1,17 @@
 package website.msdnna.budget_app.ui.screens
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -12,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Backspace
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material3.*
+import androidx.compose.ui.draw.scale
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,6 +67,10 @@ fun LockScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var biometricAttempted by remember { mutableStateOf(false) }
     var showRecovery by remember { mutableStateOf(false) }
+    // True between "PIN-length reached" and the delayed submit() — the dots
+    // animate in a sequential wave during this interval to give the user
+    // perceived feedback that something is happening.
+    var verifying by remember { mutableStateOf(false) }
 
     fun submit(pin: String) {
         if (pin.length != PIN_LENGTH) return
@@ -119,6 +134,7 @@ fun LockScreen(
                 filled = entered.length,
                 primaryColor = primaryColor,
                 error = error != null,
+                verifying = verifying,
             )
 
             Spacer(Modifier.height(12.dp))
@@ -138,13 +154,24 @@ fun LockScreen(
                 primaryColor = primaryColor,
                 showBiometric = biometricEnabled && BiometricHelper.isAvailable(context),
                 onDigit = { d ->
+                    if (verifying) return@PinKeypad
                     if (entered.length < PIN_LENGTH) {
                         error = null
                         entered += d
-                        if (entered.length == PIN_LENGTH) submit(entered)
+                        if (entered.length == PIN_LENGTH) {
+                            // Briefly hold the loader animation so the user sees
+                            // visible feedback before unlock or error.
+                            verifying = true
+                            scope.launch {
+                                delay(620)
+                                verifying = false
+                                submit(entered)
+                            }
+                        }
                     }
                 },
                 onBackspace = {
+                    if (verifying) return@PinKeypad
                     if (entered.isNotEmpty()) {
                         error = null
                         entered = entered.dropLast(1)
@@ -174,29 +201,95 @@ fun LockScreen(
 }
 
 @Composable
-private fun PinDots(length: Int, filled: Int, primaryColor: Color, error: Boolean) {
+private fun PinDots(
+    length: Int,
+    filled: Int,
+    primaryColor: Color,
+    error: Boolean,
+    verifying: Boolean = false,
+) {
+    AnimatedPinDotsRow(
+        length = length,
+        filled = filled,
+        primaryColor = primaryColor,
+        error = error,
+        verifying = verifying,
+    )
+}
+
+/**
+ * Shared dot row used by [LockScreen] and [PinSetupScreen].
+ *
+ * Each dot scales 0→1 with a bouncy spring as the user enters digits, the
+ * fill colour cross-fades on state change, and during [verifying] the dots
+ * bob in a sequential wave to convey "checking…" without blocking input on a
+ * separate spinner.
+ */
+@Composable
+internal fun AnimatedPinDotsRow(
+    length: Int,
+    filled: Int,
+    primaryColor: Color,
+    error: Boolean,
+    verifying: Boolean = false,
+) {
+    val baseColor = MaterialTheme.colorScheme.outlineVariant
+    val errorColor = MaterialTheme.colorScheme.error
+
+    val transition = rememberInfiniteTransition(label = "pinWave")
+    val wavePhase by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = length.toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 900, easing = LinearEasing),
+        ),
+        label = "wave",
+    )
+
     Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         repeat(length) { i ->
             val isFilled = i < filled
-            val color = when {
-                error -> MaterialTheme.colorScheme.error
+            val targetColor = when {
+                error    -> errorColor
                 isFilled -> primaryColor
-                else -> MaterialTheme.colorScheme.outlineVariant
+                else     -> baseColor
             }
+            val animatedColor by animateColorAsState(
+                targetValue = targetColor,
+                animationSpec = tween(durationMillis = 220),
+                label = "pinDotColor$i",
+            )
+            val fillScale by animateFloatAsState(
+                targetValue = if (isFilled) 1f else 0.55f,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessMedium,
+                ),
+                label = "pinDotScale$i",
+            )
+
+            // Sequential vertical bounce while verifying — each dot lags the
+            // previous by ~1/length of the wave period.
+            val phase = ((wavePhase - i).rem(length.toFloat()) + length) % length
+            val waveOffset = if (verifying && length > 0) {
+                val triangular = 1f - kotlin.math.abs(phase / length * 2f - 1f) // 0..1..0
+                -triangular * 6f
+            } else 0f
+
             Box(
                 modifier = Modifier
                     .size(16.dp)
+                    .offset(y = waveOffset.dp)
                     .clip(CircleShape)
-                    .background(if (isFilled || error) color else Color.Transparent),
+                    .background(baseColor),
             ) {
-                if (!isFilled && !error) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.outlineVariant),
-                    )
-                }
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .scale(fillScale)
+                        .clip(CircleShape)
+                        .background(animatedColor),
+                )
             }
         }
     }
