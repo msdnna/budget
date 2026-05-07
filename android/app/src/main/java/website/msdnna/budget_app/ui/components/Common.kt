@@ -256,11 +256,10 @@ fun Modifier.bringIntoViewOnFocus(): Modifier = composed {
 }
 
 /**
- * "mb" logo: bold letters with an accent underline under "b".
- * Renders the [R.drawable.mb_logo] vector drawable tinted with [primaryColor];
- * the drawable encodes the underline at fillAlpha=0.45, so a single tint paints
- * the letters at full opacity and the underline at 45%. [size] is the rendered
- * height; the drawable's intrinsic 304:184 aspect ratio is preserved.
+ * "mb" logo with sculpted shadow gradients under each letter (3D depth) and
+ * a grey accent underline. Stacked as two drawables so [primaryColor] tints
+ * only the letter base — the gradient shadows + underline overlay sit on top
+ * untinted, surviving the ColorFilter that would otherwise flatten them.
  */
 @Composable
 fun MbLogo(
@@ -268,14 +267,23 @@ fun MbLogo(
     size: Dp,
     modifier: Modifier = Modifier
 ) {
-    Image(
-        painter = painterResource(R.drawable.mb_logo),
-        contentDescription = null,
+    Box(
         modifier = modifier
             .height(size)
-            .aspectRatio(304f / 184f),
-        colorFilter = ColorFilter.tint(primaryColor)
-    )
+            .aspectRatio(304f / 184f)
+    ) {
+        Image(
+            painter = painterResource(R.drawable.mb_logo),
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            colorFilter = ColorFilter.tint(primaryColor)
+        )
+        Image(
+            painter = painterResource(R.drawable.mb_logo_overlay),
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize()
+        )
+    }
 }
 
 private val AVATAR_PALETTE = listOf(
