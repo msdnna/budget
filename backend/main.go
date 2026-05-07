@@ -34,6 +34,7 @@ func main() {
 	wlRepo := repository.NewWishlistRepository(db)
 	userRepo := repository.NewUserRepository(db)
 	catRepo := repository.NewCategoryRepository(db)
+	drRepo := repository.NewDetailRequestRepository(db)
 
 	seedCtx, seedCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer seedCancel()
@@ -49,6 +50,7 @@ func main() {
 	catHandler := handlers.NewCategoryHandler(catRepo)
 	syncHandler := handlers.NewSyncHandler(txRepo, wlRepo, catRepo)
 	versionHandler := handlers.NewVersionHandler(appVersion)
+	drHandler := handlers.NewDetailRequestHandler(drRepo, txRepo, userRepo)
 
 	r := gin.Default()
 	r.SetTrustedProxies([]string{"127.0.0.1", "::1"})
@@ -96,6 +98,13 @@ func main() {
 
 			protected.GET("/sync/pull", syncHandler.Pull)
 			protected.POST("/sync/push", syncHandler.Push)
+
+			protected.POST("/detail-requests", drHandler.Create)
+			protected.GET("/detail-requests", drHandler.List)
+			protected.GET("/detail-requests/:id", drHandler.Get)
+			protected.POST("/detail-requests/:id/transactions", drHandler.AddChild)
+			protected.POST("/detail-requests/:id/close", drHandler.Close)
+			protected.POST("/detail-requests/:id/cancel", drHandler.Cancel)
 		}
 	}
 

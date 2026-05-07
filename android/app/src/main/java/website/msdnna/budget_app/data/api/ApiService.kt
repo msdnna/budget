@@ -130,6 +130,35 @@ interface ApiService {
         @Body body: website.msdnna.budget_app.data.model.SyncPushRequest
     ): website.msdnna.budget_app.data.model.SyncPushResponse
 
+    // ───── Detail requests (online-only) ───────────────────────────────
+
+    @GET("detail-requests")
+    suspend fun listDetailRequests(
+        @Query("assignee_id") assigneeId: String? = null,
+        @Query("creator_id")  creatorId: String? = null,
+        @Query("status")      status: String? = null,
+    ): List<website.msdnna.budget_app.data.model.DetailRequest>
+
+    @POST("detail-requests")
+    suspend fun createDetailRequest(
+        @Body body: website.msdnna.budget_app.data.model.CreateDetailRequestPayload
+    ): website.msdnna.budget_app.data.model.DetailRequest
+
+    @GET("detail-requests/{id}")
+    suspend fun getDetailRequest(@Path("id") id: String): website.msdnna.budget_app.data.model.DetailRequestView
+
+    @POST("detail-requests/{id}/transactions")
+    suspend fun addDetailRequestChild(
+        @Path("id") id: String,
+        @Body body: CreateTransactionRequest
+    ): Transaction
+
+    @POST("detail-requests/{id}/close")
+    suspend fun closeDetailRequest(@Path("id") id: String): website.msdnna.budget_app.data.model.DetailRequest
+
+    @POST("detail-requests/{id}/cancel")
+    suspend fun cancelDetailRequest(@Path("id") id: String): Map<String, String>
+
     @Streaming
     @GET("export/excel")
     suspend fun exportExcel(

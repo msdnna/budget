@@ -34,6 +34,19 @@ data class TransactionEntity(
 
     /** Server document we conflicted against (JSON). Null unless syncStatus=CONFLICT. */
     @ColumnInfo(name = "server_payload") val serverPayload: String? = null,
+
+    // Detail-request linkage. parent_id points to the lump-sum parent for
+    // children; detail_request_id/status are set on the parent once a request
+    // is opened. excluded_from_stats mirrors the server flag — open children
+    // and closed parents are skipped from sums.
+    @ColumnInfo(name = "parent_id", defaultValue = "''")
+    val parentId: String = "",
+    @ColumnInfo(name = "detail_request_id", defaultValue = "''")
+    val detailRequestId: String = "",
+    @ColumnInfo(name = "detail_request_status", defaultValue = "''")
+    val detailRequestStatus: String = "",
+    @ColumnInfo(name = "excluded_from_stats", defaultValue = "0")
+    val excludedFromStats: Boolean = false,
 )
 
 @Entity(tableName = "wishlist")

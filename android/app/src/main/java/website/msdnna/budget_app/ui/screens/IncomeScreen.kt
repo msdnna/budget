@@ -25,6 +25,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Assignment
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
@@ -390,6 +391,9 @@ fun SwipeableTransactionCard(
     valuesHidden: Boolean = false,
     selectionMode: Boolean = false,
     selected: Boolean = false,
+    /** When true, paint the card background in a warning (yellow) tint —
+     *  used by the assignee's expense list to surface open detail-requests. */
+    highlightWarning: Boolean = false,
     onLongPress: (id: String) -> Unit = {},
     onSelectToggle: (id: String) -> Unit = {},
     onDelete: (id: String) -> Unit,
@@ -550,8 +554,10 @@ fun SwipeableTransactionCard(
         // per-scroll-frame, so the per-card Animatable cost is acceptable.
         val baseSurface = MaterialTheme.colorScheme.surface
         val hiddenBg = MaterialTheme.colorScheme.surfaceVariant
+        val warningBg = Color(0xFFF0A020).copy(alpha = 0.18f).compositeOver(baseSurface)
         val targetBg = when {
             selected           -> primaryColor.copy(alpha = 0.16f).compositeOver(baseSurface)
+            highlightWarning   -> warningBg
             transaction.hidden -> hiddenBg
             else               -> baseSurface
         }
@@ -656,7 +662,14 @@ fun TransactionDetailSheet(
     onSave: suspend (UpdateTransactionRequest) -> Unit,
     onGetUsers: suspend () -> List<UserInfo>,
     onDismiss: () -> Unit,
-    onSaved: () -> Unit
+    onSaved: () -> Unit,
+    /** Optional: open the detail-request linked to this transaction (if any). */
+    onOpenDetailRequest: ((String) -> Unit)? = null,
+    /** Optional: start the "create detail-request" flow at parent level. */
+    onCreateDetailRequest: (() -> Unit)? = null,
+    /** When the transaction is a child of a detail-request, the id of that
+     *  request — surfaced as a "back-link" row in view mode. */
+    linkedDetailRequestId: String? = null,
 ) {
     val scope = rememberCoroutineScope()
     var isEditing by remember { mutableStateOf(false) }
@@ -728,8 +741,33 @@ fun TransactionDetailSheet(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    IconButton(onClick = { isEditing = true }) {
-                        Icon(Icons.Default.Edit, "Редактировать", tint = amountColor)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        // Detail-request action: open existing or create new.
+                        // Only shown when callbacks are wired (i.e., from
+                        // ExpensesScreen) and the transaction itself isn't a
+                        // child of another request.
+                        if (transaction.parentId.isBlank()) {
+                            if (transaction.detailRequestId.isNotBlank() && onOpenDetailRequest != null) {
+                                IconButton(onClick = { onOpenDetailRequest(transaction.detailRequestId) }) {
+                                    Icon(
+                                        Icons.AutoMirrored.Filled.Assignment,
+                                        contentDescription = if (transaction.detailRequestStatus == "open") "Открыть запрос на детализацию" else "Закрытый запрос на детализацию",
+                                        tint = if (transaction.detailRequestStatus == "open") Color(0xFFF0A020) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            } else if (onCreateDetailRequest != null) {
+                                IconButton(onClick = { onCreateDetailRequest() }) {
+                                    Icon(
+                                        Icons.AutoMirrored.Filled.Assignment,
+                                        contentDescription = "Создать запрос на детализацию",
+                                        tint = primaryColor,
+                                    )
+                                }
+                            }
+                        }
+                        IconButton(onClick = { isEditing = true }) {
+                            Icon(Icons.Default.Edit, "Редактировать", tint = amountColor)
+                        }
                     }
                 }
 
@@ -749,6 +787,27 @@ fun TransactionDetailSheet(
                 }
                 if (transaction.hidden) {
                     DetailRow("Статус", "Скрыто")
+                }
+                // Back-link from a child to its detail-request — only shown
+                // when the parent linkage is wired by the caller.
+                if (transaction.parentId.isNotBlank() && linkedDetailRequestId != null && onOpenDetailRequest != null) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            "Запрос на детализацию",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f),
+                        )
+                        TextButton(onClick = { onOpenDetailRequest(linkedDetailRequestId) }) {
+                            Text("Открыть запрос")
+                        }
+                    }
                 }
 
                 Spacer(Modifier.height(4.dp))

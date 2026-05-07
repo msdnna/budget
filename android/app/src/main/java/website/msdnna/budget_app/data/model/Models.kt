@@ -45,6 +45,35 @@ data class Transaction(
     @SerializedName("updated_at") val updatedAt: String = "",
     @SerializedName("deleted_at") val deletedAt: String? = null,
     @SerializedName("last_modified_by") val lastModifiedBy: UserInfo? = null,
+    @SerializedName("parent_id") val parentId: String = "",
+    @SerializedName("detail_request_id") val detailRequestId: String = "",
+    @SerializedName("detail_request_status") val detailRequestStatus: String = "",
+    @SerializedName("excluded_from_stats") val excludedFromStats: Boolean = false,
+)
+
+// ===== Detail-request DTOs =====
+
+data class DetailRequest(
+    val id: String = "",
+    @SerializedName("parent_transaction_id") val parentTransactionId: String = "",
+    @SerializedName("target_amount") val targetAmount: Double = 0.0,
+    val assignee: UserInfo? = null,
+    val creator: UserInfo? = null,
+    val status: String = "",                 // "open" | "closed"
+    @SerializedName("created_at") val createdAt: String = "",
+    @SerializedName("closed_at") val closedAt: String? = null,
+    @SerializedName("updated_at") val updatedAt: String = "",
+)
+
+data class DetailRequestView(
+    val request: DetailRequest? = null,
+    val parent: Transaction? = null,
+    val children: List<Transaction> = emptyList(),
+)
+
+data class CreateDetailRequestPayload(
+    @SerializedName("transaction_id") val transactionId: String,
+    @SerializedName("assignee_id")    val assigneeId: String,
 )
 
 data class TransactionListResponse(

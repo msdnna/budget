@@ -164,7 +164,7 @@
                                                 <template #trigger>
                                                     <n-button quaternary circle size="small">
                                                         <template #icon>
-                                                            <n-icon size="16"><InformationCircleOutline /></n-icon>
+                                                            <n-icon size="18"><InformationCircleOutline /></n-icon>
                                                         </template>
                                                     </n-button>
                                                 </template>
@@ -183,6 +183,8 @@
                                             </div>
                                         </div>
                                     </n-popover>
+                                    <!-- Detail-requests bell -->
+                                    <DetailRequestBell />
                                     <!-- Hide/show values toggle -->
                                     <n-tooltip trigger="hover" placement="bottom">
                                         <template #trigger>
@@ -267,6 +269,8 @@
                                         Войти
                                     </n-button>
                                 </template>
+                                <!-- Mobile detail-requests bell -->
+                                <DetailRequestBell />
                                 <!-- Mobile theme picker -->
                                 <n-popover trigger="click" placement="bottom-end" :show-arrow="false">
                                     <template #trigger>
@@ -335,7 +339,7 @@
                                     <template #trigger>
                                         <n-button quaternary circle size="small">
                                             <template #icon>
-                                                <n-icon size="16"><InformationCircleOutline /></n-icon>
+                                                <n-icon size="18"><InformationCircleOutline /></n-icon>
                                             </template>
                                         </n-button>
                                     </template>
@@ -378,6 +382,19 @@
                 </n-layout>
 
                 <LoginModal :show="showLogin" @success="showLogin = false" @close="showLogin = false" />
+                <DetailRequestModal
+                    :show="!!detailReq.openRequestId"
+                    :request-id="detailReq.openRequestId"
+                    @close="detailReq.closeRequest()"
+                    @updated="detailReq.fetchAll()"
+                    @closed="detailReq.fetchAll()"
+                />
+                <DetailRequestCreateModal
+                    :show="!!detailReq.creatingForTx"
+                    :transaction="detailReq.creatingForTx"
+                    @close="detailReq.cancelCreate()"
+                    @created="onRequestCreated"
+                />
             </n-notification-provider>
         </n-message-provider>
     </n-config-provider>
@@ -405,6 +422,10 @@ import LoginModal from "@/components/LoginModal.vue";
 import UserAvatar from "@/components/UserAvatar.vue";
 import AuthGate from "@/components/AuthGate.vue";
 import MbLogo from "@/components/MbLogo.vue";
+import DetailRequestBell from "@/components/DetailRequestBell.vue";
+import DetailRequestModal from "@/components/DetailRequestModal.vue";
+import DetailRequestCreateModal from "@/components/DetailRequestCreateModal.vue";
+import { useDetailRequestsStore } from "@/stores/detailRequests";
 
 // ── Version info ──────────────────────────────────────────────────
 const webVersion = __APP_VERSION__
@@ -428,6 +449,11 @@ function dotStyle(t) {
 // ── Auth ──────────────────────────────────────────────────────────
 const auth = useAuthStore();
 const showLogin = ref(false);
+const detailReq = useDetailRequestsStore();
+
+function onRequestCreated() {
+    detailReq.fetchAll();
+}
 
 function handleLogout() {
     auth.logout();

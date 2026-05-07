@@ -256,6 +256,56 @@ func (r *TransactionRepository) FindModifiedSince(ctx context.Context, since tim
 	return out, nil
 }
 
+// FindChildren returns the non-deleted child transactions of a parent.
+func (r *TransactionRepository) FindChildren(ctx context.Context, parentID string) ([]models.Transaction, error) {
+	cur, err := r.col.Find(ctx, bson.M{"parent_id": parentID, "deleted_at": nil},
+		options.Find().SetSort(bson.D{{"date", -1}, {"created_at", -1}}))
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+	var out []models.Transaction
+	if err := cur.All(ctx, &out); err != nil {
+		return nil, err
+	}
+	if out == nil {
+		out = []models.Transaction{}
+	}
+	return out, nil
+}
+
+// SetExcludedForChildren flips the excluded_from_stats flag on every child of
+// the given parent. Used on detail-request close (false) to fold children into
+// stats, and unused on cancel since children are deleted instead.
+func (r *TransactionRepository) SetExcludedForChildren(ctx context.Context, parentID string, excluded bool, modifiedBy *models.UserInfo) error {
+	now := time.Now()
+	update := bson.M{
+		"$set": bson.M{
+			"excluded_from_stats": excluded,
+			"updated_at":          now,
+			"last_modified_by":    modifiedBy,
+		},
+		"$inc": bson.M{"version": 1},
+	}
+	_, err := r.col.UpdateMany(ctx, bson.M{"parent_id": parentID, "deleted_at": nil}, update)
+	return err
+}
+
+// SoftDeleteChildren is used when a detail-request is cancelled.
+func (r *TransactionRepository) SoftDeleteChildren(ctx context.Context, parentID string, modifiedBy *models.UserInfo) error {
+	now := time.Now()
+	update := bson.M{
+		"$set": bson.M{
+			"deleted_at":       now,
+			"updated_at":       now,
+			"last_modified_by": modifiedBy,
+		},
+		"$inc": bson.M{"version": 1},
+	}
+	_, err := r.col.UpdateMany(ctx, bson.M{"parent_id": parentID, "deleted_at": nil}, update)
+	return err
+}
+
 func (r *TransactionRepository) AggregateByCategory(ctx context.Context, txType string, from, to time.Time) ([]models.CategoryData, error) {
 	matchStage := bson.D{{"$match", buildDateFilter(txType, from, to)}}
 
@@ -326,6 +376,7 @@ func (r *TransactionRepository) AggregateMonthlyRange(ctx context.Context, from,
 			{"date", bson.D{{"$gte", from}, {"$lte", to}}},
 			{"hidden", bson.D{{"$ne", true}}},
 			{"deleted_at", nil},
+			{"excluded_from_stats", bson.D{{"$ne", true}}},
 		}}},
 		{{"$group", bson.D{
 			{"_id", bson.D{
@@ -392,7 +443,7 @@ func (r *TransactionRepository) AggregateMonthlyRange(ctx context.Context, from,
 }
 
 func (r *TransactionRepository) GetSummary(ctx context.Context, from, to time.Time) (*models.SummaryData, error) {
-	filter := bson.M{"hidden": bson.M{"$ne": true}, "deleted_at": nil}
+	filter := bson.M{"hidden": bson.M{"$ne": true}, "deleted_at": nil, "excluded_from_stats": bson.M{"$ne": true}}
 	if !from.IsZero() || !to.IsZero() {
 		dateFilter := bson.M{}
 		if !from.IsZero() {
@@ -468,6 +519,19 @@ func (r *TransactionRepository) GetAverageMonthlyCategoryExpenses(ctx context.Co
 
 func buildTransactionFilter(f models.TransactionFilter) bson.M {
 	filter := bson.M{"deleted_at": nil}
+	// Hide pending children of an open detail-request: parent_id != '' AND
+	// excluded_from_stats=true. Closed-request children (excluded_from_stats=
+	// false) and regular transactions stay visible.
+	filter["$or"] = []bson.M{
+		{"parent_id": bson.M{"$in": []any{nil, ""}}},
+		{"excluded_from_stats": bson.M{"$ne": true}},
+	}
+	// Closed-request parents are historical placeholders — superseded by
+	// their children in stats. Hide them from the regular list unless the
+	// caller explicitly opts in (e.g., "show closed requests" toggle).
+	if !f.IncludeDetailed {
+		filter["detail_request_status"] = bson.M{"$ne": "closed"}
+	}
 	if f.Type != "" {
 		filter["type"] = f.Type
 	}
@@ -490,7 +554,7 @@ func buildTransactionFilter(f models.TransactionFilter) bson.M {
 }
 
 func buildDateFilter(txType string, from, to time.Time) bson.M {
-	filter := bson.M{"hidden": bson.M{"$ne": true}, "deleted_at": nil}
+	filter := bson.M{"hidden": bson.M{"$ne": true}, "deleted_at": nil, "excluded_from_stats": bson.M{"$ne": true}}
 	if txType != "" {
 		filter["type"] = txType
 	}

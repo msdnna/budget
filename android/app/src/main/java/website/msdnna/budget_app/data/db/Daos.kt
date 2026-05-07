@@ -10,12 +10,22 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface TransactionDao {
-    @Query("SELECT * FROM transactions WHERE deleted_at IS NULL AND sync_status != :pendingDelete ORDER BY date DESC")
+    // Hide pending children of an open detail-request (parent_id != '' AND
+    // excluded_from_stats=1). Closed-request parents have excluded_from_stats=1
+    // too but stay visible — they're the historical record.
+    @Query("""
+        SELECT * FROM transactions
+        WHERE deleted_at IS NULL AND sync_status != :pendingDelete
+          AND (parent_id = '' OR excluded_from_stats = 0)
+        ORDER BY date DESC
+    """)
     fun observeAll(pendingDelete: String = SyncStatus.PENDING_DELETE): Flow<List<TransactionEntity>>
 
     @Query("""
         SELECT * FROM transactions
         WHERE deleted_at IS NULL AND sync_status != :pendingDelete
+          AND (parent_id = '' OR excluded_from_stats = 0)
+          AND (:includeDetailed = 1 OR detail_request_status != 'closed')
           AND (:type IS NULL OR type = :type)
           AND (:from IS NULL OR date >= :from)
           AND (:to IS NULL OR date <= :to)
@@ -25,8 +35,19 @@ interface TransactionDao {
         type: String?,
         from: String?,
         to: String?,
+        includeDetailed: Boolean = false,
         pendingDelete: String = SyncStatus.PENDING_DELETE,
     ): Flow<List<TransactionEntity>>
+
+    // Children of a parent transaction — used when fulfilling a detail-request
+    // so the assignee can see what they've already added.
+    @Query("""
+        SELECT * FROM transactions
+        WHERE deleted_at IS NULL AND parent_id = :parentId
+          AND sync_status != :pendingDelete
+        ORDER BY date DESC, created_at DESC
+    """)
+    fun observeChildren(parentId: String, pendingDelete: String = SyncStatus.PENDING_DELETE): Flow<List<TransactionEntity>>
 
     @Query("SELECT * FROM transactions WHERE id = :id")
     suspend fun findById(id: String): TransactionEntity?

@@ -31,8 +31,9 @@ object TransactionRepository {
         categories: Set<String>? = null,
         from: String? = null,
         to: String? = null,
+        includeDetailed: Boolean = false,
     ): Flow<List<Transaction>> =
-        dao.observeFiltered(type, from, to).map { list ->
+        dao.observeFiltered(type, from, to, includeDetailed).map { list ->
             val filtered = if (categories.isNullOrEmpty()) list
             else list.filter { it.category in categories }
             filtered.map { it.toModel() }

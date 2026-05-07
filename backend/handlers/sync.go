@@ -186,41 +186,49 @@ func (h *SyncHandler) applyTransaction(ctx context.Context, op models.SyncOperat
 // REST API expects) round-trip cleanly through the sync endpoint.
 func decodeTransactionPayload(raw json.RawMessage) (*models.Transaction, error) {
 	type alias struct {
-		ID             string                 `json:"id"`
-		Type           models.TransactionType `json:"type"`
-		Amount         float64                `json:"amount"`
-		Date           string                 `json:"date"`
-		Category       string                 `json:"category"`
-		Source         string                 `json:"source"`
-		Purpose        string                 `json:"purpose"`
-		Description    string                 `json:"description"`
-		Hidden         bool                   `json:"hidden"`
-		CreatedBy      *models.UserInfo       `json:"created_by"`
-		CreatedAt      string                 `json:"created_at"`
-		Version        int                    `json:"version"`
-		UpdatedAt      string                 `json:"updated_at"`
-		DeletedAt      *string                `json:"deleted_at"`
-		LastModifiedBy *models.UserInfo       `json:"last_modified_by"`
+		ID                  string                 `json:"id"`
+		Type                models.TransactionType `json:"type"`
+		Amount              float64                `json:"amount"`
+		Date                string                 `json:"date"`
+		Category            string                 `json:"category"`
+		Source              string                 `json:"source"`
+		Purpose             string                 `json:"purpose"`
+		Description         string                 `json:"description"`
+		Hidden              bool                   `json:"hidden"`
+		CreatedBy           *models.UserInfo       `json:"created_by"`
+		CreatedAt           string                 `json:"created_at"`
+		Version             int                    `json:"version"`
+		UpdatedAt           string                 `json:"updated_at"`
+		DeletedAt           *string                `json:"deleted_at"`
+		LastModifiedBy      *models.UserInfo       `json:"last_modified_by"`
+		ParentID            string                 `json:"parent_id"`
+		DetailRequestID     string                 `json:"detail_request_id"`
+		DetailRequestStatus string                 `json:"detail_request_status"`
+		ExcludedFromStats   bool                   `json:"excluded_from_stats"`
 	}
 	var a alias
 	if err := json.Unmarshal(raw, &a); err != nil {
 		return nil, err
 	}
 	t := &models.Transaction{
-		ID:             a.ID,
-		Type:           a.Type,
-		Amount:         a.Amount,
-		Date:           parseLooseTime(a.Date),
-		Category:       a.Category,
-		Source:         a.Source,
-		Purpose:        a.Purpose,
-		Description:    a.Description,
-		Hidden:         a.Hidden,
-		CreatedBy:      a.CreatedBy,
-		CreatedAt:      parseLooseTime(a.CreatedAt),
-		Version:        a.Version,
-		UpdatedAt:      parseLooseTime(a.UpdatedAt),
-		LastModifiedBy: a.LastModifiedBy,
+		ID:                  a.ID,
+		Type:                a.Type,
+		Amount:              a.Amount,
+		Date:                parseLooseTime(a.Date),
+		Category:            a.Category,
+		Source:              a.Source,
+		Purpose:             a.Purpose,
+		Description:         a.Description,
+		Hidden:              a.Hidden,
+		CreatedBy:           a.CreatedBy,
+		CreatedAt:           parseLooseTime(a.CreatedAt),
+		Version:             a.Version,
+		UpdatedAt:           parseLooseTime(a.UpdatedAt),
+		LastModifiedBy:      a.LastModifiedBy,
+		ParentID:            a.ParentID,
+		DetailRequestID:     a.DetailRequestID,
+		DetailRequestStatus: a.DetailRequestStatus,
+		ExcludedFromStats:   a.ExcludedFromStats,
 	}
 	if a.DeletedAt != nil && *a.DeletedAt != "" {
 		dt := parseLooseTime(*a.DeletedAt)

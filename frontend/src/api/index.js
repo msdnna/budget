@@ -60,6 +60,15 @@ export const versionApi = {
   get: () => api.get('/version'),
 }
 
+export const detailRequests = {
+  list: (params) => api.get('/detail-requests', { params }),
+  create: (data) => api.post('/detail-requests', data),
+  get: (id) => api.get(`/detail-requests/${id}`),
+  addChild: (id, data) => api.post(`/detail-requests/${id}/transactions`, data),
+  close: (id) => api.post(`/detail-requests/${id}/close`),
+  cancel: (id) => api.post(`/detail-requests/${id}/cancel`),
+}
+
 export const exportApi = {
   excel: (params) => api.get('/export/excel', { params, responseType: 'blob' }),
   pdf: (params) => api.get('/export/pdf', { params, responseType: 'blob' }),

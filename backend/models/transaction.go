@@ -28,6 +28,17 @@ type Transaction struct {
 	UpdatedAt      time.Time       `bson:"updated_at" json:"updated_at"`
 	DeletedAt      *time.Time      `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
 	LastModifiedBy *UserInfo       `bson:"last_modified_by,omitempty" json:"last_modified_by,omitempty"`
+
+	// Detail-request linkage. ParentID is set on child transactions; it
+	// references the lump-sum parent. DetailRequestID/Status are set on the
+	// parent transaction once a detail-request is opened over it.
+	// ExcludedFromStats is denormalized so aggregation queries stay simple:
+	// while a request is open, children are excluded; once closed, the parent
+	// is excluded and the children become canonical.
+	ParentID            string `bson:"parent_id,omitempty" json:"parent_id,omitempty"`
+	DetailRequestID     string `bson:"detail_request_id,omitempty" json:"detail_request_id,omitempty"`
+	DetailRequestStatus string `bson:"detail_request_status,omitempty" json:"detail_request_status,omitempty"`
+	ExcludedFromStats   bool   `bson:"excluded_from_stats,omitempty" json:"excluded_from_stats,omitempty"`
 }
 
 type CreateTransactionRequest struct {
@@ -52,13 +63,16 @@ type UpdateTransactionRequest struct {
 }
 
 type TransactionFilter struct {
-	Type       string
-	From       *time.Time
-	To         *time.Time
-	Category   string
-	Categories []string
-	Limit      int64
-	Skip       int64
+	Type           string
+	From           *time.Time
+	To             *time.Time
+	Category       string
+	Categories     []string
+	Limit          int64
+	Skip           int64
+	// IncludeDetailed: when false, parents of closed detail-requests are
+	// hidden (they're historical and superseded by their children in stats).
+	IncludeDetailed bool
 }
 
 type CategoryData struct {

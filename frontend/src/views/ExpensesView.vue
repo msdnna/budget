@@ -49,8 +49,25 @@
 
       <template #right>
         <n-card title="История расходов">
+          <!-- Pinned: my open detail-requests -->
+          <div v-if="myOpenParents.length" class="dr-pinned" :style="pinnedStyle">
+            <div class="dr-pinned-title">Открытые запросы на детализацию</div>
+            <div
+              v-for="p in myOpenParents"
+              :key="p.id"
+              class="dr-pinned-row"
+              @click="openDetailRequest(p.detail_request_id)"
+            >
+              <div>
+                <div style="font-weight:600">{{ p.category }} · {{ p.amount.toLocaleString('ru-RU') }} ₽</div>
+                <div style="font-size:11px; opacity:0.65">{{ p.purpose || p.description || 'без описания' }} · {{ new Date(p.date).toLocaleDateString('ru-RU') }}</div>
+              </div>
+              <n-tag size="small" type="warning" round>заполнить</n-tag>
+            </div>
+          </div>
+
           <n-space style="margin-bottom:12px" wrap align="center" justify="space-between">
-            <n-space wrap>
+            <n-space wrap align="center">
               <n-date-picker v-model:value="filterRange" type="daterange" clearable size="small" @update:value="applyFilters" placeholder="Фильтр по дате" />
               <n-select
                 v-model:value="filterCategories"
@@ -64,6 +81,9 @@
                 to="body"
                 @update:value="applyFilters"
               />
+              <n-checkbox v-model:checked="showDetailed" @update:checked="applyFilters" size="small">
+                <span style="font-size:12px">Показать закрытые запросы</span>
+              </n-checkbox>
             </n-space>
             <n-space align="center" :size="8">
               <template v-if="!bulkMode">
@@ -122,7 +142,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, h } from 'vue'
+import { ref, computed, onMounted, watch, h } from 'vue'
 function toLocalDateString(ts) {
   const d = new Date(ts)
   const offset = d.getTimezoneOffset()
@@ -132,7 +152,7 @@ import { useMessage } from 'naive-ui'
 import {
   NCard, NGrid, NGridItem, NForm, NFormItem, NInput, NInputNumber,
   NSelect, NDatePicker, NButton, NDataTable, NSpace, NPopconfirm, NText, NTooltip,
-  NModal, NSpin, NList, NListItem
+  NModal, NSpin, NList, NListItem, NTag, NCheckbox,
 } from 'naive-ui'
 import { useTransactionsStore } from '@/stores/transactions'
 import { useThemeStore } from '@/stores/theme'
@@ -141,9 +161,13 @@ import { storeToRefs } from 'pinia'
 import SplitPane from '@/components/SplitPane.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
 import ConfirmActionButton from '@/components/ConfirmActionButton.vue'
-import { users as usersApi, transactions as txApi } from '@/api'
+import { users as usersApi, transactions as txApi, detailRequests as drApi } from '@/api'
+import { useDetailRequestsStore } from '@/stores/detailRequests'
+import { useAuthStore } from '@/stores/auth'
 
 const store = useTransactionsStore('expenses')
+const drStore = useDetailRequestsStore()
+const auth = useAuthStore()
 const { palette, valuesHidden, primaryColor } = storeToRefs(useThemeStore())
 const expenseColor = computed(() => palette.value.expense)
 const message = useMessage()
@@ -151,6 +175,7 @@ const formRef = ref(null)
 const saving = ref(false)
 const filterRange = ref(null)
 const filterCategories = ref([])
+const showDetailed = ref(false)
 
 const form = ref({ amount: null, date: Date.now(), category: '', purpose: '', description: '' })
 
@@ -236,7 +261,57 @@ function getRowProps(row) {
   if (bulkMode.value && selectedIds.value.has(row.id)) {
     styles.push(`background:${primaryColor.value}1f`)
   }
+  if (hasMyOpenRequest(row)) {
+    // Yellow highlight for transactions where the current user has an open
+    // detail-request waiting to be filled in.
+    styles.push('background:rgba(240,160,32,0.16)')
+  }
   return { style: styles.join(';') }
+}
+
+const myOpenRequestParentIds = computed(() => new Set(
+  drStore.items
+    .filter(r => r.status === 'open' && r.assignee?.user_id === auth.user?.user_id)
+    .map(r => r.parent_transaction_id)
+))
+
+function hasMyOpenRequest(row) {
+  return myOpenRequestParentIds.value.has(row.id) ||
+    (row.detail_request_status === 'open' &&
+      drStore.items.find(r => r.id === row.detail_request_id)?.assignee?.user_id === auth.user?.user_id)
+}
+
+// Parent transactions of my open requests — fetched eagerly so the pinned
+// banner can render even when the parent isn't on the current page.
+const myOpenParents = ref([])
+async function loadMyOpenParents() {
+  const mine = drStore.items.filter(
+    r => r.status === 'open' && r.assignee?.user_id === auth.user?.user_id,
+  )
+  const out = []
+  for (const r of mine) {
+    try {
+      const { data } = await drApi.get(r.id)
+      if (data?.parent) out.push(data.parent)
+    } catch {}
+  }
+  myOpenParents.value = out
+}
+
+const pinnedStyle = computed(() => ({
+  background: 'rgba(240,160,32,0.10)',
+  border: '1px solid rgba(240,160,32,0.35)',
+  borderRadius: '6px',
+  padding: '8px 10px',
+  marginBottom: '12px',
+}))
+
+function openDetailRequest(id) {
+  drStore.openRequest(id)
+}
+
+function startCreateDetailRequest(row) {
+  drStore.startCreate(row)
 }
 
 function fillFromTemplate(row) {
@@ -250,7 +325,7 @@ function fmtLocalDate(ts) {
 }
 
 function applyFilters() {
-  const f = { type: 'expense', categories: filterCategories.value }
+  const f = { type: 'expense', categories: filterCategories.value, includeDetailed: showDetailed.value }
   if (filterRange.value) {
     f.from = fmtLocalDate(filterRange.value[0])
     f.to = fmtLocalDate(filterRange.value[1])
@@ -571,9 +646,9 @@ const columns = computed(() => [
     }
   },
   {
-    title: '', key: 'actions', width: 100, align: 'center',
-    render: row => h(NSpace, { size: 2, justify: 'center', wrap: false }, {
-      default: () => [
+    title: '', key: 'actions', width: 140, align: 'right',
+    render: row => {
+      const buttons = [
         h(NTooltip, null, {
           trigger: () => h(NButton, {
             size: 'small', quaternary: true,
@@ -589,12 +664,34 @@ const columns = computed(() => [
           }, { default: () => '+' }),
           default: () => 'Добавить как шаблон'
         }),
-        h(NPopconfirm, { onPositiveClick: () => store.remove(row.id) }, {
-          trigger: () => h(NButton, { size: 'small', type: 'error', quaternary: true }, { default: () => '✕' }),
-          default: () => 'Удалить запись?'
-        })
       ]
-    })
+      // Detail-request actions: open existing or create new (only for parent
+      // expense transactions; child transactions never get a detail-request).
+      if (!row.parent_id) {
+        if (row.detail_request_id) {
+          buttons.push(h(NTooltip, null, {
+            trigger: () => h(NButton, {
+              size: 'small', quaternary: true, type: 'warning',
+              onClick: () => openDetailRequest(row.detail_request_id)
+            }, { default: () => '⇲' }),
+            default: () => row.detail_request_status === 'open' ? 'Открыть запрос на детализацию' : 'Закрытый запрос на детализацию'
+          }))
+        } else {
+          buttons.push(h(NTooltip, null, {
+            trigger: () => h(NButton, {
+              size: 'small', quaternary: true, type: 'primary',
+              onClick: () => startCreateDetailRequest(row)
+            }, { default: () => '⇲' }),
+            default: () => 'Создать запрос на детализацию'
+          }))
+        }
+      }
+      buttons.push(h(NPopconfirm, { onPositiveClick: () => store.remove(row.id) }, {
+        trigger: () => h(NButton, { size: 'small', type: 'error', quaternary: true }, { default: () => '✕' }),
+        default: () => 'Удалить запись?'
+      }))
+      return h(NSpace, { size: 2, justify: 'end', wrap: false }, { default: () => buttons })
+    }
   }
 ])
 
@@ -602,8 +699,28 @@ const pagination = computed(() => ({
   page: store.page, pageSize: store.limit, itemCount: store.total, showSizePicker: false
 }))
 
-onMounted(() => {
+onMounted(async () => {
   store.setFilters({ type: 'expense' })
   catStore.load('expense')
+  await drStore.fetchAll()
+  await loadMyOpenParents()
 })
+
+watch(() => drStore.items, async () => {
+  await loadMyOpenParents()
+}, { deep: true })
 </script>
+
+<style scoped>
+.dr-pinned-title {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
+  opacity: 0.7; margin-bottom: 6px;
+}
+.dr-pinned-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 4px; border-radius: 4px; cursor: pointer;
+  transition: background 0.15s;
+}
+.dr-pinned-row:hover { background: rgba(240,160,32,0.18); }
+.dr-pinned-row + .dr-pinned-row { border-top: 1px dashed rgba(240,160,32,0.25); }
+</style>

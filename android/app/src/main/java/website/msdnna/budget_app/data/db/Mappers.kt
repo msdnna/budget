@@ -26,6 +26,10 @@ fun TransactionEntity.toModel(): Transaction = Transaction(
     updatedAt = updatedAt,
     deletedAt = deletedAt,
     lastModifiedBy = lastModifiedById?.let { UserInfo(it, lastModifiedByName.orEmpty(), lastModifiedByAvatar) },
+    parentId = parentId,
+    detailRequestId = detailRequestId,
+    detailRequestStatus = detailRequestStatus,
+    excludedFromStats = excludedFromStats,
 )
 
 fun Transaction.toEntity(syncStatus: String = SyncStatus.SYNCED, serverPayload: String? = null): TransactionEntity =
@@ -51,6 +55,10 @@ fun Transaction.toEntity(syncStatus: String = SyncStatus.SYNCED, serverPayload: 
         deletedAt = deletedAt,
         syncStatus = syncStatus,
         serverPayload = serverPayload,
+        parentId = parentId,
+        detailRequestId = detailRequestId,
+        detailRequestStatus = detailRequestStatus,
+        excludedFromStats = excludedFromStats,
     )
 
 // ---- Wishlist ----

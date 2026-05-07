@@ -34,11 +34,13 @@ class ExpensesViewModel(private val serverUrl: String) : ViewModel() {
     private val _filterFrom  = MutableStateFlow<String?>(null)
     private val _filterTo    = MutableStateFlow<String?>(null)
     private val _selectedIds = MutableStateFlow<Set<String>>(emptySet())
+    private val _includeDetailed = MutableStateFlow(false)
 
     val filterCats  = _filterCats.asStateFlow()
     val filterFrom  = _filterFrom.asStateFlow()
     val filterTo    = _filterTo.asStateFlow()
     val selectedIds = _selectedIds.asStateFlow()
+    val includeDetailed = _includeDetailed.asStateFlow()
     val categories: StateFlow<List<Category>> = combine(
         CategoryRepository.expense,
         CategoryUsage.usage,
@@ -46,18 +48,23 @@ class ExpensesViewModel(private val serverUrl: String) : ViewModel() {
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    val uiState: StateFlow<ExpensesUiState> = combine(_filterCats, _filterFrom, _filterTo) { c, f, t ->
-        Triple(c, f, t)
+    val uiState: StateFlow<ExpensesUiState> = combine(_filterCats, _filterFrom, _filterTo, _includeDetailed) { c, f, t, inc ->
+        FilterTuple(c, f, t, inc)
     }
-        .flatMapLatest { (cats, from, to) ->
+        .flatMapLatest { (cats, from, to, inc) ->
             TransactionRepository.observeFiltered(
                 type = "expense",
                 categories = cats.takeIf { it.isNotEmpty() },
                 from = from,
                 to = to,
+                includeDetailed = inc,
             ).map { txs -> ExpensesUiState(transactions = txs, total = txs.size, loading = false) }
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, ExpensesUiState(loading = true))
+
+    private data class FilterTuple(val cats: Set<String>, val from: String?, val to: String?, val includeDetailed: Boolean)
+
+    fun setIncludeDetailed(v: Boolean) { _includeDetailed.value = v }
 
     // Keep page state for compatibility with existing UI scaffolding; pagination is
     // a no-op now since Room observes the whole list.

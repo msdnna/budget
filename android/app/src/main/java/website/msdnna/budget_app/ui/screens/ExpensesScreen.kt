@@ -9,10 +9,15 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.ui.zIndex
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -22,6 +27,7 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -49,21 +55,50 @@ fun ExpensesScreen(
     primaryColor: Color,
     valuesHidden: Boolean = false,
     filtersVisible: Boolean = false,
+    currentUserId: String = "",
     onSelectionCountChange: (Int) -> Unit = {},
+    onOpenDetailRequest: (String) -> Unit = {},
 ) {
     val vm = viewModel<ExpensesViewModel>(key = "expenses:$serverUrl", factory = ExpensesViewModel.factory(serverUrl))
     val uiState    by vm.uiState.collectAsState()
     val filterCats by vm.filterCats.collectAsState()
     val filterFrom by vm.filterFrom.collectAsState()
     val filterTo   by vm.filterTo.collectAsState()
+    val includeDetailed by vm.includeDetailed.collectAsState()
     val categories by vm.categories.collectAsState()
     val selectedIds by vm.selectedIds.collectAsState()
     val selectionMode = selectedIds.isNotEmpty()
 
     val scope = rememberCoroutineScope()
+    val listState = rememberLazyListState()
     var showAdd      by remember { mutableStateOf(false) }
     var template     by remember { mutableStateOf<Transaction?>(null) }
     var detailTx     by remember { mutableStateOf<Transaction?>(null) }
+    var createDrForTx by remember { mutableStateOf<Transaction?>(null) }
+    var createDrError by remember { mutableStateOf<String?>(null) }
+    // Skip the initial composition; only animate-scroll on later flips.
+    var includeDetailedSeen by rememberSaveable { mutableStateOf<Boolean?>(null) }
+    val drItems by website.msdnna.budget_app.data.repository.DetailRequestStore.items.collectAsState()
+    val myOpenParentIds = remember(drItems, currentUserId) {
+        drItems.filter { it.status == "open" && it.assignee?.userId == currentUserId }
+            .map { it.parentTransactionId }.toSet()
+    }
+    // Sort transactions so that ones with my open detail-request float to the top.
+    val orderedTransactions = remember(uiState.transactions, myOpenParentIds) {
+        if (myOpenParentIds.isEmpty()) uiState.transactions
+        else uiState.transactions.sortedByDescending { it.id in myOpenParentIds }
+    }
+    LaunchedEffect(Unit) {
+        website.msdnna.budget_app.data.repository.DetailRequestStore.refresh()
+    }
+    LaunchedEffect(includeDetailed) {
+        if (includeDetailedSeen != null && includeDetailedSeen != includeDetailed) {
+            // Newly appearing rows pin to the top; surface them so the user
+            // sees the effect of the toggle without manually scrolling.
+            listState.animateScrollToItem(0)
+        }
+        includeDetailedSeen = includeDetailed
+    }
 
     val expenseColor = LocalExpenseColor.current
 
@@ -124,7 +159,15 @@ fun ExpensesScreen(
     ) { padding ->
         PullToRefreshBox(
             isRefreshing = false,
-            onRefresh = { vm.reload() },
+            onRefresh = {
+                vm.reload()
+                // Online-only state isn't covered by SyncWorker — force a
+                // refresh here so the header badge clears after another
+                // device closes a request.
+                scope.launch {
+                    website.msdnna.budget_app.data.repository.DetailRequestStore.refresh()
+                }
+            },
             modifier = Modifier.fillMaxSize().padding(padding)
         ) {
         // top=6 makes the first card sit 12dp below the AppBar (matches the
@@ -133,6 +176,13 @@ fun ExpensesScreen(
             // Filters card — collapsed by default; toggled by the header
             // FilterAlt button. See IncomeScreen for the same pattern.
             androidx.compose.animation.AnimatedVisibility(
+                modifier = Modifier
+                    // Keep the filter card above the LazyColumn during item
+                    // transitions — without zIndex, an item being removed by
+                    // a filter toggle (e.g. closed-request parent disappearing)
+                    // briefly bleeds through the card area.
+                    .zIndex(1f)
+                    .background(MaterialTheme.colorScheme.background),
                 visible = filtersVisible,
                 enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
                 exit  = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut(),
@@ -170,6 +220,27 @@ fun ExpensesScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            // Whole row is the toggle — flat, no ripple (the
+                            // small grey press tint behind the label looked
+                            // like a bug, not a feature).
+                            modifier = Modifier.clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                            ) { vm.setIncludeDetailed(!includeDetailed) },
+                        ) {
+                            Checkbox(
+                                checked = includeDetailed,
+                                onCheckedChange = null,
+                                colors = CheckboxDefaults.colors(checkedColor = primaryColor),
+                            )
+                            Text(
+                                "Показать закрытые запросы",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
                     }
                 }
             }
@@ -180,10 +251,11 @@ fun ExpensesScreen(
                 uiState.transactions.isEmpty() -> EmptyView("Нет расходов")
                 else -> LazyColumn(
                     modifier = Modifier.fillMaxSize(),
+                    state = listState,
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    items(uiState.transactions, key = { it.id }) { t ->
+                    items(orderedTransactions, key = { it.id }) { t ->
                         SwipeableTransactionCard(
                             modifier = Modifier.animateItem(),
                             transaction = t,
@@ -193,6 +265,9 @@ fun ExpensesScreen(
                             valuesHidden = valuesHidden,
                             selectionMode = selectionMode,
                             selected = t.id in selectedIds,
+                            // Yellow tint when this expense has an open
+                            // detail-request assigned to the current user.
+                            highlightWarning = t.id in myOpenParentIds,
                             onLongPress    = vm::startSelection,
                             onSelectToggle = vm::toggleSelection,
                             onDelete             = vm::deleteTransaction,
@@ -228,6 +303,13 @@ fun ExpensesScreen(
     }
 
     detailTx?.let { tx ->
+        // Resolve the detail-request id for child transactions so the sheet
+        // can render a back-link row.
+        val linkedDrId = remember(tx.id, tx.parentId, drItems) {
+            if (tx.parentId.isNotBlank())
+                drItems.firstOrNull { it.parentTransactionId == tx.parentId }?.id
+            else null
+        }
         TransactionDetailSheet(
             transaction = tx,
             amountColor = expenseColor,
@@ -239,9 +321,95 @@ fun ExpensesScreen(
             onSave           = { req -> vm.updateTransaction(tx.id, req) },
             onGetUsers       = { vm.getUsers() },
             onDismiss = { detailTx = null },
-            onSaved   = { detailTx = null; vm.reload() }
+            onSaved   = { detailTx = null; vm.reload() },
+            onOpenDetailRequest = { id ->
+                detailTx = null
+                onOpenDetailRequest(id)
+            },
+            onCreateDetailRequest = {
+                createDrForTx = tx
+                detailTx = null
+            },
+            linkedDetailRequestId = linkedDrId,
         )
     }
+
+    createDrForTx?.let { tx ->
+        AssigneePickerDialog(
+            primaryColor = primaryColor,
+            onGetUsers = { vm.getUsers() },
+            onDismiss = { createDrForTx = null; createDrError = null },
+            onPick = { user ->
+                scope.launch {
+                    try {
+                        val r = website.msdnna.budget_app.data.repository.DetailRequestStore
+                            .create(tx.id, user.userId)
+                        createDrForTx = null
+                        // Refresh local Room copy of the parent so detail_request_id
+                        // is reflected in the list immediately.
+                        vm.reload()
+                        onOpenDetailRequest(r.id)
+                    } catch (e: Exception) {
+                        createDrError = e.message ?: "Не удалось создать запрос. Возможно, нет соединения."
+                    }
+                }
+            },
+        )
+    }
+
+    createDrError?.let { err ->
+        AlertDialog(
+            onDismissRequest = { createDrError = null },
+            title = { Text("Ошибка") },
+            text = { Text(err) },
+            confirmButton = { TextButton(onClick = { createDrError = null }) { Text("OK") } },
+        )
+    }
+}
+
+@Composable
+private fun AssigneePickerDialog(
+    primaryColor: Color,
+    onGetUsers: suspend () -> List<UserInfo>,
+    onDismiss: () -> Unit,
+    onPick: (UserInfo) -> Unit,
+) {
+    var users by remember { mutableStateOf<List<UserInfo>>(emptyList()) }
+    var loading by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) {
+        users = onGetUsers()
+        loading = false
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Назначить запрос") },
+        text = {
+            if (loading) {
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = primaryColor)
+                }
+            } else {
+                LazyColumn {
+                    items(users) { user ->
+                        ListItem(
+                            headlineContent = { Text(user.displayName) },
+                            leadingContent = {
+                                website.msdnna.budget_app.ui.components.UserAvatar(
+                                    displayName = user.displayName,
+                                    avatarUrl = user.avatarUrl,
+                                    size = 32.dp,
+                                )
+                            },
+                            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                            modifier = Modifier.fillMaxWidth().clickable { onPick(user) },
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

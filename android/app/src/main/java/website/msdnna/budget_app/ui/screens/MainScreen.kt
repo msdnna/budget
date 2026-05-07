@@ -13,7 +13,9 @@ import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.TrendingDown
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
+import androidx.compose.animation.core.tween
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.Assignment
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.FilterAlt
 import androidx.compose.material.icons.outlined.FilterAltOff
@@ -35,6 +37,7 @@ import kotlinx.coroutines.launch
 import website.msdnna.budget_app.BuildConfig
 import website.msdnna.budget_app.data.api.RetrofitClient
 import website.msdnna.budget_app.data.preferences.AppPreferences
+import website.msdnna.budget_app.data.repository.DetailRequestStore
 import website.msdnna.budget_app.data.repository.TransactionRepository
 import website.msdnna.budget_app.data.repository.WishlistRepository
 import website.msdnna.budget_app.data.AppContainer
@@ -54,6 +57,27 @@ import website.msdnna.budget_app.ui.theme.AppThemes
 import java.util.Calendar
 
 private data class NavItem(val label: String, val icon: ImageVector, val route: String)
+
+/** Fetch /api/version and resolve update state. Shared between initial load
+ *  and lifecycle resume so cross-app upgrades surface without a restart. */
+private suspend fun checkVersion(
+    serverUrl: String,
+    setApiVersion: (String?) -> Unit,
+    setUpdateState: (UpdateState) -> Unit,
+) {
+    try {
+        val v = RetrofitClient.getService(serverUrl).getVersion()
+        setApiVersion(v.api)
+        setUpdateState(
+            resolveUpdate(
+                current = BuildConfig.VERSION_NAME,
+                latest = v.androidLatest,
+                minRequired = v.androidMinRequired,
+                serverUrl = serverUrl,
+            )
+        )
+    } catch (_: Exception) {}
+}
 
 private val NAV_ITEMS = listOf(
     NavItem("Статистика", Icons.Default.BarChart,      "statistics"),
@@ -91,6 +115,17 @@ fun MainScreen(
     var showConflicts by remember { mutableStateOf(false) }
     var showNotifications by remember { mutableStateOf(false) }
     var showSecurity by remember { mutableStateOf(false) }
+    // Detail-request navigation: list overlay vs single-request overlay vs
+    // "all" mode reachable from settings (showAll=true -> tabs).
+    var showDetailRequestsList by remember { mutableStateOf(false) }
+    var detailRequestsListShowAll by remember { mutableStateOf(false) }
+    var openDetailRequestId by remember { mutableStateOf<String?>(null) }
+    val currentUserId by prefs.userId.collectAsStateWithLifecycle(initialValue = "")
+    val drItems by DetailRequestStore.items.collectAsStateWithLifecycle()
+    val myOpenDrCount = drItems.count { it.status == "open" && it.assignee?.userId == currentUserId }
+    LaunchedEffect(serverUrl, currentUserId) {
+        if (currentUserId.isNotBlank()) DetailRequestStore.refresh()
+    }
     var valuesHidden by remember { mutableStateOf(false) }
     // Income / Expenses share a "filters drawer" that's collapsed by default;
     // the header button below toggles it. Shared across both routes so a user
@@ -117,6 +152,13 @@ fun MainScreen(
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
             if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
                 canInstallApk = ApkInstaller.canInstall(context)
+                // Refresh online-only state (detail-requests, server version)
+                // so cross-app actions (e.g. closing a request on web) reflect
+                // here without an app restart.
+                scope.launch {
+                    DetailRequestStore.refresh()
+                    checkVersion(serverUrl, { apiVersion = it }, { updateState = it })
+                }
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -130,18 +172,7 @@ fun MainScreen(
         ) { a, b -> a + b }
     }.collectAsStateWithLifecycle(initialValue = 0)
 
-    LaunchedEffect(serverUrl) {
-        try {
-            val v = RetrofitClient.getService(serverUrl).getVersion()
-            apiVersion = v.api
-            updateState = resolveUpdate(
-                current = BuildConfig.VERSION_NAME,
-                latest = v.androidLatest,
-                minRequired = v.androidMinRequired,
-                serverUrl = serverUrl,
-            )
-        } catch (e: Exception) {}
-    }
+    LaunchedEffect(serverUrl) { checkVersion(serverUrl, { apiVersion = it }, { updateState = it }) }
 
     fun startDownload(url: String, version: String, onDone: (java.io.File) -> Unit) {
         downloadProgress = DownloadProgress.Running(0, 0)
@@ -212,7 +243,37 @@ fun MainScreen(
                             }
                         }
                     }
-                    if (currentRoute == "income" || currentRoute == "expenses") {
+                    // DR badge — only on Expenses (per spec) and only when
+                    // there's at least one open request assigned to me.
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = currentRoute == "expenses" && myOpenDrCount > 0,
+                        enter = androidx.compose.animation.fadeIn(animationSpec = tween(200)) +
+                            androidx.compose.animation.expandHorizontally(animationSpec = tween(220)),
+                        exit = androidx.compose.animation.fadeOut(animationSpec = tween(160)) +
+                            androidx.compose.animation.shrinkHorizontally(animationSpec = tween(180)),
+                    ) {
+                        BadgedBox(
+                            badge = {
+                                Badge(containerColor = Color(0xFFF0A020)) {
+                                    Text(myOpenDrCount.toString())
+                                }
+                            }
+                        ) {
+                            IconButton(onClick = {
+                                detailRequestsListShowAll = false
+                                showDetailRequestsList = true
+                            }) {
+                                Icon(Icons.AutoMirrored.Filled.Assignment, "Запросы на детализацию")
+                            }
+                        }
+                    }
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = currentRoute == "income" || currentRoute == "expenses",
+                        enter = androidx.compose.animation.fadeIn(animationSpec = tween(200)) +
+                            androidx.compose.animation.expandHorizontally(animationSpec = tween(220)),
+                        exit = androidx.compose.animation.fadeOut(animationSpec = tween(160)) +
+                            androidx.compose.animation.shrinkHorizontally(animationSpec = tween(180)),
+                    ) {
                         IconButton(onClick = { filtersVisible = !filtersVisible }) {
                             // Outlined variants match the visual weight of the
                             // eye/settings glyphs alongside (the filled
@@ -305,7 +366,9 @@ fun MainScreen(
                         "expenses"   -> ExpensesScreen(
                             serverUrl, primaryColor, valuesHidden,
                             filtersVisible = filtersVisible,
-                            onSelectionCountChange = { selectionCounts["expenses"] = it }
+                            currentUserId = currentUserId,
+                            onSelectionCountChange = { selectionCounts["expenses"] = it },
+                            onOpenDetailRequest = { id -> openDetailRequestId = id },
                         )
                         "forecast"   -> ForecastScreen(
                             serverUrl, primaryColor,
@@ -404,6 +467,11 @@ fun MainScreen(
                 showSettings = false
                 showSecurity = true
             },
+            onOpenDetailRequests = {
+                showSettings = false
+                detailRequestsListShowAll = true
+                showDetailRequestsList = true
+            },
             onPieUnitChange = { ruble ->
                 scope.launch { prefs.setPieUnitRuble(ruble) }
             },
@@ -426,6 +494,40 @@ fun MainScreen(
             onClose      = { showSecurity = false },
         )
     }
+
+    androidx.compose.animation.AnimatedVisibility(
+        visible = showDetailRequestsList,
+        enter = androidx.compose.animation.slideInHorizontally(initialOffsetX = { it }) + androidx.compose.animation.fadeIn(),
+        exit  = androidx.compose.animation.slideOutHorizontally(targetOffsetX  = { it }) + androidx.compose.animation.fadeOut(),
+    ) {
+        DetailRequestsScreen(
+            primaryColor = primaryColor,
+            currentUserId = currentUserId,
+            showAll = detailRequestsListShowAll,
+            onOpen = { id ->
+                openDetailRequestId = id
+            },
+            onClose = { showDetailRequestsList = false },
+        )
+    }
+
+    val openDrId = openDetailRequestId
+    androidx.compose.animation.AnimatedVisibility(
+        visible = openDrId != null,
+        enter = androidx.compose.animation.slideInHorizontally(initialOffsetX = { it }) + androidx.compose.animation.fadeIn(),
+        exit  = androidx.compose.animation.slideOutHorizontally(targetOffsetX  = { it }) + androidx.compose.animation.fadeOut(),
+    ) {
+        if (openDrId != null) {
+            DetailRequestScreen(
+                requestId = openDrId,
+                primaryColor = primaryColor,
+                valuesHidden = valuesHidden,
+                currentUserId = currentUserId,
+                serverUrl = serverUrl,
+                onClose = { openDetailRequestId = null },
+            )
+        }
+    }
 }
 
 @Composable
@@ -441,6 +543,7 @@ fun SettingsDialog(
     onDarkModeChange: (Boolean) -> Unit = {},
     onOpenNotifications: () -> Unit = {},
     onOpenSecurity: () -> Unit = {},
+    onOpenDetailRequests: () -> Unit = {},
     onPieUnitChange: (Boolean) -> Unit = {},
     onLogout: () -> Unit = {},
     onDismiss: () -> Unit
@@ -477,6 +580,13 @@ fun SettingsDialog(
                             Text(displayName, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                             Text("Вы авторизованы", style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        IconButton(onClick = onOpenDetailRequests) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.Assignment,
+                                contentDescription = "Запросы на детализацию",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         }
                         IconButton(onClick = onLogout) {
                             Icon(

@@ -112,6 +112,10 @@ func (h *TransactionHandler) List(c *gin.Context) {
 		}
 	}
 
+	if v := c.Query("include_detailed"); v == "true" || v == "1" {
+		filter.IncludeDetailed = true
+	}
+
 	transactions, total, err := h.repo.Find(c.Request.Context(), filter)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

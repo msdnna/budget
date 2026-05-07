@@ -16,6 +16,25 @@
 
 ## API (backend)
 
+### [1.9.0] — 2026-05-08
+
+#### Added
+- Запросы на детализацию (детализационные запросы над lump-sum расходами): модель `DetailRequest` + коллекция `detail_requests` + индексы (`assignee.user_id+status`, `parent_transaction_id`, `creator.user_id`, `status`).
+- Новые поля у `Transaction`: `parent_id` (ссылка на родителя у дочерних), `detail_request_id` / `detail_request_status` (на родителе), `excluded_from_stats` (денормализован для простоты агрегаций).
+- Эндпоинты:
+  - `POST /api/detail-requests` — создать (creator может назначать на себя или на любого пользователя семьи)
+  - `GET  /api/detail-requests?assignee_id=me|...&creator_id=me|...&status=open|closed`
+  - `GET  /api/detail-requests/:id` — возвращает `{request, parent, children}`
+  - `POST /api/detail-requests/:id/transactions` — добавить child (только assignee, только пока `open`)
+  - `POST /api/detail-requests/:id/close` — Готово (только assignee, требует ≥1 child; помечает родителя `excluded_from_stats=true`, дочерние — `false`)
+  - `POST /api/detail-requests/:id/cancel` — отменить (только creator; soft-delete детей, сброс флагов на родителе)
+- `GET /api/transactions?include_detailed=true|false` — параметр (default `false`) скрывает родителей закрытых запросов из listing'а; статистика их игнорирует всегда.
+
+#### Changed
+- Агрегации `GetSummary` / `AggregateByCategory` / `AggregateMonthlyRange` исключают записи с `excluded_from_stats=true` (открытые children и закрытые parents).
+- `buildTransactionFilter` дополнительно исключает pending children открытых запросов (`parent_id != '' AND excluded_from_stats=true`).
+- `decodeTransactionPayload` пропускает новые поля при `/api/sync/push`, чтобы дочерние транзакции корректно round-tripили через offline-sync.
+
 ### [1.8.0] — 2026-05-06
 
 #### Added
@@ -51,6 +70,20 @@
 ---
 
 ## Web (frontend)
+
+### [1.11.0] — 2026-05-08
+
+#### Added
+- Запросы на детализацию (поверх API 1.9.0):
+  - Колокольчик в header (Pinia-store `detailRequests`, `AlertCircleOutline` + бейдж количества открытых) с popover в стиле version-popover (uppercase title, `text3`, табы Открытые/Закрытые, отдельный компонент `DetailRequestBellList`).
+  - Модалка `DetailRequestModal.vue` — прогресс-карточка (target/total/count, остаток в баланс или сверх), список children, форма «добавить расход», кнопки «Готово»/«Отменить запрос».
+  - Модалка `DetailRequestCreateModal.vue` — выбор assignee из списка пользователей.
+  - В `ExpensesView`: pinned-баннер сверху со списком моих открытых запросов, жёлтая подсветка строки родителя, иконка «⇲» в actions (создать или открыть). Колонка actions выровнена по правой стороне (`justify: 'end'`), чтобы дочерние строки не оставляли провал на месте отсутствующей кнопки.
+  - Чекбокс «Показать закрытые запросы» в фильтре расходов — пробрасывается в `?include_detailed=true`. По умолчанию закрытые-родительские транзакции скрыты.
+
+#### Changed
+- Иконки в header `i` (версия) и `!` (запросы на детализацию) увеличены с 16 → 18 px для разборчивости.
+- Глобальные модалки `DetailRequestModal` / `DetailRequestCreateModal` смонтированы в `App.vue`, состояние видимости управляется через store (`openRequestId`, `creatingForTx`) — открываются и из колокольчика, и из ExpensesView.
 
 ### [1.10.0] — 2026-05-07
 
@@ -98,6 +131,33 @@
 ---
 
 ## Android
+
+### [1.22.0] — 2026-05-08
+
+#### Added
+- Запросы на детализацию (поверх API 1.9.0):
+  - `DetailRequestStore` (singleton, online-only `StateFlow`); API в `ApiService` (`listDetailRequests`/`createDetailRequest`/`getDetailRequest`/`addDetailRequestChild`/`closeDetailRequest`/`cancelDetailRequest`).
+  - `DetailRequestsScreen` — список запросов с табами Open/Closed (когда `showAll=true`, открывается из настроек) или только Open (из header-бейджа).
+  - `DetailRequestScreen` — карточка прогресса (target/total/count + предупреждение overshoot или остаток в баланс), мета-карточка с родительской транзакцией и assignee, FAB «+» для добавления child, кнопки «Готово»/«Отменить».
+  - В `MainScreen` TopAppBar — `BadgedBox` с иконкой `Assignment` (только на экране «Расходы», только при `myOpenDrCount > 0`) с плавной `AnimatedVisibility` (fadeIn+expandHorizontally) при свайпе между экранами.
+  - В `ExpensesScreen` — жёлтая подсветка карточек (`highlightWarning` на `SwipeableTransactionCard`), сортировка моих open-родителей наверх, кнопка «⇲» в `TransactionDetailSheet` (открыть/создать) рядом с «Редактировать».
+  - В `TransactionDetailSheet` для child-записи (`parentId != ""`) — back-link «Запрос на детализацию · Открыть запрос» с переходом в DetailRequestScreen.
+  - В `SettingsDialog` — иконка `Assignment` рядом с logout-иконкой в верхнем user-row для входа в полный список запросов.
+  - Чекбокс «Показать закрытые запросы» в filter card — проброшен в `TransactionDao.observeFiltered` (`(:includeDetailed = 1 OR detail_request_status != 'closed')`).
+- Кнопка фильтра в TopAppBar теперь анимируется (fadeIn+expandHorizontally) при переходе на/с Income/Expenses — раньше появлялась мгновенно.
+
+#### Changed
+- **Room v2** (миграция MIGRATION_1_2): `parent_id`, `detail_request_id`, `detail_request_status`, `excluded_from_stats` на `transactions` (default `''`/`0`).
+- `TransactionDao.observeAll` / `observeFiltered` скрывают pending children (`parent_id != '' AND excluded_from_stats=1`); закрытые-родительские прячутся опционально через `includeDetailed`.
+- `AssigneePickerDialog` рендерит `UserAvatar` в `leadingContent` — единый стиль с диалогом «Изменить автора».
+- Cross-app синхронизация online-only состояния: на `Lifecycle.ON_RESUME` дёргается `DetailRequestStore.refresh()` и `checkVersion(...)` — бейдж и баннер обновления подтягиваются без рестарта приложения. Pull-to-refresh в `ExpensesScreen` тоже зовёт `DetailRequestStore.refresh()`.
+
+#### Fixed
+- BackHandler на `DetailRequestsScreen` и `DetailRequestScreen` возвращает на предыдущий экран (раньше системная «Назад» сворачивала приложение).
+- Фильтр-карточка в `ExpensesScreen` получила `zIndex(1f)` и непрозрачный фон — исчезающий ряд при переключении `includeDetailed` больше не пробивается под Card.
+- Чекбокс «Показать закрытые запросы» переведён в один кликабельный Row с `indication = null` — серое нажатие на текст убрано; `animateScrollToItem(0)` при флипе фильтра, чтобы новые сверху-всплывающие записи показывались сами.
+
+
 
 ### [1.21.0] — 2026-05-07
 

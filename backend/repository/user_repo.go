@@ -44,6 +44,18 @@ func (r *UserRepository) Create(ctx context.Context, u *models.User) error {
 	return err
 }
 
+func (r *UserRepository) FindByID(ctx context.Context, id string) (*models.User, error) {
+	oid, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return nil, err
+	}
+	var u models.User
+	if err := r.col.FindOne(ctx, bson.M{"_id": oid}).Decode(&u); err != nil {
+		return nil, err
+	}
+	return &u, nil
+}
+
 func (r *UserRepository) FindAll(ctx context.Context) ([]models.User, error) {
 	cursor, err := r.col.Find(ctx, bson.M{})
 	if err != nil {
