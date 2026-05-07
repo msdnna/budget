@@ -48,11 +48,14 @@ fun ExpensesScreen(
     serverUrl: String,
     primaryColor: Color,
     valuesHidden: Boolean = false,
+    filtersVisible: Boolean = false,
     onSelectionCountChange: (Int) -> Unit = {},
 ) {
     val vm = viewModel<ExpensesViewModel>(key = "expenses:$serverUrl", factory = ExpensesViewModel.factory(serverUrl))
     val uiState    by vm.uiState.collectAsState()
     val filterCats by vm.filterCats.collectAsState()
+    val filterFrom by vm.filterFrom.collectAsState()
+    val filterTo   by vm.filterTo.collectAsState()
     val categories by vm.categories.collectAsState()
     val selectedIds by vm.selectedIds.collectAsState()
     val selectionMode = selectedIds.isNotEmpty()
@@ -124,24 +127,51 @@ fun ExpensesScreen(
             onRefresh = { vm.reload() },
             modifier = Modifier.fillMaxSize().padding(padding)
         ) {
-        Column(Modifier.fillMaxSize()) {
-            Row(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
+        // top=6 makes the first card sit 12dp below the AppBar (matches the
+        // visual weight of inter-card gaps in the LazyColumn below).
+        Column(Modifier.fillMaxSize().padding(top = 6.dp)) {
+            // Filters card — collapsed by default; toggled by the header
+            // FilterAlt button. See IncomeScreen for the same pattern.
+            androidx.compose.animation.AnimatedVisibility(
+                visible = filtersVisible,
+                enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
+                exit  = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut(),
             ) {
-                CategoryFilterField(
-                    selected = filterCats,
-                    categories = categories,
-                    primaryColor = primaryColor,
-                    onToggle = { vm.toggleFilterCategory(it) },
-                    onClear = { vm.clearFilterCategories() },
-                    onDelete = { id -> scope.launch { vm.deleteCategory(id) } },
-                    modifier = Modifier.weight(1f),
-                )
-                Text("Всего: ${uiState.total}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                ) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        DateRangePickerField(
+                            fromIso = filterFrom,
+                            toIso = filterTo,
+                            primaryColor = primaryColor,
+                            onChange = { f, t -> vm.setDateRange(f, t) },
+                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            CategoryFilterField(
+                                selected = filterCats,
+                                categories = categories,
+                                primaryColor = primaryColor,
+                                onToggle = { vm.toggleFilterCategory(it) },
+                                onClear = { vm.clearFilterCategories() },
+                                onDelete = { id -> scope.launch { vm.deleteCategory(id) } },
+                                modifier = Modifier.weight(1f),
+                            )
+                            Text(
+                                "Всего: ${uiState.total}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
             }
 
             when {

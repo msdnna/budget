@@ -31,9 +31,13 @@ data class ExpensesUiState(
 class ExpensesViewModel(private val serverUrl: String) : ViewModel() {
 
     private val _filterCats  = MutableStateFlow<Set<String>>(emptySet())
+    private val _filterFrom  = MutableStateFlow<String?>(null)
+    private val _filterTo    = MutableStateFlow<String?>(null)
     private val _selectedIds = MutableStateFlow<Set<String>>(emptySet())
 
     val filterCats  = _filterCats.asStateFlow()
+    val filterFrom  = _filterFrom.asStateFlow()
+    val filterTo    = _filterTo.asStateFlow()
     val selectedIds = _selectedIds.asStateFlow()
     val categories: StateFlow<List<Category>> = combine(
         CategoryRepository.expense,
@@ -42,11 +46,15 @@ class ExpensesViewModel(private val serverUrl: String) : ViewModel() {
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    val uiState: StateFlow<ExpensesUiState> = _filterCats
-        .flatMapLatest { cats ->
+    val uiState: StateFlow<ExpensesUiState> = combine(_filterCats, _filterFrom, _filterTo) { c, f, t ->
+        Triple(c, f, t)
+    }
+        .flatMapLatest { (cats, from, to) ->
             TransactionRepository.observeFiltered(
                 type = "expense",
                 categories = cats.takeIf { it.isNotEmpty() },
+                from = from,
+                to = to,
             ).map { txs -> ExpensesUiState(transactions = txs, total = txs.size, loading = false) }
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, ExpensesUiState(loading = true))
@@ -67,6 +75,11 @@ class ExpensesViewModel(private val serverUrl: String) : ViewModel() {
         _page.value = 1
     }
     fun clearFilterCategories() { _filterCats.value = emptySet(); _page.value = 1 }
+    fun setDateRange(from: String?, to: String?) {
+        _filterFrom.value = from
+        _filterTo.value = to
+        _page.value = 1
+    }
     fun loadMore() { /* no-op: full list is always loaded from Room */ }
 
     fun deleteTransaction(id: String) {

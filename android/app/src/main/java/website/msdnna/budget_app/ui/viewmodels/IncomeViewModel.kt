@@ -27,11 +27,15 @@ class IncomeViewModel(private val serverUrl: String) : ViewModel() {
     private val now = Calendar.getInstance()
 
     private val _filterCats  = MutableStateFlow<Set<String>>(emptySet())
+    private val _filterFrom  = MutableStateFlow<String?>(null)
+    private val _filterTo    = MutableStateFlow<String?>(null)
     private val _ibYear      = MutableStateFlow(now.get(Calendar.YEAR))
     private val _ibMonth     = MutableStateFlow(now.get(Calendar.MONTH) + 1)
     private val _selectedIds = MutableStateFlow<Set<String>>(emptySet())
 
     val filterCats  = _filterCats.asStateFlow()
+    val filterFrom  = _filterFrom.asStateFlow()
+    val filterTo    = _filterTo.asStateFlow()
     val selectedIds = _selectedIds.asStateFlow()
     val categories: StateFlow<List<Category>> = combine(
         CategoryRepository.income,
@@ -42,11 +46,15 @@ class IncomeViewModel(private val serverUrl: String) : ViewModel() {
     val ibMonth     = _ibMonth.asStateFlow()
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    val uiState: StateFlow<IncomeUiState> = _filterCats
-        .flatMapLatest { cats ->
+    val uiState: StateFlow<IncomeUiState> = combine(_filterCats, _filterFrom, _filterTo) { c, f, t ->
+        Triple(c, f, t)
+    }
+        .flatMapLatest { (cats, from, to) ->
             TransactionRepository.observeFiltered(
                 type = "income",
                 categories = cats.takeIf { it.isNotEmpty() },
+                from = from,
+                to = to,
             ).map { txs -> IncomeUiState(transactions = txs, total = txs.size, loading = false) }
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, IncomeUiState(loading = true))
@@ -78,6 +86,11 @@ class IncomeViewModel(private val serverUrl: String) : ViewModel() {
         _page.value = 1
     }
     fun clearFilterCategories() { _filterCats.value = emptySet(); _page.value = 1 }
+    fun setDateRange(from: String?, to: String?) {
+        _filterFrom.value = from
+        _filterTo.value = to
+        _page.value = 1
+    }
     fun loadMore() { /* no-op: Room observes full list */ }
 
     fun ibNavigateBack() {

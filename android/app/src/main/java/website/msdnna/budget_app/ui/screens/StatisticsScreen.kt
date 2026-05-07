@@ -10,7 +10,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import website.msdnna.budget_app.ui.components.*
@@ -26,6 +25,8 @@ fun StatisticsScreen(serverUrl: String, primaryColor: Color, valuesHidden: Boole
     val period by vm.period.collectAsState()
     val year   by vm.year.collectAsState()
     val month  by vm.month.collectAsState()
+    val from   by vm.from.collectAsState()
+    val to     by vm.to.collectAsState()
     val state  by vm.state.collectAsState()
 
     val incomeColor  = LocalIncomeColor.current
@@ -46,39 +47,79 @@ fun StatisticsScreen(serverUrl: String, primaryColor: Color, valuesHidden: Boole
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Period selector
-            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+            // Period selector — chips are both mode toggles and picker triggers.
+            // Active chip shows the picked value (e.g. "Май 2026"), other chips
+            // show the type label. Tapping any chip switches mode and opens the
+            // corresponding picker.
+            var pickerOpen by remember { mutableStateOf<StatsPeriod?>(null) }
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            ) {
                 Row(
-                    modifier = Modifier.padding(12.dp),
+                    modifier = Modifier.fillMaxWidth().padding(12.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     StatsPeriod.values().forEach { p ->
-                        FilterChip(
-                            selected = period == p,
-                            onClick  = { vm.setPeriod(p) },
-                            label    = { Text(if (p == StatsPeriod.MONTH) "Месяц" else "Год") },
-                            colors   = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = primaryColor,
-                                selectedLabelColor     = Color.White
+                        val label = when {
+                            p != period -> when (p) {
+                                StatsPeriod.MONTH -> "Месяц"
+                                StatsPeriod.YEAR  -> "Год"
+                                StatsPeriod.RANGE -> "Период"
+                            }
+                            p == StatsPeriod.MONTH -> "${monthName(month)} $year"
+                            p == StatsPeriod.YEAR  -> year.toString()
+                            else -> if (from != null && to != null)
+                                "${shortIsoDate(from!!)} — ${shortIsoDate(to!!)}"
+                            else "Период"
+                        }
+                        Box {
+                            FilterChip(
+                                selected = period == p,
+                                onClick = {
+                                    if (period != p) vm.setPeriod(p)
+                                    pickerOpen = p
+                                },
+                                label = { Text(label) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = primaryColor,
+                                    selectedLabelColor     = Color.White,
+                                ),
                             )
-                        )
-                    }
-                    Spacer(Modifier.weight(1f))
-                    IconButton(onClick = { vm.navigateBack() }, modifier = Modifier.size(32.dp)) {
-                        Text("‹", fontWeight = FontWeight.Bold)
-                    }
-                    Text(
-                        text = if (period == StatsPeriod.MONTH)
-                            "${monthName(month, true)} $year" else year.toString(),
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium
-                    )
-                    IconButton(onClick = { vm.navigateForward() }, modifier = Modifier.size(32.dp)) {
-                        Text("›", fontWeight = FontWeight.Bold)
+                            // Anchor the popups to the chip itself so they
+                            // appear directly below the trigger.
+                            TilePeriodPickerPopup(
+                                open = pickerOpen == StatsPeriod.MONTH && p == StatsPeriod.MONTH,
+                                type = TilePickerType.MONTH,
+                                year = year,
+                                month = month,
+                                primaryColor = primaryColor,
+                                onSelect = { y, m -> vm.selectMonth(y, m); pickerOpen = null },
+                                onDismiss = { pickerOpen = null },
+                                anchorOffset = androidx.compose.ui.unit.IntOffset(0, 110),
+                            )
+                            TilePeriodPickerPopup(
+                                open = pickerOpen == StatsPeriod.YEAR && p == StatsPeriod.YEAR,
+                                type = TilePickerType.YEAR,
+                                year = year,
+                                month = month,
+                                primaryColor = primaryColor,
+                                onSelect = { y, _ -> vm.selectYear(y); pickerOpen = null },
+                                onDismiss = { pickerOpen = null },
+                                anchorOffset = androidx.compose.ui.unit.IntOffset(0, 110),
+                            )
+                        }
                     }
                 }
             }
+            DateRangePickerDialog(
+                open = pickerOpen == StatsPeriod.RANGE,
+                initialFromIso = from,
+                initialToIso = to,
+                primaryColor = primaryColor,
+                onConfirm = { f, t -> vm.selectRange(f, t); pickerOpen = null },
+                onDismiss = { pickerOpen = null },
+            )
 
             when {
                 state.loading -> SkeletonStatisticsContent()
@@ -169,4 +210,12 @@ fun StatisticsScreen(serverUrl: String, primaryColor: Color, valuesHidden: Boole
             }
         }
     }
+}
+
+/** "yyyy-MM-dd" → "dd.MM" for compact chip labels. */
+private fun shortIsoDate(iso: String): String {
+    if (iso.length < 10) return iso
+    val parts = iso.take(10).split("-")
+    if (parts.size != 3) return iso
+    return "${parts[2]}.${parts[1]}"
 }

@@ -15,6 +15,8 @@ import androidx.compose.material.icons.automirrored.filled.TrendingDown
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.DarkMode
+import androidx.compose.material.icons.outlined.FilterAlt
+import androidx.compose.material.icons.outlined.FilterAltOff
 import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -90,6 +92,10 @@ fun MainScreen(
     var showNotifications by remember { mutableStateOf(false) }
     var showSecurity by remember { mutableStateOf(false) }
     var valuesHidden by remember { mutableStateOf(false) }
+    // Income / Expenses share a "filters drawer" that's collapsed by default;
+    // the header button below toggles it. Shared across both routes so a user
+    // who expanded filters on Income sees them already expanded on Expenses.
+    var filtersVisible by remember { mutableStateOf(false) }
     // Per-route selection count published by each transactional screen via callback;
     // we read the entry for the currently visible route to decide between the
     // section title and a "Выбрано: N" counter in the top app bar.
@@ -206,6 +212,21 @@ fun MainScreen(
                             }
                         }
                     }
+                    if (currentRoute == "income" || currentRoute == "expenses") {
+                        IconButton(onClick = { filtersVisible = !filtersVisible }) {
+                            // Outlined variants match the visual weight of the
+                            // eye/settings glyphs alongside (the filled
+                            // FilterAlt sat heavier than its neighbours in
+                            // light theme and lighter in dark — both broke
+                            // visual balance).
+                            Icon(
+                                if (filtersVisible) Icons.Outlined.FilterAltOff else Icons.Outlined.FilterAlt,
+                                if (filtersVisible) "Скрыть фильтры" else "Показать фильтры",
+                                tint = if (filtersVisible) primaryColor
+                                       else LocalContentColor.current,
+                            )
+                        }
+                    }
                     IconButton(onClick = { valuesHidden = !valuesHidden }) {
                         Icon(
                             if (valuesHidden) Icons.Default.Visibility else Icons.Default.VisibilityOff,
@@ -278,10 +299,12 @@ fun MainScreen(
                         "statistics" -> StatisticsScreen(serverUrl, primaryColor, valuesHidden, pieUnitRuble)
                         "income"     -> IncomeScreen(
                             serverUrl, primaryColor, valuesHidden,
+                            filtersVisible = filtersVisible,
                             onSelectionCountChange = { selectionCounts["income"] = it }
                         )
                         "expenses"   -> ExpensesScreen(
                             serverUrl, primaryColor, valuesHidden,
+                            filtersVisible = filtersVisible,
                             onSelectionCountChange = { selectionCounts["expenses"] = it }
                         )
                         "forecast"   -> ForecastScreen(

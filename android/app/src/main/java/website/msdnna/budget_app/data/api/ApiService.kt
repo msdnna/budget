@@ -75,7 +75,9 @@ interface ApiService {
     @GET("statistics/overview")
     suspend fun getStatisticsOverview(
         @Query("month") month: String? = null,
-        @Query("year") year: String? = null
+        @Query("year") year: String? = null,
+        @Query("from") from: String? = null,
+        @Query("to") to: String? = null,
     ): website.msdnna.budget_app.data.model.StatisticsOverviewResponse
 
     @GET("wishlist")
