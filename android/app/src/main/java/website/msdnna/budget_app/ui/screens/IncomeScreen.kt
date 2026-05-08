@@ -678,10 +678,13 @@ fun TransactionDetailSheet(
     /** When the transaction is a child of a detail-request, the id of that
      *  request — surfaced as a "back-link" row in view mode. */
     linkedDetailRequestId: String? = null,
-    /** When the transaction is a fulfillment of a recurring wishlist item,
-     *  this is its display name. Tapping the row should open the wishlist
-     *  detail sheet via [onOpenLinkedWishlist]. */
+    /** When the transaction is linked to a wishlist item, this is its
+     *  display name. Tapping the row should open the wishlist detail
+     *  sheet via [onOpenLinkedWishlist]. */
     linkedWishlistName: String? = null,
+    /** Row-label for the linked wishlist back-link — defaults to
+     *  «Регулярный расход»; pass «Желаемая покупка» for one-off items. */
+    linkedWishlistLabel: String = "Регулярный расход",
     onOpenLinkedWishlist: (() -> Unit)? = null,
 ) {
     val scope = rememberCoroutineScope()
@@ -848,7 +851,7 @@ fun TransactionDetailSheet(
                         verticalAlignment = Alignment.Top,
                     ) {
                         Text(
-                            "Регулярный расход",
+                            linkedWishlistLabel,
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.weight(0.4f),

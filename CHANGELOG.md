@@ -224,6 +224,16 @@
 
 ## Android
 
+### [1.27.0] — 2026-05-08
+
+#### Changed
+- **«Куплено» в wishlist теперь работает как «Оплачено» в регулярных:** свайп по кнопке открывает префилл-`AddExpenseSheet`. На сохранении создаётся expense с `wishlist_id` + флипается `purchased=true`.
+- **«Отменить»** на купленном wishlist-итеме зовёт `unlink-period` (для once бэкенд очищает единственную привязку, api ≥ 1.12.1) и сбрасывает `purchased=false`. Сама транзакция остаётся в Расходах.
+- В `TransactionDetailSheet` back-link для tx с `wishlist_id`, ссылающимся на `frequency=once` итем, теперь подписан **«Желаемая покупка»** (раньше всегда «Регулярный расход»). Лейбл прокидывается через новый параметр `linkedWishlistLabel`.
+
+#### Removed
+- `ForecastViewModel.togglePurchased(id, currentPurchased)` — заменён на пару `purchaseWishlist(req)` / `unpurchaseWishlist(id)`. Bulk-purchase для wishlist остаётся simple toggle (массовая фиксация форм была бы UX-кошмаром).
+
 ### [1.26.0] — 2026-05-08
 
 #### Added

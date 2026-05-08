@@ -79,11 +79,9 @@ class ForecastViewModel(private val serverUrl: String) : ViewModel() {
 
     fun reload() { _refreshTick.value += 1 }
 
-    fun togglePurchased(id: String, purchased: Boolean) {
-        viewModelScope.launch {
-            WishlistRepository.update(id, purchased = !purchased)
-        }
-    }
+    // togglePurchased был удалён в android 1.27.0 — теперь «Куплено»
+    // открывает префилл-форму (purchaseWishlist) с linked tx, а «Не
+    // куплено» отвязывает и сбрасывает флаг (unpurchaseWishlist).
 
     fun deleteWishlistItem(id: String) {
         viewModelScope.launch { WishlistRepository.delete(id) }
@@ -227,6 +225,46 @@ class ForecastViewModel(private val serverUrl: String) : ViewModel() {
             CategoryUsage.recordUse("expense", req.category)
             // Forecast is server-side; reload pulls the new paid_this_period.
             reload()
+        }
+    }
+
+    /** Wishlist «Куплено» = create linked expense + flip `purchased=true`.
+     *  Mirrors the regular flow but additionally toggles the wishlist row's
+     *  purchased state so it strikes through and disappears from forecast. */
+    fun purchaseWishlist(req: CreateTransactionRequest) {
+        viewModelScope.launch {
+            val wlId = req.wishlistId.orEmpty()
+            TransactionRepository.create(
+                type = req.type,
+                amount = req.amount,
+                date = req.date,
+                category = req.category,
+                source = req.source,
+                purpose = req.purpose,
+                description = req.description,
+                wishlistId = wlId,
+            )
+            CategoryUsage.recordUse("expense", req.category)
+            if (wlId.isNotBlank()) {
+                WishlistRepository.update(id = wlId, purchased = true)
+            }
+            reload()
+        }
+    }
+
+    /** Wishlist «Не куплено» — unlink the single linked transaction and
+     *  reset `purchased=false`. The transaction itself stays in Расходах. */
+    fun unpurchaseWishlist(wishlistId: String, onError: (String) -> Unit = {}) {
+        viewModelScope.launch {
+            try {
+                service.unlinkWishlistPeriod(wishlistId)
+                WishlistRepository.update(id = wishlistId, purchased = false)
+                reload()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                onError(e.localizedMessage ?: "Не удалось отвязать")
+            }
         }
     }
 

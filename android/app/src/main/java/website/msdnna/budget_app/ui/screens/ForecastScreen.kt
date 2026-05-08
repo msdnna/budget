@@ -114,6 +114,8 @@ fun ForecastScreen(
     var detailItem   by remember { mutableStateOf<WishlistItem?>(null) }
     // When non-null, opens AddExpenseSheet prefilled from a recurring item.
     var payRegular   by remember { mutableStateOf<RegularItem?>(null) }
+    // Same idea for «Куплено» on a one-off wishlist row.
+    var payWishlist  by remember { mutableStateOf<WishlistItem?>(null) }
 
     BackHandler(enabled = anySelectionMode) {
         if (selectionMode) vm.clearSelection()
@@ -337,11 +339,12 @@ fun ForecastScreen(
                             primaryColor = primaryColor,
                             selectionMode = selectionMode,
                             selected = item.id in selectedIds,
-                            onLongPress       = vm::startSelection,
-                            onSelectToggle    = vm::toggleSelection,
-                            onTogglePurchased = vm::togglePurchased,
-                            onDelete          = vm::deleteWishlistItem,
-                            onDetails         = onShowDetails,
+                            onLongPress    = vm::startSelection,
+                            onSelectToggle = vm::toggleSelection,
+                            onPurchase     = { wl -> payWishlist = wl },
+                            onUnpurchase   = { id -> vm.unpurchaseWishlist(id) },
+                            onDelete       = vm::deleteWishlistItem,
+                            onDetails      = onShowDetails,
                         )
                     }
                 }
@@ -398,6 +401,28 @@ fun ForecastScreen(
             onSave = { req ->
                 vm.markRegularPaid(req.copy(wishlistId = item.id))
                 payRegular = null
+            },
+        )
+    }
+
+    payWishlist?.let { item ->
+        // Same prefilled flow used for «Куплено» on a one-off wishlist
+        // item: создаёт linked tx + ставит purchased=true (см. VM).
+        AddExpenseSheet(
+            primaryColor = primaryColor,
+            template = Transaction(
+                amount      = item.estimatedCost,
+                category    = item.category,
+                purpose     = item.name,
+                description = item.notes ?: "",
+            ),
+            categories = expenseCategories,
+            onAddCategory    = { name -> vm.addExpenseCategory(name) },
+            onDeleteCategory = { id -> vm.deleteExpenseCategory(id) },
+            onDismiss = { payWishlist = null },
+            onSave = { req ->
+                vm.purchaseWishlist(req.copy(wishlistId = item.id))
+                payWishlist = null
             },
         )
     }
@@ -754,7 +779,11 @@ fun SwipeableWishlistCard(
     selected: Boolean = false,
     onLongPress: (id: String) -> Unit = {},
     onSelectToggle: (id: String) -> Unit = {},
-    onTogglePurchased: (id: String, currentPurchased: Boolean) -> Unit,
+    /** Open the prefilled expense form to record a wishlist purchase. */
+    onPurchase: (WishlistItem) -> Unit = {},
+    /** Unlink the transaction created via [onPurchase] and reset the
+     *  purchased flag — keeps the original tx in расходах. */
+    onUnpurchase: (id: String) -> Unit = {},
     onDelete: (id: String) -> Unit,
     onDetails: (WishlistItem) -> Unit = {}
 ) {
@@ -806,7 +835,15 @@ fun SwipeableWishlistCard(
                         .fillMaxHeight()
                         .align(Alignment.CenterStart)
                         .background(if (item.purchased) Color(0xFF757575) else ColourPurchased)
-                        .clickable { snapTo(0f); onTogglePurchased(item.id, item.purchased) },
+                        .clickable {
+                            snapTo(0f)
+                            // «Куплено» теперь открывает префилл-форму
+                            // расхода (как у регулярных), создаёт linked tx
+                            // + переключает purchased. «Отменить» отвязывает
+                            // и сбрасывает флаг, не удаляя транзакцию.
+                            if (item.purchased) onUnpurchase(item.id)
+                            else onPurchase(item)
+                        },
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {

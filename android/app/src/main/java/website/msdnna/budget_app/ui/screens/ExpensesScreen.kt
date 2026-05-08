@@ -362,6 +362,8 @@ fun ExpensesScreen(
             },
             linkedDetailRequestId = linkedDrId,
             linkedWishlistName    = linkedWl?.name,
+            linkedWishlistLabel   = if (linkedWl?.frequency == "once" || linkedWl?.frequency.isNullOrBlank())
+                "Желаемая покупка" else "Регулярный расход",
             onOpenLinkedWishlist  = if (linkedWl != null) {
                 { wishlistInfo = linkedWl; detailTx = null }
             } else null,
