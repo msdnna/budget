@@ -64,14 +64,23 @@ type RegularItemForecast struct {
 	ID            string  `json:"id"`
 	Name          string  `json:"name"`
 	EstimatedCost float64 `json:"estimated_cost"`
-	MonthlyCost   float64 `json:"monthly_cost"`
-	Frequency     string  `json:"frequency"`
-	Category      string  `json:"category"`
-	// PaidThisPeriod is true when at least one expense transaction with
-	// WishlistID == ID exists in the current period (month for monthly,
-	// quarter for quarterly, year for yearly). Such items are excluded
-	// from the forecast totals so we don't double-count actual + planned.
+	// MonthlyCost is now the FULL cost per period (not divided across
+	// months) — clients display it with a frequency-specific suffix:
+	// monthly → "₽/мес", quarterly → "₽/кв", yearly → "₽/год".
+	MonthlyCost float64 `json:"monthly_cost"`
+	Frequency   string  `json:"frequency"`
+	Category    string  `json:"category"`
+	// PaidThisPeriod is true when ≥1 linked expense exists in the current
+	// calendar period (month/quarter/year per frequency). Used by the UI
+	// for the "оплачено · X ₽" badge and strike-through styling.
 	PaidThisPeriod bool    `json:"paid_this_period"`
 	PaidAmount     float64 `json:"paid_amount"`
 	PaidCount      int     `json:"paid_count"`
+	// NextDueDate is when the item is next expected to be paid, derived
+	// from latest linked transaction + period (or "now" if never paid).
+	// Empty when not applicable. Forecast contribution = full
+	// estimated_cost when the item is monthly, OR NextDueDate ≤ now+1
+	// month — otherwise the recurring schedule is far enough out that
+	// it doesn't affect the upcoming month's projection.
+	NextDueDate string `json:"next_due_date,omitempty"`
 }

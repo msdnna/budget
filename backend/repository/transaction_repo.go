@@ -618,6 +618,86 @@ func (r *TransactionRepository) GetAverageMonthlyCategoryExpenses(ctx context.Co
 	return rawData, nil
 }
 
+// GetAverageMonthlyCategoryExpensesUnlinked is GetAverageMonthlyCategoryExpenses
+// minus transactions that are fulfillments of recurring wishlist items
+// (wishlist_id != ""). Used by Forecast() so we don't double-count: the
+// recurring schedule is already projected via wishlist_contrib's next-due
+// model — including the actual payment in the 3-month avg would inflate
+// the forecast for the next 3 months after every yearly bill.
+func (r *TransactionRepository) GetAverageMonthlyCategoryExpensesUnlinked(ctx context.Context, from, to time.Time) ([]models.CategoryData, error) {
+	months := to.Sub(from).Hours() / 24 / 30
+	if months < 1 {
+		months = 1
+	}
+
+	match := bson.M{
+		"type":                models.Expense,
+		"deleted_at":          nil,
+		"hidden":              bson.M{"$ne": true},
+		"excluded_from_stats": bson.M{"$ne": true},
+		// Empty/missing wishlist_id only — bson omitempty means unlinked
+		// rows store no field at all, so $in handles both shapes.
+		"wishlist_id": bson.M{"$in": []any{nil, ""}},
+	}
+	if !from.IsZero() || !to.IsZero() {
+		df := bson.M{}
+		if !from.IsZero() {
+			df["$gte"] = from
+		}
+		if !to.IsZero() {
+			df["$lte"] = to
+		}
+		match["date"] = df
+	}
+
+	pipeline := mongo.Pipeline{
+		{{"$match", match}},
+		{{"$group", bson.D{
+			{"_id", "$category"},
+			{"total", bson.D{{"$sum", "$amount"}}},
+			{"count", bson.D{{"$sum", 1}}},
+		}}},
+		{{"$sort", bson.D{{"total", -1}}}},
+	}
+
+	cur, err := r.col.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+
+	type aggResult struct {
+		ID    string  `bson:"_id"`
+		Total float64 `bson:"total"`
+		Count int32   `bson:"count"`
+	}
+
+	var raw []aggResult
+	if err := cur.All(ctx, &raw); err != nil {
+		return nil, err
+	}
+
+	var grandTotal float64
+	for _, r := range raw {
+		grandTotal += r.Total
+	}
+
+	result := make([]models.CategoryData, len(raw))
+	for i, r := range raw {
+		pct := 0.0
+		if grandTotal > 0 {
+			pct = r.Total / grandTotal * 100
+		}
+		result[i] = models.CategoryData{
+			Category:   r.ID,
+			Amount:     r.Total / months,
+			Percentage: pct,
+			Count:      r.Count,
+		}
+	}
+	return result, nil
+}
+
 func buildTransactionFilter(f models.TransactionFilter) bson.M {
 	filter := bson.M{"deleted_at": nil}
 	// Hide pending children of an open detail-request: parent_id != '' AND

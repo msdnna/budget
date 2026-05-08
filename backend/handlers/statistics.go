@@ -175,7 +175,10 @@ func (h *StatisticsHandler) Forecast(c *gin.Context) {
 	now := time.Now()
 	threeMonthsAgo := now.AddDate(0, -3, 0)
 
-	historyCats, err := h.txRepo.GetAverageMonthlyCategoryExpenses(ctx, threeMonthsAgo, now)
+	// Historical avg by category, EXCLUDING transactions linked to recurring
+	// wishlist items — those are projected separately via the next-due model
+	// below. Counting them in both places double-billed the forecast.
+	historyCats, err := h.txRepo.GetAverageMonthlyCategoryExpensesUnlinked(ctx, threeMonthsAgo, now)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -189,16 +192,16 @@ func (h *StatisticsHandler) Forecast(c *gin.Context) {
 	}
 
 	// Pull every expense transaction linked to any recurring wishlist item
-	// since the start of the calendar year. We then bucket per item's
-	// frequency-period in Go (monthly/quarterly/yearly windows differ).
-	yearStart := time.Date(now.Year(), 1, 1, 0, 0, 0, 0, time.UTC)
+	// over the last ~2 years — far enough back to find the latest yearly
+	// payment so we can compute next_due. Bucketing per period happens in Go.
+	twoYearsAgo := now.AddDate(-2, 0, 0)
 	var recurringIDs []string
 	for _, item := range unpurchased {
 		if item.Frequency != models.FrequencyOnce {
 			recurringIDs = append(recurringIDs, item.ID)
 		}
 	}
-	payments, err := h.txRepo.FindLinkedToWishlistMulti(ctx, recurringIDs, yearStart, time.Time{})
+	payments, err := h.txRepo.FindLinkedToWishlistMulti(ctx, recurringIDs, twoYearsAgo, time.Time{})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -212,35 +215,39 @@ func (h *StatisticsHandler) Forecast(c *gin.Context) {
 		histTotal += cat.Amount
 	}
 
-	// Period bounds for "paid this period" lookup. Monthly = current calendar
-	// month, quarterly = current calendar quarter, yearly = current calendar
-	// year. ≥1 linked transaction in the window marks the item as paid; the
-	// item is then excluded from forecast totals (but still rendered so the
-	// UI can show a struck-through "оплачено" row).
+	// Calendar period bounds — drive only the UI badge "оплачено за …".
 	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
 	monthEnd := monthStart.AddDate(0, 1, 0)
 	q := (int(now.Month()) - 1) / 3
 	quarterStart := time.Date(now.Year(), time.Month(q*3+1), 1, 0, 0, 0, 0, time.UTC)
 	quarterEnd := quarterStart.AddDate(0, 3, 0)
+	yearStart := time.Date(now.Year(), 1, 1, 0, 0, 0, 0, time.UTC)
 	yearEnd := yearStart.AddDate(1, 0, 0)
 
-	type paidStat struct {
-		amount float64
-		count  int
+	// Aggregate per recurring item: latest payment date (drives next_due) and
+	// the calendar-period paid_amount/count (drives the UI badge).
+	type itemAgg struct {
+		latest       time.Time
+		paidInPeriod bool
+		paidAmount   float64
+		paidCount    int
 	}
-	paidByItem := make(map[string]paidStat)
+	byItem := make(map[string]*itemAgg)
+	itemFreq := make(map[string]models.Frequency, len(unpurchased))
+	for _, it := range unpurchased {
+		itemFreq[it.ID] = it.Frequency
+	}
 	for _, p := range payments {
-		var inPeriod bool
-		// Find the matching item's frequency to know which window applies.
-		// (Linear scan is fine — recurringIDs is small.)
-		var freq models.Frequency
-		for _, item := range unpurchased {
-			if item.ID == p.WishlistID {
-				freq = item.Frequency
-				break
-			}
+		s, ok := byItem[p.WishlistID]
+		if !ok {
+			s = &itemAgg{}
+			byItem[p.WishlistID] = s
 		}
-		switch freq {
+		if p.Date.After(s.latest) {
+			s.latest = p.Date
+		}
+		var inPeriod bool
+		switch itemFreq[p.WishlistID] {
 		case models.FrequencyMonthly:
 			inPeriod = !p.Date.Before(monthStart) && p.Date.Before(monthEnd)
 		case models.FrequencyQuarterly:
@@ -248,50 +255,84 @@ func (h *StatisticsHandler) Forecast(c *gin.Context) {
 		case models.FrequencyYearly:
 			inPeriod = !p.Date.Before(yearStart) && p.Date.Before(yearEnd)
 		}
-		if !inPeriod {
-			continue
+		if inPeriod {
+			s.paidInPeriod = true
+			s.paidAmount += p.Amount
+			s.paidCount++
 		}
-		s := paidByItem[p.WishlistID]
-		s.amount += p.Amount
-		s.count++
-		paidByItem[p.WishlistID] = s
 	}
 
-	// Calculate monthly contribution for every unpurchased wishlist item.
-	// once / monthly  → full cost per month
-	// quarterly       → cost / 3 per month
-	// yearly          → cost / 12 per month
+	// Next-due model: an item contributes its FULL estimated_cost to the
+	// next-month projection iff its next due date falls within the next
+	// month. Monthly items always contribute (next_due always ≤ ~30d).
+	// Unpaid items default to "due now".
+	nextMonthCutoff := now.AddDate(0, 1, 0)
+
+	// 'once' wishlist items still contribute their full cost (existing
+	// semantics: planned one-off purchase shows up as upcoming spend).
 	var regularItems []models.RegularItemForecast
 	var wishlistTotal float64
 	for _, item := range unpurchased {
-		var monthly float64
+		s := byItem[item.ID]
+		var nextDue time.Time
+		if s == nil || s.latest.IsZero() {
+			nextDue = now // never paid → due now (Approach A)
+		} else {
+			switch item.Frequency {
+			case models.FrequencyMonthly:
+				nextDue = s.latest.AddDate(0, 1, 0)
+			case models.FrequencyQuarterly:
+				nextDue = s.latest.AddDate(0, 3, 0)
+			case models.FrequencyYearly:
+				nextDue = s.latest.AddDate(1, 0, 0)
+			default:
+				nextDue = now
+			}
+		}
+
+		// Decide contribution.
+		var contribution float64
 		switch item.Frequency {
-		case models.FrequencyQuarterly:
-			monthly = item.EstimatedCost / 3
-		case models.FrequencyYearly:
-			monthly = item.EstimatedCost / 12
-		default: // once, monthly, or empty
-			monthly = item.EstimatedCost
+		case models.FrequencyOnce:
+			// Wishlist one-off: planned purchase, always projected once.
+			contribution = item.EstimatedCost
+		case models.FrequencyMonthly:
+			// Always due within the next month.
+			contribution = item.EstimatedCost
+		default: // quarterly | yearly
+			if !nextDue.After(nextMonthCutoff) {
+				contribution = item.EstimatedCost
+			}
 		}
-		paid := paidByItem[item.ID]
-		isPaid := paid.count > 0
-		// Exclude paid recurring items from forecast totals — actual
-		// transactions already counted in the expense history.
-		if !isPaid {
-			catMap[item.Category] += monthly
-			wishlistTotal += monthly
+
+		if contribution > 0 {
+			catMap[item.Category] += contribution
+			wishlistTotal += contribution
 		}
+
 		if item.Frequency != models.FrequencyOnce {
+			paidThisPeriod := s != nil && s.paidInPeriod
+			var paidAmount float64
+			var paidCount int
+			if s != nil {
+				paidAmount = s.paidAmount
+				paidCount = s.paidCount
+			}
+			var nextDueStr string
+			if !nextDue.IsZero() {
+				nextDueStr = nextDue.Format("2006-01-02")
+			}
 			regularItems = append(regularItems, models.RegularItemForecast{
 				ID:             item.ID,
 				Name:           item.Name,
 				EstimatedCost:  item.EstimatedCost,
-				MonthlyCost:    monthly,
+				MonthlyCost:    item.EstimatedCost, // full per-period cost; UI suffix varies
 				Frequency:      string(item.Frequency),
 				Category:       item.Category,
-				PaidThisPeriod: isPaid,
-				PaidAmount:     paid.amount,
-				PaidCount:      paid.count,
+				PaidThisPeriod: paidThisPeriod,
+				PaidAmount:     paidAmount,
+				PaidCount:      paidCount,
+				NextDueDate:    nextDueStr,
 			})
 		}
 	}

@@ -16,6 +16,16 @@
 
 ## API (backend)
 
+### [1.11.0] — 2026-05-08
+
+#### Changed
+- **Forecast: переход на next-due модель.** Регулярные wishlist-итемы больше не размазываются /3 / /12 на месяцы — вклад в `total_monthly` теперь равен полной `estimated_cost` (или 0), исходя из даты следующего платежа: `next_due = last_paid_date + period`; вклад добавляется когда `next_due ≤ now + 1 месяц`. Monthly всегда вкладывается, never-paid тоже (трактуется как due now). Это устраняет ситуацию, когда после оплаты годового платежа прогноз на следующий месяц увеличивался.
+- `historical_avg` теперь считается **только по транзакциям без `wishlist_id`** (`GetAverageMonthlyCategoryExpensesUnlinked`) — связанные с регулярными итемами расходы уже учитываются через next-due, иначе двойной счёт.
+- `monthly_cost` в `regular_items` теперь = полная `estimated_cost` (без деления). Клиенты подставляют суффикс по `frequency`: «₽/мес» / «₽/кв» / «₽/год».
+
+#### Added
+- Поле `next_due_date` (YYYY-MM-DD) в `RegularItemForecast` — вычисленная дата следующего ожидаемого платежа. Пустое для never-applicable случаев.
+
 ### [1.10.0] — 2026-05-08
 
 #### Added
