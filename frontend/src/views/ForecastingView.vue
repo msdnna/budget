@@ -41,11 +41,40 @@
             <n-empty v-if="!forecast.regular_items?.length" description="Нет регулярных позиций" style="padding: 30px 0;" />
             <n-list v-else>
               <n-list-item v-for="item in forecast.regular_items" :key="item.id">
-                <n-thing :title="item.name" :description="item.category">
+                <n-thing>
+                  <template #header>
+                    <n-text :style="{
+                      textDecoration: item.paid_this_period ? 'line-through' : 'none',
+                      color: item.paid_this_period ? palette.text3 : 'inherit'
+                    }">{{ item.name }}</n-text>
+                  </template>
+                  <template #description>
+                    <n-space align="center" :size="6">
+                      <n-text depth="3" style="font-size:12px">{{ item.category }}</n-text>
+                      <n-tag v-if="item.paid_this_period" type="success" size="small" round>
+                        Оплачено · {{ Math.round(item.paid_amount).toLocaleString('ru-RU') }} ₽
+                      </n-tag>
+                    </n-space>
+                  </template>
                   <template #header-extra>
-                    <n-space align="center">
+                    <n-space align="center" :size="8">
                       <n-tag type="info" size="small">{{ freqLabel(item.frequency) }}</n-tag>
-                      <n-text strong :style="{ color: palette.expense }">{{ Math.round(item.monthly_cost).toLocaleString('ru-RU') }} ₽/мес</n-text>
+                      <n-text strong :style="{
+                        color: item.paid_this_period ? palette.text3 : palette.expense,
+                        textDecoration: item.paid_this_period ? 'line-through' : 'none',
+                      }">{{ Math.round(item.monthly_cost).toLocaleString('ru-RU') }} ₽/мес</n-text>
+                    </n-space>
+                  </template>
+                  <template #action>
+                    <n-space size="small">
+                      <n-button size="tiny" type="success" @click="openPayRegular(item)">Оплачено</n-button>
+                      <ConfirmActionButton
+                        v-if="item.paid_this_period"
+                        label="Отменить"
+                        type="default"
+                        :loading="cancelingId === item.id"
+                        @confirm="cancelRegularPaid(item)"
+                      />
                     </n-space>
                   </template>
                 </n-thing>
@@ -243,6 +272,40 @@
       </n-grid-item>
     </n-grid>
 
+    <!-- Prefilled expense modal for "Оплачено" on a recurring item -->
+    <n-modal v-model:show="showPayRegular" preset="card" title="Зафиксировать оплату" style="max-width:420px">
+      <template v-if="payRegularItem">
+        <n-form label-placement="top">
+          <n-form-item label="Сумма (₽)">
+            <n-input-number v-model:value="payForm.amount" :min="1" style="width:100%" />
+          </n-form-item>
+          <n-form-item label="Дата">
+            <n-date-picker v-model:formatted-value="payForm.date" value-format="yyyy-MM-dd" type="date" style="width:100%" />
+          </n-form-item>
+          <n-form-item label="Категория">
+            <n-select
+              v-model:value="payForm.category"
+              :options="expenseCategoryOptions"
+              filterable
+              tag
+              :on-create="handleCategoryCreate"
+              to="body"
+              placeholder="Выберите или введите категорию"
+            />
+          </n-form-item>
+          <n-form-item label="Описание">
+            <n-input v-model:value="payForm.description" placeholder="Необязательно" />
+          </n-form-item>
+        </n-form>
+        <n-space justify="end">
+          <n-button @click="showPayRegular = false">Отмена</n-button>
+          <n-button type="primary" :loading="payingBusy" :disabled="!payForm.amount || !payForm.category" @click="confirmPayRegular">
+            Сохранить
+          </n-button>
+        </n-space>
+      </template>
+    </n-modal>
+
     <!-- Reassign user modal -->
     <n-modal v-model:show="showReassign" preset="card" title="Изменить автора" style="max-width:320px">
       <n-spin :show="loadingUsers">
@@ -270,11 +333,11 @@ import VChart from 'vue-echarts'
 import {
   NCard, NGrid, NGridItem, NStatistic, NSpin, NEmpty, NList, NListItem, NThing,
   NText, NTag, NSpace, NButton, NPopconfirm, NForm, NFormItem, NInput,
-  NInputNumber, NSelect, NSwitch, NModal, NTooltip
+  NInputNumber, NSelect, NSwitch, NModal, NTooltip, NDatePicker
 } from 'naive-ui'
 import { useWishlistStore } from '@/stores/wishlist'
 import { useCategoriesStore } from '@/stores/categories'
-import { statistics, users as usersApi, wishlist as wlApi } from '@/api'
+import { statistics, users as usersApi, wishlist as wlApi, transactions as txApi } from '@/api'
 import { storeToRefs } from 'pinia'
 import { useThemeStore } from '@/stores/theme'
 import UserAvatar from '@/components/UserAvatar.vue'
@@ -396,6 +459,87 @@ function checkboxStyle(checked) {
   const ringColor = checked ? primaryColor.value : palette.value.text3
   const bg = checked ? primaryColor.value : 'transparent'
   return `cursor:pointer;display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;border:2px solid ${ringColor};background:${bg};color:#fff;transition:background .15s,border-color .15s;box-sizing:border-box`
+}
+
+// ── «Оплачено» / «Отменить» on recurring forecast items ───────────────────────
+//
+// Recurring items show two buttons:
+//   • «Оплачено» — opens a small modal prefilled from the wishlist item
+//     (estimated_cost, category, description=name) and POSTs a new expense
+//     with `wishlist_id`. Multiple presses = multiple linked transactions
+//     (e.g. utility surcharges); the item stays "paid" as long as ≥1 exists.
+//   • «Отменить» — clears wishlist_id on every linked tx in the current
+//     period via /api/wishlist/:id/unlink-period (one round-trip).
+
+const showPayRegular  = ref(false)
+const payRegularItem  = ref(null)
+const payingBusy      = ref(false)
+const cancelingId     = ref(null)
+const payForm = ref({ amount: null, date: '', category: '', description: '' })
+
+const expenseCategoryOptions = computed(() => catStore.options('expense'))
+
+function todayStr() {
+  const d = new Date()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${d.getFullYear()}-${m}-${day}`
+}
+
+function openPayRegular(item) {
+  payRegularItem.value = item
+  payForm.value = {
+    // Prefill with the full bill amount (estimated_cost), not monthly_cost —
+    // for quarterly/yearly items the user pays the full bill once per period.
+    amount: Math.round(item.estimated_cost || item.monthly_cost) || null,
+    date: todayStr(),
+    category: item.category || '',
+    description: item.name || '',
+  }
+  showPayRegular.value = true
+}
+
+async function confirmPayRegular() {
+  if (!payRegularItem.value || !payForm.value.amount || !payForm.value.category) return
+  payingBusy.value = true
+  try {
+    // Auto-create the expense category if the user typed a new one (matches
+    // the existing wishlist-form behaviour — the backend would accept any
+    // string but we keep the per-section catalog in sync).
+    const cat = payForm.value.category
+    if (cat && !catStore.bySection.expense?.find(c => c.name === cat)) {
+      await catStore.add('expense', cat).catch(() => {})
+    }
+    await txApi.create({
+      type: 'expense',
+      amount: payForm.value.amount,
+      date: payForm.value.date,
+      category: cat,
+      description: payForm.value.description || '',
+      wishlist_id: payRegularItem.value.id,
+    })
+    catStore.recordUse('expense', cat)
+    showPayRegular.value = false
+    await loadForecast()
+    message.success('Оплата зафиксирована')
+  } catch (e) {
+    message.error(e.message)
+  } finally {
+    payingBusy.value = false
+  }
+}
+
+async function cancelRegularPaid(item) {
+  cancelingId.value = item.id
+  try {
+    await wlApi.unlinkPeriod(item.id)
+    await loadForecast()
+    message.success('Привязки в текущем периоде сняты')
+  } catch (e) {
+    message.error(e.message)
+  } finally {
+    cancelingId.value = null
+  }
 }
 
 // ── Reassign user ─────────────────────────────────────────────────────────────
@@ -545,6 +689,8 @@ const forecastPieOption = computed(() => {
 
 onMounted(async () => {
   catStore.load('wishlist')
+  // Expense categories are needed for the prefilled "Оплачено" form below.
+  catStore.load('expense')
   await Promise.all([wlStore.fetch(), loadForecast()])
 })
 </script>

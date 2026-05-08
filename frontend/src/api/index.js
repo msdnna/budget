@@ -44,6 +44,7 @@ export const wishlist = {
   create: (data) => api.post('/wishlist', data),
   update: (id, data) => api.put(`/wishlist/${id}`, data),
   remove: (id) => api.delete(`/wishlist/${id}`),
+  unlinkPeriod: (id) => api.post(`/wishlist/${id}/unlink-period`),
 }
 
 export const users = {
