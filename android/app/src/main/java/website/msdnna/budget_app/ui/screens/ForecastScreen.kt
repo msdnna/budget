@@ -98,6 +98,14 @@ fun ForecastScreen(
     val selectedIds by vm.selectedIds.collectAsState()
     val selectionMode = selectedIds.isNotEmpty()
 
+    // Wishlist (one-off planned purchases) and regular expenses live in the
+    // same `wishlist` collection on the backend, distinguished only by
+    // `frequency`. The forecast screen renders them in two separate
+    // sections so the user can tell wishes from obligations at a glance.
+    val wishlistOneOff = remember(uiState.wishlist) {
+        uiState.wishlist.filter { !isRecurring(it.frequency) }
+    }
+
     val expenseColor = LocalExpenseColor.current
     var showAdd      by remember { mutableStateOf(false) }
     var detailItem   by remember { mutableStateOf<WishlistItem?>(null) }
@@ -189,6 +197,10 @@ fun ForecastScreen(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
+                // Top block: summary cards + categories breakdown. Kept as a
+                // single `item { Column }` because it composes once and stays
+                // small; the heavy lists below benefit from LazyColumn
+                // recycling as separate items.
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         when {
@@ -204,15 +216,6 @@ fun ForecastScreen(
                                     SummaryCard("Ср. за 3 мес",   fc.historicalAvg,   "", primaryColor, Modifier.weight(1f))
                                 }
                                 SummaryCard("Список желаний / мес", fc.wishlistContrib, "", primaryColor, Modifier.fillMaxWidth())
-
-                                if (fc.regularItems.isNotEmpty()) {
-                                    RegularExpensesSection(
-                                        items = fc.regularItems,
-                                        primaryColor = primaryColor,
-                                        onMarkPaid   = { item -> payRegular = item },
-                                        onCancelPaid = { item -> vm.unlinkRegularPeriod(item.id) },
-                                    )
-                                }
 
                                 if (fc.breakdown.isNotEmpty()) {
                                     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
@@ -236,18 +239,45 @@ fun ForecastScreen(
                                 }
                             }
                         }
+                    }
+                }
+
+                // Регулярные расходы (heading + flat list of swipeable cards).
+                // Each item is its own LazyColumn item so the cards line up
+                // with the same visual rhythm as wishlist rows below.
+                val regular = uiState.forecast?.regularItems.orEmpty()
+                if (regular.isNotEmpty()) {
+                    item {
                         Text(
-                            "Список желаний",
+                            "Регулярные расходы",
                             style = MaterialTheme.typography.titleMedium,
-                            modifier = Modifier.padding(top = 4.dp)
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    }
+                    items(regular, key = { "reg:${it.id}" }) { regItem ->
+                        SwipeableRegularItemCard(
+                            modifier = Modifier.animateItem(),
+                            item = regItem,
+                            primaryColor = primaryColor,
+                            onMarkPaid   = { payRegular = regItem },
+                            onCancelPaid = { vm.unlinkRegularPeriod(regItem.id) },
+                            onDelete     = { vm.deleteWishlistItem(regItem.id) },
                         )
                     }
                 }
 
-                if (uiState.wishlist.isEmpty()) {
+                item {
+                    Text(
+                        "Список желаний",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
+
+                if (wishlistOneOff.isEmpty()) {
                     item { EmptyView("Список желаний пуст") }
                 } else {
-                    items(uiState.wishlist, key = { it.id }) { item ->
+                    items(wishlistOneOff, key = { it.id }) { item ->
                         SwipeableWishlistCard(
                             modifier = Modifier.animateItem(),
                             item = item,
@@ -354,73 +384,77 @@ private fun ForecastSummarySkeleton() {
 
 // ─── Регулярные расходы (forecast.regular_items) ─────────────────────────────
 
-private val ColourRegularPaid   = Color(0xFF388E3C) // right swipe: «Оплачено»
-private val ColourRegularCancel = Color(0xFF757575) // left  swipe: «Отменить»
+private val ColourRegularPaid   = Color(0xFF388E3C) // right action: «Оплачено»
+private val ColourRegularCancel = Color(0xFF757575) // left action:  «Отменить»
 
-@Composable
-private fun RegularExpensesSection(
-    items: List<RegularItem>,
-    primaryColor: Color,
-    onMarkPaid: (RegularItem) -> Unit,
-    onCancelPaid: (RegularItem) -> Unit,
-) {
-    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Регулярные расходы", style = MaterialTheme.typography.titleMedium)
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                items.forEach { item ->
-                    SwipeableRegularItemCard(
-                        item = item,
-                        primaryColor = primaryColor,
-                        onMarkPaid = { onMarkPaid(item) },
-                        onCancelPaid = { onCancelPaid(item) },
-                    )
-                }
-            }
-        }
-    }
+private fun frequencyUnit(freq: String): String = when (freq) {
+    "quarterly" -> "₽/кв"
+    "yearly"    -> "₽/год"
+    else        -> "₽/мес"
 }
 
+private fun formatDueDate(iso: String): String {
+    if (iso.isBlank()) return ""
+    // YYYY-MM-DD → DD.MM.YYYY
+    val parts = iso.split("-")
+    if (parts.size != 3) return iso
+    return "${parts[2]}.${parts[1]}.${parts[0]}"
+}
+
+/**
+ * Swipe layout (mirrors `SwipeableWishlistCard`):
+ *   • Swipe RIGHT → reveal LEFT background = «Оплачено» (green)
+ *   • Swipe LEFT  → reveal RIGHT background:
+ *       - paid_this_period: «Отменить» + «Удалить» side by side
+ *       - else:             «Удалить» only
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun SwipeableRegularItemCard(
     item: RegularItem,
     primaryColor: Color,
+    modifier: Modifier = Modifier,
     onMarkPaid: () -> Unit,
     onCancelPaid: () -> Unit,
+    onDelete: (id: String) -> Unit,
 ) {
-    val scope    = rememberCoroutineScope()
-    val density  = LocalDensity.current
-    val expense  = LocalExpenseColor.current
+    val scope   = rememberCoroutineScope()
+    val density = LocalDensity.current
+    val expense = LocalExpenseColor.current
 
-    // Right swipe → «Оплачено» (always); Left swipe → «Отменить» (only when paid).
-    val rightRevealDp = 88.dp
-    val leftRevealDp  = if (item.paidThisPeriod) 88.dp else 0.dp
-    val rightRevealPx = with(density) { rightRevealDp.toPx() }
-    val leftRevealPx  = with(density) { leftRevealDp.toPx() }
+    val payRevealDp    = 88.dp
+    val cancelRevealDp = 88.dp
+    val deleteRevealDp = 88.dp
+
+    val leftRevealDp   = payRevealDp
+    val rightRevealDp  = if (item.paidThisPeriod) cancelRevealDp + deleteRevealDp else deleteRevealDp
+
+    val leftRevealPx   = with(density) { leftRevealDp.toPx() }
+    val rightRevealPx  = with(density) { rightRevealDp.toPx() }
 
     val offsetX = remember(item.id) { Animatable(0f) }
+    var pendingDelete by remember { mutableStateOf(false) }
+
     fun snapTo(target: Float) = scope.launch {
         offsetX.animateTo(target, spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
             stiffness    = Spring.StiffnessMedium
         ))
+        if (target == 0f) pendingDelete = false
     }
 
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .height(IntrinsicSize.Min)
             .clip(MaterialTheme.shapes.medium)
     ) {
-        // Right-side action: «Оплачено» (revealed by swiping the card left, i.e.
-        // dragging the card toward the left edge — same convention the wishlist
-        // delete uses).
+        // ── Left background: «Оплачено» (revealed by right-swipe). ──
         Box(
             modifier = Modifier
-                .width(rightRevealDp)
+                .width(leftRevealDp)
                 .fillMaxHeight()
-                .align(Alignment.CenterEnd)
+                .align(Alignment.CenterStart)
                 .background(ColourRegularPaid)
                 .clickable { snapTo(0f); onMarkPaid() },
             contentAlignment = Alignment.Center
@@ -430,24 +464,64 @@ private fun SwipeableRegularItemCard(
                 Text("Оплачено", color = Color.White, fontSize = 10.sp)
             }
         }
-        // Left-side action: «Отменить» (only meaningful when already paid).
-        if (item.paidThisPeriod) {
+
+        // ── Right background: «Отменить» (if paid) + «Удалить». ──
+        Row(
+            modifier = Modifier
+                .width(rightRevealDp)
+                .fillMaxHeight()
+                .align(Alignment.CenterEnd),
+        ) {
+            if (item.paidThisPeriod) {
+                Box(
+                    modifier = Modifier
+                        .width(cancelRevealDp)
+                        .fillMaxHeight()
+                        .background(ColourRegularCancel)
+                        .clickable { snapTo(0f); onCancelPaid() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(Icons.Default.Close, null, tint = Color.White, modifier = Modifier.size(22.dp))
+                        Text("Отменить", color = Color.White, fontSize = 10.sp)
+                    }
+                }
+            }
             Box(
                 modifier = Modifier
-                    .width(leftRevealDp)
+                    .width(deleteRevealDp)
                     .fillMaxHeight()
-                    .align(Alignment.CenterStart)
-                    .background(ColourRegularCancel)
-                    .clickable { snapTo(0f); onCancelPaid() },
+                    .background(ColourWlDelete)
+                    .clickable {
+                        if (pendingDelete) {
+                            snapTo(0f)
+                            onDelete(item.id)
+                        } else {
+                            pendingDelete = true
+                        }
+                    },
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Default.Close, null, tint = Color.White, modifier = Modifier.size(22.dp))
-                    Text("Отменить", color = Color.White, fontSize = 10.sp)
+                    Icon(Icons.Default.Delete, null, tint = Color.White, modifier = Modifier.size(22.dp))
+                    AnimatedContent(
+                        targetState = pendingDelete,
+                        transitionSpec = {
+                            (fadeIn(tween(160)) + scaleIn(initialScale = 0.85f, animationSpec = tween(160))) togetherWith
+                                (fadeOut(tween(140)) + scaleOut(targetScale = 0.85f, animationSpec = tween(140)))
+                        },
+                        label = "regDeleteConfirm",
+                    ) { pending ->
+                        Text(
+                            if (pending) "Подтвердить?" else "Удалить",
+                            color = Color.White, fontSize = 10.sp
+                        )
+                    }
                 }
             }
         }
 
+        // ── Foreground card. ──
         val baseSurface = MaterialTheme.colorScheme.surface
         val targetBg = if (item.paidThisPeriod)
             MaterialTheme.colorScheme.surfaceVariant
@@ -466,15 +540,13 @@ private fun SwipeableRegularItemCard(
                     orientation = Orientation.Horizontal,
                     state = rememberDraggableState { delta ->
                         scope.launch {
-                            val min = -rightRevealPx
-                            val max = leftRevealPx
-                            offsetX.snapTo((offsetX.value + delta).coerceIn(min, max))
+                            offsetX.snapTo((offsetX.value + delta).coerceIn(-rightRevealPx, leftRevealPx))
                         }
                     },
                     onDragStopped = {
                         when {
                             offsetX.value < -rightRevealPx * 0.35f -> snapTo(-rightRevealPx)
-                            item.paidThisPeriod && offsetX.value > leftRevealPx * 0.35f -> snapTo(leftRevealPx)
+                            offsetX.value >  leftRevealPx  * 0.35f -> snapTo(leftRevealPx)
                             else -> snapTo(0f)
                         }
                     }
@@ -521,10 +593,17 @@ private fun SwipeableRegularItemCard(
                             )
                         }
                     }
+                    if (item.paidThisPeriod && item.nextDueDate.isNotBlank()) {
+                        Text(
+                            "след. оплата: ${formatDueDate(item.nextDueDate)}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
-                        "${formatMoney(item.monthlyCost)} ₽/мес",
+                        "${formatMoney(item.monthlyCost)} ${frequencyUnit(item.frequency)}",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Bold,
                         color = if (item.paidThisPeriod)
@@ -1120,13 +1199,23 @@ fun AddWishlistSheet(
     onSave: (CreateWishlistRequest) -> Unit
 ) {
     val scope    = rememberCoroutineScope()
+    // `kind` is a UI-only switch driving which form branch shows; on save
+    // we map it to the `frequency` field the backend understands.
+    var kind     by remember { mutableStateOf("wishlist") } // "wishlist" | "regular"
     var name     by remember { mutableStateOf("") }
     var cost     by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("") }
-    var frequency by remember { mutableStateOf("once") }
+    // Default recurring frequency; only consulted when kind == "regular".
+    var frequency by remember { mutableStateOf("monthly") }
     var catExpanded  by remember { mutableStateOf(false) }
     var catInput     by remember { mutableStateOf("") }
     var freqExpanded by remember { mutableStateOf(false) }
+
+    // Recurring branch dropdown — `once` is implicit for the wishlist branch
+    // and removed from the picker.
+    val recurringFrequencies = remember {
+        FREQUENCIES.filter { it.first != "once" }
+    }
 
     val catFiltered = remember(catInput, categories) {
         if (catInput.isBlank()) categories else categories.filter { it.name.contains(catInput, ignoreCase = true) }
@@ -1145,7 +1234,31 @@ fun AddWishlistSheet(
                 .padding(bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text("Добавить в список желаний", style = MaterialTheme.typography.titleLarge)
+            Text(
+                if (kind == "regular") "Добавить регулярный расход" else "Добавить в список желаний",
+                style = MaterialTheme.typography.titleLarge
+            )
+
+            // Type selector (FilterChip pair, mirroring the Statistics period
+            // pattern). Default «Желаемая покупка»; switching to «Регулярный
+            // расход» reveals the frequency picker below.
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = kind == "wishlist",
+                    onClick = { kind = "wishlist" },
+                    label = { Text("Желаемая покупка") },
+                )
+                FilterChip(
+                    selected = kind == "regular",
+                    onClick = {
+                        kind = "regular"
+                        // If user toggled to regular but frequency is still
+                        // "once" from a stale state, force a sane default.
+                        if (frequency == "once") frequency = "monthly"
+                    },
+                    label = { Text("Регулярный расход") },
+                )
+            }
 
             OutlinedTextField(
                 value = name, onValueChange = { name = it },
@@ -1205,33 +1318,33 @@ fun AddWishlistSheet(
                 }
             }
 
-            ExposedDropdownMenuBox(expanded = freqExpanded, onExpandedChange = { freqExpanded = it }) {
-                OutlinedTextField(
-                    value = frequencyLabel(frequency), onValueChange = {}, readOnly = true,
-                    label = { Text("Периодичность") },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(freqExpanded) },
-                    modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
-                    colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(focusedBorderColor = primaryColor)
-                )
-                ExposedDropdownMenu(expanded = freqExpanded, onDismissRequest = { freqExpanded = false }) {
-                    FREQUENCIES.forEach { (key, label) ->
-                        DropdownMenuItem(text = { Text(label) }, onClick = { frequency = key; freqExpanded = false })
+            if (kind == "regular") {
+                ExposedDropdownMenuBox(expanded = freqExpanded, onExpandedChange = { freqExpanded = it }) {
+                    OutlinedTextField(
+                        value = frequencyLabel(frequency), onValueChange = {}, readOnly = true,
+                        label = { Text("Периодичность") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(freqExpanded) },
+                        modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
+                        colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(focusedBorderColor = primaryColor)
+                    )
+                    ExposedDropdownMenu(expanded = freqExpanded, onDismissRequest = { freqExpanded = false }) {
+                        recurringFrequencies.forEach { (key, label) ->
+                            DropdownMenuItem(text = { Text(label) }, onClick = { frequency = key; freqExpanded = false })
+                        }
                     }
                 }
-            }
 
-            // Explanation based on frequency
-            val hint = when (frequency) {
-                "once"      -> "Учитывается в прогнозе каждый месяц до отметки «Куплено»"
-                "monthly"   -> "Учитывается ежемесячно в прогнозе"
-                "quarterly" -> "Стоимость / 3 добавляется к прогнозу каждый месяц"
-                "yearly"    -> "Стоимость / 12 добавляется к прогнозу каждый месяц"
-                else        -> ""
-            }
-            if (hint.isNotEmpty()) {
-                Text(hint,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                val hint = when (frequency) {
+                    "monthly"   -> "Полная стоимость учтётся в прогнозе на следующий месяц."
+                    "quarterly" -> "Стоимость учтётся в прогнозе на месяц перед следующей оплатой (раз в квартал)."
+                    "yearly"    -> "Стоимость учтётся в прогнозе на месяц перед следующей оплатой (раз в год)."
+                    else        -> ""
+                }
+                if (hint.isNotEmpty()) {
+                    Text(hint,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
 
             Spacer(Modifier.height(4.dp))
@@ -1239,10 +1352,11 @@ fun AddWishlistSheet(
                 onClick = {
                     val costD = cost.replace(',', '.').toDoubleOrNull() ?: return@Button
                     if (name.isBlank()) return@Button
+                    val freq = if (kind == "regular") frequency else "once"
                     onSave(CreateWishlistRequest(
                         name = name, estimatedCost = costD,
                         category = catInput.trim().ifBlank { category },
-                        frequency = frequency
+                        frequency = freq
                     ))
                 },
                 modifier = Modifier.fillMaxWidth().height(48.dp),

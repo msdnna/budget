@@ -128,12 +128,14 @@ data class RegularItem(
     val id: String = "",
     val name: String = "",
     @SerializedName("estimated_cost") val estimatedCost: Double = 0.0,
+    // Full per-period cost (api ≥ 1.11.0). Display with per-frequency suffix.
     @SerializedName("monthly_cost") val monthlyCost: Double = 0.0,
     val frequency: String = "monthly",
     val category: String = "",
     @SerializedName("paid_this_period") val paidThisPeriod: Boolean = false,
     @SerializedName("paid_amount") val paidAmount: Double = 0.0,
     @SerializedName("paid_count") val paidCount: Int = 0,
+    @SerializedName("next_due_date") val nextDueDate: String = "",
 )
 
 data class WishlistItem(
