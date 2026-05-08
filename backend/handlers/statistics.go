@@ -271,7 +271,7 @@ func (h *StatisticsHandler) Forecast(c *gin.Context) {
 	// 'once' wishlist items still contribute their full cost (existing
 	// semantics: planned one-off purchase shows up as upcoming spend).
 	var regularItems []models.RegularItemForecast
-	var wishlistTotal float64
+	var wishlistTotal, regularTotal float64
 	for _, item := range unpurchased {
 		s := byItem[item.ID]
 		var nextDue time.Time
@@ -308,6 +308,9 @@ func (h *StatisticsHandler) Forecast(c *gin.Context) {
 		if contribution > 0 {
 			catMap[item.Category] += contribution
 			wishlistTotal += contribution
+			if item.Frequency != models.FrequencyOnce {
+				regularTotal += contribution
+			}
 		}
 
 		if item.Frequency != models.FrequencyOnce {
@@ -333,6 +336,7 @@ func (h *StatisticsHandler) Forecast(c *gin.Context) {
 				PaidAmount:     paidAmount,
 				PaidCount:      paidCount,
 				NextDueDate:    nextDueStr,
+				Notes:          item.Notes,
 			})
 		}
 	}
@@ -363,6 +367,7 @@ func (h *StatisticsHandler) Forecast(c *gin.Context) {
 		TotalMonthly:        total,
 		HistoricalAvg:       histTotal,
 		WishlistContrib:     wishlistTotal,
+		RegularContrib:      regularTotal,
 		Breakdown:           breakdown,
 		RegularItems:        regularItems,
 		UnpurchasedWishlist: unpurchased,

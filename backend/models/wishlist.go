@@ -52,9 +52,16 @@ type UpdateWishlistRequest struct {
 }
 
 type ForecastResponse struct {
-	TotalMonthly        float64               `json:"total_monthly"`
-	HistoricalAvg       float64               `json:"historical_avg"`
-	WishlistContrib     float64               `json:"wishlist_contrib"`
+	TotalMonthly  float64 `json:"total_monthly"`
+	HistoricalAvg float64 `json:"historical_avg"`
+	// WishlistContrib is the SUM of contributions from all wishlist items
+	// (recurring + one-off). Kept for backward compat with older clients.
+	WishlistContrib float64 `json:"wishlist_contrib"`
+	// RegularContrib is the subset coming from recurring items only —
+	// clients use it to render two separate summary cards
+	// «Регулярные расходы / мес» (= regular_contrib) and
+	// «Список желаний / мес» (= wishlist_contrib − regular_contrib).
+	RegularContrib      float64               `json:"regular_contrib"`
 	Breakdown           []CategoryData        `json:"breakdown"`
 	RegularItems        []RegularItemForecast `json:"regular_items"`
 	UnpurchasedWishlist []WishlistItem        `json:"unpurchased_wishlist"`
@@ -83,4 +90,8 @@ type RegularItemForecast struct {
 	// month — otherwise the recurring schedule is far enough out that
 	// it doesn't affect the upcoming month's projection.
 	NextDueDate string `json:"next_due_date,omitempty"`
+	// Notes mirrors the wishlist item's notes verbatim. Surfaced here so
+	// the «Оплачено» flow can prefill the expense form's «Описание»
+	// (description) without an extra wishlist lookup on the client.
+	Notes string `json:"notes,omitempty"`
 }
