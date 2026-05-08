@@ -436,6 +436,14 @@ fun SummaryCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(Modifier.height(6.dp))
+            // Both Crossfade children get an explicit 26.dp height so the
+            // Crossfade's outer Box never resizes between states. Without
+            // this the Text-row was ~22dp and the placeholder 26dp, which
+            // caused two visible artefacts: (a) the card grew/shrank by 4dp
+            // when the switch happened (fixed in 1.22.3), and (b) within
+            // the outer fixed-height container the Crossfade Box itself
+            // resized 22 ↔ 26, so the Text "jumped" vertically during the
+            // fade. Locking both children to 26dp eliminates both.
             Crossfade(targetState = hidden, animationSpec = tween(220), label = "summaryHidden") { isHidden ->
                 if (isHidden) {
                     Box(
@@ -446,7 +454,10 @@ fun SummaryCard(
                             .background(amountColor.copy(alpha = 0.22f))
                     )
                 } else {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        modifier = Modifier.height(26.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
                         if (prefix.isNotEmpty()) {
                             Text(
                                 text = prefix,

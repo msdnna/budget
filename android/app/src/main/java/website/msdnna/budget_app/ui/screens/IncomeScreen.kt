@@ -799,25 +799,35 @@ fun TransactionDetailSheet(
                 if (transaction.hidden) {
                     DetailRow("Статус", "Скрыто")
                 }
-                // Back-link from a child to its detail-request — only shown
-                // when the parent linkage is wired by the caller.
+                // Back-link from a child to its detail-request. Uses the same
+                // two-column layout as DetailRow so typography and column
+                // alignment match the surrounding "Дата" / "Назначение" rows;
+                // the link itself is a plain primary-tinted Text (not a
+                // TextButton — the button's internal padding broke the column
+                // baseline and it looked like a foreign chip).
                 if (transaction.parentId.isNotBlank() && linkedDetailRequestId != null && onOpenDetailRequest != null) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 6.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
+                        verticalAlignment = Alignment.Top,
                     ) {
                         Text(
                             "Запрос на детализацию",
-                            style = MaterialTheme.typography.bodySmall,
+                            style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier.weight(0.4f),
                         )
-                        TextButton(onClick = { onOpenDetailRequest(linkedDetailRequestId) }) {
-                            Text("Открыть запрос")
-                        }
+                        Text(
+                            text = "Открыть запрос",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = primaryColor,
+                            modifier = Modifier
+                                .weight(0.6f)
+                                .clickable { onOpenDetailRequest(linkedDetailRequestId) },
+                        )
                     }
                 }
 

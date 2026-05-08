@@ -3,6 +3,7 @@ package website.msdnna.budget_app.ui.components
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -116,9 +117,17 @@ fun ChartLegend(
                     modifier = Modifier.weight(1f)
                 )
                 if (pieUnitRuble) {
-                    androidx.compose.animation.Crossfade(
+                    // AnimatedContent with CenterEnd alignment so the 48dp
+                    // placeholder and the variable-width Text both anchor on
+                    // the right column edge — Crossfade's TopStart default
+                    // briefly slid the placeholder leftward during the fade.
+                    androidx.compose.animation.AnimatedContent(
                         targetState = valuesHidden,
-                        animationSpec = tween(220),
+                        transitionSpec = {
+                            androidx.compose.animation.fadeIn(tween(220))
+                                .togetherWith(androidx.compose.animation.fadeOut(tween(220)))
+                        },
+                        contentAlignment = Alignment.CenterEnd,
                         label = "legendValue",
                     ) { isHidden ->
                         if (isHidden) {
