@@ -35,8 +35,13 @@ class ForecastViewModel(private val serverUrl: String) : ViewModel() {
     private val _forecastLoading = MutableStateFlow(true)
     private val _forecastError   = MutableStateFlow<String?>(null)
     private val _selectedIds     = MutableStateFlow<Set<String>>(emptySet())
+    // Separate selection bucket for «Регулярные расходы» — bulk operations
+    // there are different (cancel paid / delete) so we keep selections from
+    // bleeding into the wishlist FAB and vice versa.
+    private val _selectedRegularIds = MutableStateFlow<Set<String>>(emptySet())
 
     val selectedIds = _selectedIds.asStateFlow()
+    val selectedRegularIds = _selectedRegularIds.asStateFlow()
     val categories: StateFlow<List<Category>> = combine(
         CategoryRepository.wishlist,
         CategoryUsage.usage,
@@ -86,6 +91,7 @@ class ForecastViewModel(private val serverUrl: String) : ViewModel() {
 
     fun startSelection(id: String) {
         _selectedIds.value = setOf(id)
+        _selectedRegularIds.value = emptySet()
     }
 
     fun toggleSelection(id: String) {
@@ -94,6 +100,42 @@ class ForecastViewModel(private val serverUrl: String) : ViewModel() {
     }
 
     fun clearSelection() { _selectedIds.value = emptySet() }
+
+    // ── Regular-items selection (parallel to wishlist selection above). ──
+    fun startRegularSelection(id: String) {
+        _selectedRegularIds.value = setOf(id)
+        _selectedIds.value = emptySet()
+    }
+
+    fun toggleRegularSelection(id: String) {
+        val cur = _selectedRegularIds.value
+        _selectedRegularIds.value = if (id in cur) cur - id else cur + id
+    }
+
+    fun clearRegularSelection() { _selectedRegularIds.value = emptySet() }
+
+    fun bulkDeleteSelectedRegular() {
+        val ids = _selectedRegularIds.value
+        if (ids.isEmpty()) return
+        viewModelScope.launch {
+            WishlistRepository.bulkDelete(ids)
+            _selectedRegularIds.value = emptySet()
+        }
+    }
+
+    /** Cancels the current-period link for every selected regular item that
+     *  is currently `paid_this_period`. Caller passes the list of paid ids
+     *  so the VM doesn't need a snapshot of the forecast. */
+    fun bulkCancelRegular(paidIds: Collection<String>) {
+        if (paidIds.isEmpty()) return
+        viewModelScope.launch {
+            paidIds.forEach { id ->
+                runCatching { service.unlinkWishlistPeriod(id) }
+            }
+            _selectedRegularIds.value = emptySet()
+            reload()
+        }
+    }
 
     fun bulkDeleteSelected() {
         val ids = _selectedIds.value

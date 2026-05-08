@@ -96,7 +96,10 @@ fun ForecastScreen(
     val categories by vm.categories.collectAsState()
     val expenseCategories by vm.expenseCategories.collectAsState()
     val selectedIds by vm.selectedIds.collectAsState()
+    val selectedRegularIds by vm.selectedRegularIds.collectAsState()
     val selectionMode = selectedIds.isNotEmpty()
+    val regularSelectionMode = selectedRegularIds.isNotEmpty()
+    val anySelectionMode = selectionMode || regularSelectionMode
 
     // Wishlist (one-off planned purchases) and regular expenses live in the
     // same `wishlist` collection on the backend, distinguished only by
@@ -112,9 +115,21 @@ fun ForecastScreen(
     // When non-null, opens AddExpenseSheet prefilled from a recurring item.
     var payRegular   by remember { mutableStateOf<RegularItem?>(null) }
 
-    BackHandler(enabled = selectionMode) { vm.clearSelection() }
+    BackHandler(enabled = anySelectionMode) {
+        if (selectionMode) vm.clearSelection()
+        if (regularSelectionMode) vm.clearRegularSelection()
+    }
 
-    LaunchedEffect(selectedIds.size) { onSelectionCountChange(selectedIds.size) }
+    LaunchedEffect(selectedIds.size, selectedRegularIds.size) {
+        onSelectionCountChange(selectedIds.size + selectedRegularIds.size)
+    }
+
+    // Currently-selected regular items snapshot — drives bulk-FAB state
+    // (visible cancel-action only when ≥1 selected item is paid_this_period).
+    val selectedRegularItems = remember(selectedRegularIds, uiState.forecast?.regularItems) {
+        uiState.forecast?.regularItems.orEmpty().filter { it.id in selectedRegularIds }
+    }
+    val selectedPaidIds = selectedRegularItems.filter { it.paidThisPeriod }.map { it.id }
 
     // Determine label for the "Куплено" bulk button:
     //   • Of the selectable (non-recurring) selected items, if all are already
@@ -137,43 +152,62 @@ fun ForecastScreen(
         // Bulk-mode FAB swap snaps — see IncomeScreen comment for why no
         // outer animation. Inner icon Crossfade stays.
         floatingActionButton = {
-            if (selectionMode) {
-                val canPurchase = purchasableSelected.isNotEmpty()
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    if (canPurchase) {
-                        FloatingActionButton(
-                            onClick = {
-                                vm.bulkSetPurchased(
-                                    ids = purchasableSelected.map { it.id },
-                                    targetPurchased = !allPurchased
-                                )
-                            },
-                            containerColor = ColourPurchased,
-                            contentColor   = Color.White,
-                        ) {
-                            Crossfade(
-                                targetState = allPurchased,
-                                animationSpec = tween(180),
-                                label = "bulkPurchaseIcon",
-                            ) { purchased ->
-                                Icon(
-                                    if (purchased) Icons.Default.RadioButtonUnchecked else Icons.Default.CheckCircle,
-                                    contentDescription = if (purchased) "Снять отметку «куплено»" else "Отметить как купленное"
-                                )
+            when {
+                selectionMode -> {
+                    val canPurchase = purchasableSelected.isNotEmpty()
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        if (canPurchase) {
+                            FloatingActionButton(
+                                onClick = {
+                                    vm.bulkSetPurchased(
+                                        ids = purchasableSelected.map { it.id },
+                                        targetPurchased = !allPurchased
+                                    )
+                                },
+                                containerColor = ColourPurchased,
+                                contentColor   = Color.White,
+                            ) {
+                                Crossfade(
+                                    targetState = allPurchased,
+                                    animationSpec = tween(180),
+                                    label = "bulkPurchaseIcon",
+                                ) { purchased ->
+                                    Icon(
+                                        if (purchased) Icons.Default.RadioButtonUnchecked else Icons.Default.CheckCircle,
+                                        contentDescription = if (purchased) "Снять отметку «куплено»" else "Отметить как купленное"
+                                    )
+                                }
                             }
                         }
+                        FloatingActionButton(
+                            onClick = { vm.bulkDeleteSelected() },
+                            containerColor = Color(0xFFE53935),
+                            contentColor   = Color.White,
+                        ) { Icon(Icons.Default.Delete, "Удалить выбранные") }
                     }
-                    FloatingActionButton(
-                        onClick = { vm.bulkDeleteSelected() },
-                        containerColor = Color(0xFFE53935),
-                        contentColor   = Color.White,
-                    ) { Icon(Icons.Default.Delete, "Удалить выбранные") }
                 }
-            } else {
-                FloatingActionButton(
-                    onClick = { showAdd = true },
-                    containerColor = primaryColor, contentColor = Color.White
-                ) { Icon(Icons.Default.Add, "Добавить в список") }
+                regularSelectionMode -> {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        if (selectedPaidIds.isNotEmpty()) {
+                            FloatingActionButton(
+                                onClick = { vm.bulkCancelRegular(selectedPaidIds) },
+                                containerColor = ColourRegularCancel,
+                                contentColor   = Color.White,
+                            ) { Icon(Icons.Default.Close, "Отменить выбранные") }
+                        }
+                        FloatingActionButton(
+                            onClick = { vm.bulkDeleteSelectedRegular() },
+                            containerColor = Color(0xFFE53935),
+                            contentColor   = Color.White,
+                        ) { Icon(Icons.Default.Delete, "Удалить выбранные") }
+                    }
+                }
+                else -> {
+                    FloatingActionButton(
+                        onClick = { showAdd = true },
+                        containerColor = primaryColor, contentColor = Color.White
+                    ) { Icon(Icons.Default.Add, "Добавить в список") }
+                }
             }
         },
         contentWindowInsets = WindowInsets(0)
@@ -267,6 +301,17 @@ fun ForecastScreen(
                             modifier = Modifier.animateItem(),
                             item = regItem,
                             primaryColor = primaryColor,
+                            selectionMode = regularSelectionMode,
+                            selected = regItem.id in selectedRegularIds,
+                            onLongPress    = vm::startRegularSelection,
+                            onSelectToggle = vm::toggleRegularSelection,
+                            onShowDetails  = { reg ->
+                                // Reuse the wishlist detail/edit sheet — under
+                                // the hood regular расходы и wishlist — это
+                                // одна и та же запись с разной частотой.
+                                uiState.wishlist.firstOrNull { it.id == reg.id }
+                                    ?.let { detailItem = it }
+                            },
                             onMarkPaid   = { payRegular = regItem },
                             onCancelPaid = { vm.unlinkRegularPeriod(regItem.id) },
                             onDelete     = { vm.deleteWishlistItem(regItem.id) },
@@ -425,6 +470,11 @@ private fun SwipeableRegularItemCard(
     item: RegularItem,
     primaryColor: Color,
     modifier: Modifier = Modifier,
+    selectionMode: Boolean = false,
+    selected: Boolean = false,
+    onShowDetails: (RegularItem) -> Unit = {},
+    onLongPress: (id: String) -> Unit = {},
+    onSelectToggle: (id: String) -> Unit = {},
     onMarkPaid: () -> Unit,
     onCancelPaid: () -> Unit,
     onDelete: (id: String) -> Unit,
@@ -460,12 +510,26 @@ private fun SwipeableRegularItemCard(
         }
     }
 
+    // Selection mode forces the row back to centre — swipe actions and
+    // multi-select don't mix.
+    LaunchedEffect(selectionMode) {
+        if (selectionMode && offsetX.value != 0f) {
+            offsetX.animateTo(0f, spring(
+                dampingRatio = Spring.DampingRatioMediumBouncy,
+                stiffness    = Spring.StiffnessMedium,
+            ))
+            pendingDelete = false
+            pendingCancel = false
+        }
+    }
+
     Box(
         modifier = modifier
             .fillMaxWidth()
             .height(IntrinsicSize.Min)
             .clip(MaterialTheme.shapes.medium)
     ) {
+        if (!selectionMode) {
         // ── Left background: «Оплачено» (revealed by right-swipe). ──
         Box(
             modifier = Modifier
@@ -556,22 +620,26 @@ private fun SwipeableRegularItemCard(
                 }
             }
         }
+        } // close `if (!selectionMode)` for the swipe-reveal backgrounds
 
         // ── Foreground card. ──
         val baseSurface = MaterialTheme.colorScheme.surface
-        val targetBg = if (item.paidThisPeriod)
-            MaterialTheme.colorScheme.surfaceVariant
-        else baseSurface
+        val targetBg = when {
+            selected           -> primaryColor.copy(alpha = 0.16f).compositeOver(baseSurface)
+            item.paidThisPeriod -> MaterialTheme.colorScheme.surfaceVariant
+            else               -> baseSurface
+        }
         val animatedBg by animateColorAsState(
             targetValue = targetBg,
             animationSpec = tween(durationMillis = 220),
             label = "regBg",
         )
 
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .offset { IntOffset(offsetX.value.roundToInt(), 0) }
+        val cardBaseModifier = Modifier
+            .fillMaxWidth()
+            .offset { IntOffset(offsetX.value.roundToInt(), 0) }
+        val cardModifier = if (!selectionMode) {
+            cardBaseModifier
                 .draggable(
                     orientation = Orientation.Horizontal,
                     state = rememberDraggableState { delta ->
@@ -586,6 +654,16 @@ private fun SwipeableRegularItemCard(
                             else -> snapTo(0f)
                         }
                     }
+                )
+        } else cardBaseModifier
+        Card(
+            modifier = cardModifier
+                .combinedClickable(
+                    onClick = {
+                        if (selectionMode) onSelectToggle(item.id)
+                        else onShowDetails(item)
+                    },
+                    onLongClick = { if (!selectionMode) onLongPress(item.id) },
                 ),
             colors = CardDefaults.cardColors(containerColor = animatedBg)
         ) {
@@ -650,6 +728,13 @@ private fun SwipeableRegularItemCard(
                 }
             }
         }
+
+        SelectionOverlay(
+            visible = selectionMode,
+            selected = selected,
+            primaryColor = primaryColor,
+            onClick = { onSelectToggle(item.id) },
+        )
     }
 }
 
@@ -924,7 +1009,6 @@ fun WishlistInteractiveSheet(
     var editCatInput  by remember { mutableStateOf(item.category) }
     var editFrequency by remember { mutableStateOf(item.frequency) }
     var editNotes     by remember { mutableStateOf(item.notes ?: "") }
-    var editPurchased by remember { mutableStateOf(item.purchased) }
     var catExpanded   by remember { mutableStateOf(false) }
     var freqExpanded  by remember { mutableStateOf(false) }
 
@@ -1111,16 +1195,9 @@ fun WishlistInteractiveSheet(
                     }
                 }
 
-                if (editFrequency == "once") {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text("Куплено", style = MaterialTheme.typography.bodyMedium)
-                        Switch(
-                            checked = editPurchased,
-                            onCheckedChange = { editPurchased = it },
-                            colors = SwitchDefaults.colors(checkedThumbColor = primaryColor, checkedTrackColor = primaryColor.copy(alpha = 0.4f))
-                        )
-                    }
-                }
+                // «Куплено» live на карточке (свайп для wishlist-once;
+                // кнопка-действие на действиях)  — в форме редактирования
+                // тогл лишний, ставится из карточки одной кнопкой.
 
                 OutlinedTextField(
                     value = editNotes, onValueChange = { editNotes = it },
@@ -1141,13 +1218,15 @@ fun WishlistInteractiveSheet(
                             if (editName.isBlank()) return@Button
                             saving = true
                             scope.launch {
+                                // `purchased` намеренно не передаём — статус
+                                // меняется через swipe-actions карточки, не
+                                // в форме редактирования.
                                 onSave(UpdateWishlistRequest(
                                     name = editName,
                                     estimatedCost = costD,
                                     category = editCatInput.trim().ifBlank { editCategory },
                                     frequency = editFrequency,
                                     notes = editNotes.ifBlank { null },
-                                    purchased = editPurchased
                                 ))
                                 saving = false
                                 onSaved()
@@ -1241,6 +1320,7 @@ fun AddWishlistSheet(
     var name     by remember { mutableStateOf("") }
     var cost     by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("") }
+    var notes    by remember { mutableStateOf("") }
     // Default recurring frequency; only consulted when kind == "regular".
     var frequency by remember { mutableStateOf("monthly") }
     var catExpanded  by remember { mutableStateOf(false) }
@@ -1383,6 +1463,16 @@ fun AddWishlistSheet(
                 }
             }
 
+            // Notes (заметки) — applies to both kinds. The «Оплачено» flow on
+            // a recurring item copies these into the expense's «Описание».
+            OutlinedTextField(
+                value = notes, onValueChange = { notes = it },
+                label = { Text("Заметки (необязательно)") },
+                modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
+                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = primaryColor)
+            )
+
             Spacer(Modifier.height(4.dp))
             Button(
                 onClick = {
@@ -1392,7 +1482,8 @@ fun AddWishlistSheet(
                     onSave(CreateWishlistRequest(
                         name = name, estimatedCost = costD,
                         category = catInput.trim().ifBlank { category },
-                        frequency = freq
+                        frequency = freq,
+                        notes = notes.ifBlank { null },
                     ))
                 },
                 modifier = Modifier.fillMaxWidth().height(48.dp),

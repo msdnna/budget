@@ -678,6 +678,11 @@ fun TransactionDetailSheet(
     /** When the transaction is a child of a detail-request, the id of that
      *  request — surfaced as a "back-link" row in view mode. */
     linkedDetailRequestId: String? = null,
+    /** When the transaction is a fulfillment of a recurring wishlist item,
+     *  this is its display name. Tapping the row should open the wishlist
+     *  detail sheet via [onOpenLinkedWishlist]. */
+    linkedWishlistName: String? = null,
+    onOpenLinkedWishlist: (() -> Unit)? = null,
 ) {
     val scope = rememberCoroutineScope()
     var isEditing by remember { mutableStateOf(false) }
@@ -827,6 +832,35 @@ fun TransactionDetailSheet(
                             modifier = Modifier
                                 .weight(0.6f)
                                 .clickable { onOpenDetailRequest(linkedDetailRequestId) },
+                        )
+                    }
+                }
+                // Back-link to the recurring wishlist item this transaction
+                // fulfilled (set when user taps «Оплачено» on a regular
+                // expense). Mirror the detail-request row layout so column
+                // baselines align.
+                if (transaction.wishlistId.isNotBlank() && linkedWishlistName != null && onOpenLinkedWishlist != null) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.Top,
+                    ) {
+                        Text(
+                            "Регулярный расход",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(0.4f),
+                        )
+                        Text(
+                            text = linkedWishlistName,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = primaryColor,
+                            modifier = Modifier
+                                .weight(0.6f)
+                                .clickable { onOpenLinkedWishlist() },
                         )
                     }
                 }

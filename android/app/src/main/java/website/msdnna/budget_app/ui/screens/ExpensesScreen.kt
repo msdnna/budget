@@ -40,7 +40,11 @@ import website.msdnna.budget_app.data.model.Category
 import website.msdnna.budget_app.data.model.CreateTransactionRequest
 import website.msdnna.budget_app.data.model.Transaction
 import website.msdnna.budget_app.data.model.UpdateTransactionRequest
+import website.msdnna.budget_app.data.model.UpdateWishlistRequest
 import website.msdnna.budget_app.data.model.UserInfo
+import website.msdnna.budget_app.data.model.WishlistItem
+import website.msdnna.budget_app.data.repository.CategoryRepository
+import website.msdnna.budget_app.data.repository.WishlistRepository
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import website.msdnna.budget_app.ui.components.*
 import website.msdnna.budget_app.ui.theme.LocalExpenseColor
@@ -76,6 +80,12 @@ fun ExpensesScreen(
     var detailTx     by remember { mutableStateOf<Transaction?>(null) }
     var createDrForTx by remember { mutableStateOf<Transaction?>(null) }
     var createDrError by remember { mutableStateOf<String?>(null) }
+    // When the user taps the wishlist back-link in the transaction detail
+    // sheet, we open the wishlist edit sheet inline so they can review the
+    // recurring schedule without leaving the расходы screen.
+    var wishlistInfo by remember { mutableStateOf<WishlistItem?>(null) }
+    val allWishlist by WishlistRepository.observeAll().collectAsState(emptyList())
+    val wishlistCategories by CategoryRepository.wishlist.collectAsState()
     // Skip the initial composition; only animate-scroll on later flips.
     var includeDetailedSeen by rememberSaveable { mutableStateOf<Boolean?>(null) }
     val drItems by website.msdnna.budget_app.data.repository.DetailRequestStore.items.collectAsState()
@@ -324,6 +334,12 @@ fun ExpensesScreen(
                 drItems.firstOrNull { it.parentTransactionId == tx.parentId }?.id
             else null
         }
+        // Same idea for wishlist linkage — look the source recurring item up
+        // in the locally-cached wishlist so its name surfaces in the sheet.
+        val linkedWl = remember(tx.id, tx.wishlistId, allWishlist) {
+            if (tx.wishlistId.isNotBlank()) allWishlist.firstOrNull { it.id == tx.wishlistId }
+            else null
+        }
         TransactionDetailSheet(
             transaction = tx,
             amountColor = expenseColor,
@@ -345,6 +361,36 @@ fun ExpensesScreen(
                 detailTx = null
             },
             linkedDetailRequestId = linkedDrId,
+            linkedWishlistName    = linkedWl?.name,
+            onOpenLinkedWishlist  = if (linkedWl != null) {
+                { wishlistInfo = linkedWl; detailTx = null }
+            } else null,
+        )
+    }
+
+    wishlistInfo?.let { wl ->
+        WishlistInteractiveSheet(
+            item = wl,
+            primaryColor = primaryColor,
+            categories = wishlistCategories,
+            onAddCategory    = { name -> CategoryRepository.addCategory(serverUrl, "wishlist", name) },
+            onDeleteCategory = { id -> CategoryRepository.deleteCategory(serverUrl, "wishlist", id) },
+            onSave = { req: UpdateWishlistRequest ->
+                WishlistRepository.update(
+                    id = wl.id,
+                    name = req.name,
+                    estimatedCost = req.estimatedCost,
+                    category = req.category,
+                    frequency = req.frequency,
+                    purchased = req.purchased,
+                    notes = req.notes,
+                    createdBy = req.createdBy,
+                )
+                Unit
+            },
+            onGetUsers = { vm.getUsers() },
+            onDismiss  = { wishlistInfo = null },
+            onSaved    = { wishlistInfo = null },
         )
     }
 
