@@ -211,11 +211,19 @@ fun ForecastScreen(
                             )
                             else -> {
                                 val fc = uiState.forecast ?: website.msdnna.budget_app.data.model.ForecastData()
+                                // 2×2 summary grid: Прогноз / Ср.3мес on top,
+                                // Регулярные / Желания on the second row. The
+                                // wishlist-only contribution is computed
+                                // client-side: total wishlist − recurring.
+                                val wishlistOnlyContrib = (fc.wishlistContrib - fc.regularContrib).coerceAtLeast(0.0)
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     SummaryCard("Прогноз / мес",  fc.totalMonthly,    "", expenseColor, Modifier.weight(1f))
                                     SummaryCard("Ср. за 3 мес",   fc.historicalAvg,   "", primaryColor, Modifier.weight(1f))
                                 }
-                                SummaryCard("Список желаний / мес", fc.wishlistContrib, "", primaryColor, Modifier.fillMaxWidth())
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    SummaryCard("Регулярные / мес", fc.regularContrib, "", expenseColor, Modifier.weight(1f))
+                                    SummaryCard("Желания / мес",    wishlistOnlyContrib, "", primaryColor, Modifier.weight(1f))
+                                }
 
                                 if (fc.breakdown.isNotEmpty()) {
                                     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
@@ -327,13 +335,16 @@ fun ForecastScreen(
         // Prefill the expense form from the recurring wishlist item. Amount
         // defaults to estimated_cost (the actual bill), not monthly_cost —
         // for quarterly/yearly items the user pays the full bill once per
-        // period. They're free to override before saving.
+        // period. Точное копирование: name → «Назначение» (purpose),
+        // notes → «Описание» (description). Раньше name шёл в description
+        // — пофикшено по жалобе пользователя.
         AddExpenseSheet(
             primaryColor = primaryColor,
             template = Transaction(
                 amount      = item.estimatedCost.takeIf { it > 0.0 } ?: item.monthlyCost,
                 category    = item.category,
-                description = item.name,
+                purpose     = item.name,
+                description = item.notes,
             ),
             categories = expenseCategories,
             onAddCategory    = { name -> vm.addExpenseCategory(name) },
@@ -434,13 +445,19 @@ private fun SwipeableRegularItemCard(
 
     val offsetX = remember(item.id) { Animatable(0f) }
     var pendingDelete by remember { mutableStateOf(false) }
+    // Mirror the «Удалить» two-stage pattern for «Отменить»: first tap arms,
+    // second tap commits. Both pendings reset whenever we snap back to 0.
+    var pendingCancel by remember { mutableStateOf(false) }
 
     fun snapTo(target: Float) = scope.launch {
         offsetX.animateTo(target, spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
             stiffness    = Spring.StiffnessMedium
         ))
-        if (target == 0f) pendingDelete = false
+        if (target == 0f) {
+            pendingDelete = false
+            pendingCancel = false
+        }
     }
 
     Box(
@@ -478,12 +495,31 @@ private fun SwipeableRegularItemCard(
                         .width(cancelRevealDp)
                         .fillMaxHeight()
                         .background(ColourRegularCancel)
-                        .clickable { snapTo(0f); onCancelPaid() },
+                        .clickable {
+                            if (pendingCancel) {
+                                snapTo(0f)
+                                onCancelPaid()
+                            } else {
+                                pendingCancel = true
+                            }
+                        },
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(Icons.Default.Close, null, tint = Color.White, modifier = Modifier.size(22.dp))
-                        Text("Отменить", color = Color.White, fontSize = 10.sp)
+                        AnimatedContent(
+                            targetState = pendingCancel,
+                            transitionSpec = {
+                                (fadeIn(tween(160)) + scaleIn(initialScale = 0.85f, animationSpec = tween(160))) togetherWith
+                                    (fadeOut(tween(140)) + scaleOut(targetScale = 0.85f, animationSpec = tween(140)))
+                            },
+                            label = "regCancelConfirm",
+                        ) { pending ->
+                            Text(
+                                if (pending) "Подтвердить?" else "Отменить",
+                                color = Color.White, fontSize = 10.sp
+                            )
+                        }
                     }
                 }
             }

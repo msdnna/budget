@@ -119,6 +119,9 @@ data class ForecastData(
     @SerializedName("total_monthly") val totalMonthly: Double = 0.0,
     @SerializedName("historical_avg") val historicalAvg: Double = 0.0,
     @SerializedName("wishlist_contrib") val wishlistContrib: Double = 0.0,
+    // Subset of wishlist_contrib coming from recurring items only.
+    // wishlist-only contribution = wishlistContrib - regularContrib.
+    @SerializedName("regular_contrib") val regularContrib: Double = 0.0,
     val breakdown: List<CategoryStat> = emptyList(),
     @SerializedName("regular_items") val regularItems: List<RegularItem> = emptyList(),
     @SerializedName("unpurchased_wishlist") val unpurchasedWishlist: List<WishlistItem> = emptyList()
@@ -136,6 +139,9 @@ data class RegularItem(
     @SerializedName("paid_amount") val paidAmount: Double = 0.0,
     @SerializedName("paid_count") val paidCount: Int = 0,
     @SerializedName("next_due_date") val nextDueDate: String = "",
+    // Mirrors the wishlist item's notes — used by the «Оплачено» flow to
+    // prefill the expense form's «Описание».
+    val notes: String = "",
 )
 
 data class WishlistItem(
