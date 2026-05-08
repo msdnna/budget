@@ -1,24 +1,34 @@
 <template>
   <div>
-    <!-- Forecast summary -->
-    <n-grid :cols="3" :x-gap="16" :y-gap="16" responsive="screen" :item-responsive="true" style="margin-bottom: 16px;">
-      <n-grid-item span="3 m:1">
+    <!-- Forecast summary — 4 cards: total / 3-mo avg / regular / wishlist.
+         The two contribution numbers come from the api 1.12.0 split:
+         regular_contrib (recurring only) and wishlist_contrib − regular_contrib
+         (one-off only). -->
+    <n-grid :cols="4" :x-gap="16" :y-gap="16" responsive="screen" :item-responsive="true" style="margin-bottom: 16px;">
+      <n-grid-item span="4 s:2 m:1">
         <n-card>
           <n-statistic label="Прогноз на месяц" :value="Math.round(forecast.total_monthly)" :precision="0">
             <template #suffix>₽</template>
           </n-statistic>
         </n-card>
       </n-grid-item>
-      <n-grid-item span="3 m:1">
+      <n-grid-item span="4 s:2 m:1">
         <n-card>
           <n-statistic label="Среднее (3 мес.)" :value="Math.round(forecast.historical_avg)" :precision="0">
             <template #suffix>₽</template>
           </n-statistic>
         </n-card>
       </n-grid-item>
-      <n-grid-item span="3 m:1">
+      <n-grid-item span="4 s:2 m:1">
         <n-card>
-          <n-statistic label="Вклад списка желаний" :value="Math.round(forecast.wishlist_contrib)" :precision="0">
+          <n-statistic label="Регулярные расходы / мес" :value="Math.round(forecast.regular_contrib || 0)" :precision="0">
+            <template #suffix>₽</template>
+          </n-statistic>
+        </n-card>
+      </n-grid-item>
+      <n-grid-item span="4 s:2 m:1">
+        <n-card>
+          <n-statistic label="Список желаний / мес" :value="Math.round(wishlistOnlyContrib)" :precision="0">
             <template #suffix>₽</template>
           </n-statistic>
         </n-card>
@@ -36,64 +46,63 @@
       </n-grid-item>
 
       <n-grid-item span="2 m:1">
-        <!-- Heading outside the card; each regular item is its own card so
-             actions and amounts line up consistently across rows. -->
-        <div style="margin: 0 0 10px 4px">
-          <n-text strong style="font-size:15px">Регулярные расходы</n-text>
-        </div>
-        <n-spin :show="loadingForecast">
-          <n-empty v-if="!forecast.regular_items?.length" description="Нет регулярных позиций" style="padding: 30px 0;" />
-          <n-space v-else vertical :size="8">
-            <n-card v-for="item in forecast.regular_items" :key="item.id" size="small" :bordered="true">
-              <div class="regular-row">
-                <div class="regular-row__main">
-                  <div class="regular-row__title">
-                    <n-text :style="{
-                      fontWeight: 500,
-                      textDecoration: item.paid_this_period ? 'line-through' : 'none',
-                      color: item.paid_this_period ? palette.text3 : 'inherit',
-                    }">{{ item.name }}</n-text>
-                    <n-tag type="info" size="small">{{ freqLabel(item.frequency) }}</n-tag>
-                    <n-tag v-if="item.paid_this_period" type="success" size="small" round>
-                      Оплачено · {{ Math.round(item.paid_amount).toLocaleString('ru-RU') }} ₽
-                    </n-tag>
+        <!-- Outer card holds the section title; inner sub-cards render each
+             item with consistent flex columns (title / amount / actions). -->
+        <n-card title="Регулярные расходы">
+          <n-spin :show="loadingForecast">
+            <n-empty v-if="!forecast.regular_items?.length" description="Нет регулярных позиций" style="padding: 30px 0;" />
+            <n-space v-else vertical :size="8">
+              <n-card v-for="item in forecast.regular_items" :key="item.id" size="small" :bordered="true" embedded>
+                <div class="regular-row">
+                  <div class="regular-row__main">
+                    <div class="regular-row__title">
+                      <n-text :style="{
+                        fontWeight: 500,
+                        textDecoration: item.paid_this_period ? 'line-through' : 'none',
+                        color: item.paid_this_period ? palette.text3 : 'inherit',
+                      }">{{ item.name }}</n-text>
+                      <n-tag type="info" size="small" round>{{ freqLabel(item.frequency) }}</n-tag>
+                      <n-tag v-if="item.paid_this_period" type="success" size="small" round>
+                        Оплачено · {{ Math.round(item.paid_amount).toLocaleString('ru-RU') }} ₽
+                      </n-tag>
+                    </div>
+                    <n-text depth="3" style="font-size:12px">
+                      {{ item.category }}<template v-if="item.paid_this_period && item.next_due_date">
+                        &nbsp;·&nbsp;следующая оплата: {{ formatDueDate(item.next_due_date) }}
+                      </template>
+                    </n-text>
                   </div>
-                  <n-text depth="3" style="font-size:12px">
-                    {{ item.category }}<template v-if="item.paid_this_period && item.next_due_date">
-                      &nbsp;·&nbsp;следующая оплата: {{ formatDueDate(item.next_due_date) }}
-                    </template>
-                  </n-text>
+                  <div class="regular-row__amount">
+                    <n-text strong :style="{
+                      color: item.paid_this_period ? palette.text3 : palette.expense,
+                      textDecoration: item.paid_this_period ? 'line-through' : 'none',
+                      whiteSpace: 'nowrap',
+                    }">
+                      {{ Math.round(item.monthly_cost).toLocaleString('ru-RU') }} {{ freqUnit(item.frequency) }}
+                    </n-text>
+                  </div>
+                  <div class="regular-row__actions">
+                    <n-button size="small" type="success" @click="openPayRegular(item)">Оплачено</n-button>
+                    <ConfirmActionButton
+                      v-if="item.paid_this_period"
+                      label="Отменить"
+                      type="default"
+                      size="small"
+                      :loading="cancelingId === item.id"
+                      @confirm="cancelRegularPaid(item)"
+                    />
+                    <n-popconfirm @positive-click="wlStore.remove(item.id).then(loadForecast)">
+                      <template #trigger>
+                        <n-button size="small" type="error" quaternary title="Удалить">✕</n-button>
+                      </template>
+                      Удалить эту позицию?
+                    </n-popconfirm>
+                  </div>
                 </div>
-                <div class="regular-row__amount">
-                  <n-text strong :style="{
-                    color: item.paid_this_period ? palette.text3 : palette.expense,
-                    textDecoration: item.paid_this_period ? 'line-through' : 'none',
-                    whiteSpace: 'nowrap',
-                  }">
-                    {{ Math.round(item.monthly_cost).toLocaleString('ru-RU') }} {{ freqUnit(item.frequency) }}
-                  </n-text>
-                </div>
-                <div class="regular-row__actions">
-                  <n-button size="small" type="success" @click="openPayRegular(item)">Оплачено</n-button>
-                  <ConfirmActionButton
-                    v-if="item.paid_this_period"
-                    label="Отменить"
-                    type="default"
-                    size="small"
-                    :loading="cancelingId === item.id"
-                    @confirm="cancelRegularPaid(item)"
-                  />
-                  <n-popconfirm @positive-click="wlStore.remove(item.id).then(loadForecast)">
-                    <template #trigger>
-                      <n-button size="small" type="error" quaternary title="Удалить">✕</n-button>
-                    </template>
-                    Удалить эту позицию?
-                  </n-popconfirm>
-                </div>
-              </div>
-            </n-card>
-          </n-space>
-        </n-spin>
+              </n-card>
+            </n-space>
+          </n-spin>
+        </n-card>
       </n-grid-item>
     </n-grid>
 
@@ -193,15 +202,17 @@
           </template>
           <n-spin :show="wlStore.loading">
             <n-empty v-if="!wishlistOnly.length" description="Список пуст" style="padding: 40px 0;" />
-            <n-list v-else>
-              <n-list-item
+            <n-space v-else vertical :size="8">
+              <n-card
                 v-for="item in wishlistOnly"
                 :key="item.id"
+                size="small"
+                :bordered="true"
+                embedded
                 :style="bulkMode && selectedIds.has(item.id) ? `background:${primaryColor}1f` : ''"
               >
-                <n-thing :title="item.name" :description="item.category">
-                  <!-- Avatar / assign user / selection checkbox -->
-                  <template #avatar>
+                <div class="regular-row">
+                  <div class="regular-row__avatar">
                     <template v-if="bulkMode">
                       <div
                         class="bulk-checkbox"
@@ -234,15 +245,23 @@
                       </template>
                       {{ item.created_by ? item.created_by.display_name + ' · нажмите для смены' : 'Назначить автора' }}
                     </n-tooltip>
-                  </template>
-
-                  <template #header-extra>
-                    <n-space align="center">
-                      <n-tag v-if="item.frequency && item.frequency !== 'once'" type="info" size="small">{{ freqLabel(item.frequency) }}</n-tag>
-                      <n-tag v-if="item.purchased" type="success" size="small">Куплено</n-tag>
-
-                      <!-- Inline cost edit -->
-                      <template v-if="editingId === item.id && !bulkMode">
+                  </div>
+                  <div class="regular-row__main">
+                    <div class="regular-row__title">
+                      <n-text :style="{
+                        fontWeight: 500,
+                        textDecoration: item.purchased ? 'line-through' : 'none',
+                        color: item.purchased ? palette.text3 : 'inherit',
+                      }">{{ item.name }}</n-text>
+                      <n-tag v-if="item.purchased" type="success" size="small" round>Куплено</n-tag>
+                    </div>
+                    <n-text depth="3" style="font-size:12px">
+                      {{ item.category }}<template v-if="item.notes">&nbsp;·&nbsp;{{ item.notes }}</template>
+                    </n-text>
+                  </div>
+                  <div class="regular-row__amount">
+                    <template v-if="editingId === item.id && !bulkMode">
+                      <n-space :size="4" align="center">
                         <n-input-number
                           v-model:value="editValue"
                           :min="1"
@@ -253,44 +272,43 @@
                         />
                         <n-button size="tiny" type="primary" style="padding:0 5px;min-width:24px" @click="confirmEdit(item)">✓</n-button>
                         <n-button size="tiny" style="padding:0 5px;min-width:24px" @click="cancelEdit">✗</n-button>
+                      </n-space>
+                    </template>
+                    <template v-else>
+                      <n-text strong :style="{ color: item.purchased ? palette.text3 : primaryColor, whiteSpace: 'nowrap', textDecoration: item.purchased ? 'line-through' : 'none' }">
+                        {{ item.estimated_cost.toLocaleString('ru-RU') }} ₽
+                      </n-text>
+                      <span v-if="!bulkMode" class="inline-edit-icon" @click="startEdit(item)" title="Редактировать стоимость">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                        </svg>
+                      </span>
+                    </template>
+                  </div>
+                  <div v-if="!bulkMode" class="regular-row__actions">
+                    <n-button size="small" @click="wlStore.togglePurchased(item)">
+                      {{ item.purchased ? 'Не куплено' : 'Куплено' }}
+                    </n-button>
+                    <n-popconfirm @positive-click="wlStore.remove(item.id)">
+                      <template #trigger>
+                        <n-button size="small" type="error" quaternary title="Удалить">✕</n-button>
                       </template>
-                      <template v-else>
-                        <n-text strong :style="{ color: item.purchased ? palette.text3 : primaryColor, whiteSpace: 'nowrap', textDecoration: item.purchased ? 'line-through' : 'none' }">
-                          {{ item.estimated_cost.toLocaleString('ru-RU') }} ₽
-                        </n-text>
-                        <span v-if="!bulkMode" class="inline-edit-icon" @click="startEdit(item)" title="Редактировать стоимость">
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                          </svg>
-                        </span>
-                      </template>
-                    </n-space>
-                  </template>
-
-                  <template v-if="!bulkMode" #action>
-                    <n-space size="small">
-                      <n-button v-if="item.frequency === 'once'" size="tiny" @click="wlStore.togglePurchased(item)">
-                        {{ item.purchased ? 'Не куплено' : 'Куплено' }}
-                      </n-button>
-                      <n-popconfirm @positive-click="wlStore.remove(item.id)">
-                        <template #trigger>
-                          <n-button size="tiny" type="error" quaternary>✕</n-button>
-                        </template>
-                        Удалить позицию?
-                      </n-popconfirm>
-                    </n-space>
-                  </template>
-                </n-thing>
-              </n-list-item>
-            </n-list>
+                      Удалить позицию?
+                    </n-popconfirm>
+                  </div>
+                </div>
+              </n-card>
+            </n-space>
           </n-spin>
         </n-card>
       </n-grid-item>
     </n-grid>
 
-    <!-- Prefilled expense modal for "Оплачено" on a recurring item -->
-    <n-modal v-model:show="showPayRegular" preset="card" title="Зафиксировать оплату" style="max-width:420px">
+    <!-- Prefilled expense modal for "Оплачено" on a recurring item.
+         Mirrors the same field set as the regular expense form so values
+         copy verbatim: purpose ← item.name, description ← item.notes. -->
+    <n-modal v-model:show="showPayRegular" preset="card" title="Зафиксировать оплату" style="max-width:460px">
       <template v-if="payRegularItem">
         <n-form label-placement="top">
           <n-form-item label="Сумма (₽)">
@@ -309,6 +327,9 @@
               to="body"
               placeholder="Выберите или введите категорию"
             />
+          </n-form-item>
+          <n-form-item label="Назначение">
+            <n-input v-model:value="payForm.purpose" placeholder="Например, Интернет" />
           </n-form-item>
           <n-form-item label="Описание">
             <n-input v-model:value="payForm.description" placeholder="Необязательно" />
@@ -501,9 +522,18 @@ const showPayRegular  = ref(false)
 const payRegularItem  = ref(null)
 const payingBusy      = ref(false)
 const cancelingId     = ref(null)
-const payForm = ref({ amount: null, date: '', category: '', description: '' })
+const payForm = ref({ amount: null, date: '', category: '', purpose: '', description: '' })
 
 const expenseCategoryOptions = computed(() => catStore.options('expense'))
+
+// «Список желаний / мес» = total wishlist contribution minus the recurring
+// subset; defaults to 0 while loading. The split lets the user see what's
+// driven by recurring obligations vs one-off planned purchases.
+const wishlistOnlyContrib = computed(() => {
+  const total = forecast.value.wishlist_contrib || 0
+  const reg = forecast.value.regular_contrib || 0
+  return Math.max(0, total - reg)
+})
 
 function todayStr() {
   const d = new Date()
@@ -520,7 +550,10 @@ function openPayRegular(item) {
     amount: Math.round(item.estimated_cost || item.monthly_cost) || null,
     date: todayStr(),
     category: item.category || '',
-    description: item.name || '',
+    // Точное копирование: name → «Назначение», notes → «Описание».
+    // Раньше name попадал в description — фикс описанной пользователем ошибки.
+    purpose: item.name || '',
+    description: item.notes || '',
   }
   showPayRegular.value = true
 }
@@ -541,6 +574,7 @@ async function confirmPayRegular() {
       amount: payForm.value.amount,
       date: payForm.value.date,
       category: cat,
+      purpose: payForm.value.purpose || '',
       description: payForm.value.description || '',
       wishlist_id: payRegularItem.value.id,
     })
@@ -787,11 +821,19 @@ onMounted(async () => {
   opacity: 0.65;
 }
 
-/* «Регулярные расходы» card — three-column flex with consistent action sizes */
+/* Sub-card row layout shared by «Регулярные расходы» and «Список желаний»:
+   optional avatar | title+meta (flex 1) | amount | actions. Same column
+   widths so cards line up regardless of section. */
 .regular-row {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+.regular-row__avatar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .regular-row__main {
   flex: 1 1 auto;
@@ -809,6 +851,9 @@ onMounted(async () => {
 .regular-row__amount {
   flex: 0 0 auto;
   text-align: right;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 .regular-row__actions {
   flex: 0 0 auto;
