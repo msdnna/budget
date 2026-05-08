@@ -61,11 +61,12 @@ type ForecastResponse struct {
 }
 
 type RegularItemForecast struct {
-	ID          string  `json:"id"`
-	Name        string  `json:"name"`
-	MonthlyCost float64 `json:"monthly_cost"`
-	Frequency   string  `json:"frequency"`
-	Category    string  `json:"category"`
+	ID            string  `json:"id"`
+	Name          string  `json:"name"`
+	EstimatedCost float64 `json:"estimated_cost"`
+	MonthlyCost   float64 `json:"monthly_cost"`
+	Frequency     string  `json:"frequency"`
+	Category      string  `json:"category"`
 	// PaidThisPeriod is true when at least one expense transaction with
 	// WishlistID == ID exists in the current period (month for monthly,
 	// quarter for quarterly, year for yearly). Such items are excluded

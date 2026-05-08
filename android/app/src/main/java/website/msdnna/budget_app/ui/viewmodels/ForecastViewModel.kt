@@ -12,6 +12,7 @@ import website.msdnna.budget_app.data.model.*
 import website.msdnna.budget_app.data.preferences.CategoryUsage
 import website.msdnna.budget_app.data.preferences.sortedByRecentUse
 import website.msdnna.budget_app.data.repository.CategoryRepository
+import website.msdnna.budget_app.data.repository.TransactionRepository
 import website.msdnna.budget_app.data.repository.WishlistRepository
 
 data class ForecastUiState(
@@ -151,6 +152,56 @@ class ForecastViewModel(private val serverUrl: String) : ViewModel() {
 
     suspend fun deleteCategory(id: String) {
         CategoryRepository.deleteCategory(serverUrl, "wishlist", id)
+    }
+
+    /** Categories for the prefilled expense form opened from a recurring item. */
+    suspend fun addExpenseCategory(name: String): Category? =
+        CategoryRepository.addCategory(serverUrl, "expense", name)
+
+    suspend fun deleteExpenseCategory(id: String) {
+        CategoryRepository.deleteCategory(serverUrl, "expense", id)
+    }
+
+    val expenseCategories: StateFlow<List<Category>> = combine(
+        CategoryRepository.expense,
+        CategoryUsage.usage,
+    ) { cats, usage -> cats.sortedByRecentUse(usage["expense"].orEmpty()) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** Persist a recurring-payment fulfillment: creates a linked expense, then
+     *  refreshes the forecast so paid_this_period flips to true. */
+    fun markRegularPaid(req: CreateTransactionRequest) {
+        viewModelScope.launch {
+            TransactionRepository.create(
+                type = req.type,
+                amount = req.amount,
+                date = req.date,
+                category = req.category,
+                source = req.source,
+                purpose = req.purpose,
+                description = req.description,
+                wishlistId = req.wishlistId.orEmpty(),
+            )
+            CategoryUsage.recordUse("expense", req.category)
+            // Forecast is server-side; reload pulls the new paid_this_period.
+            reload()
+        }
+    }
+
+    /** Unlinks every transaction linked to [wishlistId] in the current period
+     *  (server decides the period from the item's frequency). The server-side
+     *  bulk update bumps versions; the next sync pull will refresh local rows. */
+    fun unlinkRegularPeriod(wishlistId: String, onError: (String) -> Unit = {}) {
+        viewModelScope.launch {
+            try {
+                service.unlinkWishlistPeriod(wishlistId)
+                reload()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                onError(e.localizedMessage ?: "Не удалось отменить")
+            }
+        }
     }
 
     companion object {

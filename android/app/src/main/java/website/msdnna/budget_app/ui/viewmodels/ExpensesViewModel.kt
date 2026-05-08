@@ -137,6 +137,7 @@ class ExpensesViewModel(private val serverUrl: String) : ViewModel() {
                 source = req.source,
                 purpose = req.purpose,
                 description = req.description,
+                wishlistId = req.wishlistId.orEmpty(),
             )
             CategoryUsage.recordUse("expense", req.category)
         }

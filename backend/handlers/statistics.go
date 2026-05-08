@@ -285,6 +285,7 @@ func (h *StatisticsHandler) Forecast(c *gin.Context) {
 			regularItems = append(regularItems, models.RegularItemForecast{
 				ID:             item.ID,
 				Name:           item.Name,
+				EstimatedCost:  item.EstimatedCost,
 				MonthlyCost:    monthly,
 				Frequency:      string(item.Frequency),
 				Category:       item.Category,

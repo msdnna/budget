@@ -30,6 +30,7 @@ fun TransactionEntity.toModel(): Transaction = Transaction(
     detailRequestId = detailRequestId,
     detailRequestStatus = detailRequestStatus,
     excludedFromStats = excludedFromStats,
+    wishlistId = wishlistId,
 )
 
 fun Transaction.toEntity(syncStatus: String = SyncStatus.SYNCED, serverPayload: String? = null): TransactionEntity =
@@ -59,6 +60,7 @@ fun Transaction.toEntity(syncStatus: String = SyncStatus.SYNCED, serverPayload: 
         detailRequestId = detailRequestId,
         detailRequestStatus = detailRequestStatus,
         excludedFromStats = excludedFromStats,
+        wishlistId = wishlistId,
     )
 
 // ---- Wishlist ----

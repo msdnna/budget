@@ -52,6 +52,7 @@ object TransactionRepository {
         source: String? = null,
         purpose: String? = null,
         description: String? = null,
+        wishlistId: String = "",
     ): Transaction {
         val now = Instant.now().toString()
         val user = currentUser()
@@ -76,6 +77,7 @@ object TransactionRepository {
             updatedAt = now,
             deletedAt = null,
             syncStatus = SyncStatus.PENDING_CREATE,
+            wishlistId = wishlistId,
         )
         dao.upsert(entity)
         SyncWorker.enqueue(AppContainer.appContext)

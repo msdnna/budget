@@ -45,7 +45,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import website.msdnna.budget_app.data.model.Category
+import website.msdnna.budget_app.data.model.CreateTransactionRequest
 import website.msdnna.budget_app.data.model.CreateWishlistRequest
+import website.msdnna.budget_app.data.model.RegularItem
+import website.msdnna.budget_app.data.model.Transaction
 import website.msdnna.budget_app.data.model.UpdateWishlistRequest
 import website.msdnna.budget_app.data.model.UserInfo
 import website.msdnna.budget_app.data.model.WishlistItem
@@ -91,12 +94,15 @@ fun ForecastScreen(
     val vm = viewModel<ForecastViewModel>(key = "forecast:$serverUrl", factory = ForecastViewModel.factory(serverUrl))
     val uiState    by vm.uiState.collectAsState()
     val categories by vm.categories.collectAsState()
+    val expenseCategories by vm.expenseCategories.collectAsState()
     val selectedIds by vm.selectedIds.collectAsState()
     val selectionMode = selectedIds.isNotEmpty()
 
     val expenseColor = LocalExpenseColor.current
     var showAdd      by remember { mutableStateOf(false) }
     var detailItem   by remember { mutableStateOf<WishlistItem?>(null) }
+    // When non-null, opens AddExpenseSheet prefilled from a recurring item.
+    var payRegular   by remember { mutableStateOf<RegularItem?>(null) }
 
     BackHandler(enabled = selectionMode) { vm.clearSelection() }
 
@@ -198,6 +204,16 @@ fun ForecastScreen(
                                     SummaryCard("Ср. за 3 мес",   fc.historicalAvg,   "", primaryColor, Modifier.weight(1f))
                                 }
                                 SummaryCard("Список желаний / мес", fc.wishlistContrib, "", primaryColor, Modifier.fillMaxWidth())
+
+                                if (fc.regularItems.isNotEmpty()) {
+                                    RegularExpensesSection(
+                                        items = fc.regularItems,
+                                        primaryColor = primaryColor,
+                                        onMarkPaid   = { item -> payRegular = item },
+                                        onCancelPaid = { item -> vm.unlinkRegularPeriod(item.id) },
+                                    )
+                                }
+
                                 if (fc.breakdown.isNotEmpty()) {
                                     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                                         Column(Modifier.padding(16.dp)) {
@@ -276,6 +292,29 @@ fun ForecastScreen(
             onSaved    = { detailItem = null; vm.reload() }
         )
     }
+
+    payRegular?.let { item ->
+        // Prefill the expense form from the recurring wishlist item. Amount
+        // defaults to estimated_cost (the actual bill), not monthly_cost —
+        // for quarterly/yearly items the user pays the full bill once per
+        // period. They're free to override before saving.
+        AddExpenseSheet(
+            primaryColor = primaryColor,
+            template = Transaction(
+                amount      = item.estimatedCost.takeIf { it > 0.0 } ?: item.monthlyCost,
+                category    = item.category,
+                description = item.name,
+            ),
+            categories = expenseCategories,
+            onAddCategory    = { name -> vm.addExpenseCategory(name) },
+            onDeleteCategory = { id -> vm.deleteExpenseCategory(id) },
+            onDismiss = { payRegular = null },
+            onSave = { req ->
+                vm.markRegularPaid(req.copy(wishlistId = item.id))
+                payRegular = null
+            },
+        )
+    }
 }
 
 // ─── Skeleton for the forecast aggregation block ─────────────────────────────
@@ -307,6 +346,192 @@ private fun ForecastSummarySkeleton() {
                 ) {
                     SkeletonBox(width = 140.dp, height = 12.dp)
                     SkeletonBox(width = 180.dp, height = 24.dp)
+                }
+            }
+        }
+    }
+}
+
+// ─── Регулярные расходы (forecast.regular_items) ─────────────────────────────
+
+private val ColourRegularPaid   = Color(0xFF388E3C) // right swipe: «Оплачено»
+private val ColourRegularCancel = Color(0xFF757575) // left  swipe: «Отменить»
+
+@Composable
+private fun RegularExpensesSection(
+    items: List<RegularItem>,
+    primaryColor: Color,
+    onMarkPaid: (RegularItem) -> Unit,
+    onCancelPaid: (RegularItem) -> Unit,
+) {
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Регулярные расходы", style = MaterialTheme.typography.titleMedium)
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                items.forEach { item ->
+                    SwipeableRegularItemCard(
+                        item = item,
+                        primaryColor = primaryColor,
+                        onMarkPaid = { onMarkPaid(item) },
+                        onCancelPaid = { onCancelPaid(item) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun SwipeableRegularItemCard(
+    item: RegularItem,
+    primaryColor: Color,
+    onMarkPaid: () -> Unit,
+    onCancelPaid: () -> Unit,
+) {
+    val scope    = rememberCoroutineScope()
+    val density  = LocalDensity.current
+    val expense  = LocalExpenseColor.current
+
+    // Right swipe → «Оплачено» (always); Left swipe → «Отменить» (only when paid).
+    val rightRevealDp = 88.dp
+    val leftRevealDp  = if (item.paidThisPeriod) 88.dp else 0.dp
+    val rightRevealPx = with(density) { rightRevealDp.toPx() }
+    val leftRevealPx  = with(density) { leftRevealDp.toPx() }
+
+    val offsetX = remember(item.id) { Animatable(0f) }
+    fun snapTo(target: Float) = scope.launch {
+        offsetX.animateTo(target, spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness    = Spring.StiffnessMedium
+        ))
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(IntrinsicSize.Min)
+            .clip(MaterialTheme.shapes.medium)
+    ) {
+        // Right-side action: «Оплачено» (revealed by swiping the card left, i.e.
+        // dragging the card toward the left edge — same convention the wishlist
+        // delete uses).
+        Box(
+            modifier = Modifier
+                .width(rightRevealDp)
+                .fillMaxHeight()
+                .align(Alignment.CenterEnd)
+                .background(ColourRegularPaid)
+                .clickable { snapTo(0f); onMarkPaid() },
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(Icons.Default.CheckCircle, null, tint = Color.White, modifier = Modifier.size(22.dp))
+                Text("Оплачено", color = Color.White, fontSize = 10.sp)
+            }
+        }
+        // Left-side action: «Отменить» (only meaningful when already paid).
+        if (item.paidThisPeriod) {
+            Box(
+                modifier = Modifier
+                    .width(leftRevealDp)
+                    .fillMaxHeight()
+                    .align(Alignment.CenterStart)
+                    .background(ColourRegularCancel)
+                    .clickable { snapTo(0f); onCancelPaid() },
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(Icons.Default.Close, null, tint = Color.White, modifier = Modifier.size(22.dp))
+                    Text("Отменить", color = Color.White, fontSize = 10.sp)
+                }
+            }
+        }
+
+        val baseSurface = MaterialTheme.colorScheme.surface
+        val targetBg = if (item.paidThisPeriod)
+            MaterialTheme.colorScheme.surfaceVariant
+        else baseSurface
+        val animatedBg by animateColorAsState(
+            targetValue = targetBg,
+            animationSpec = tween(durationMillis = 220),
+            label = "regBg",
+        )
+
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .offset { IntOffset(offsetX.value.roundToInt(), 0) }
+                .draggable(
+                    orientation = Orientation.Horizontal,
+                    state = rememberDraggableState { delta ->
+                        scope.launch {
+                            val min = -rightRevealPx
+                            val max = leftRevealPx
+                            offsetX.snapTo((offsetX.value + delta).coerceIn(min, max))
+                        }
+                    },
+                    onDragStopped = {
+                        when {
+                            offsetX.value < -rightRevealPx * 0.35f -> snapTo(-rightRevealPx)
+                            item.paidThisPeriod && offsetX.value > leftRevealPx * 0.35f -> snapTo(leftRevealPx)
+                            else -> snapTo(0f)
+                        }
+                    }
+                ),
+            colors = CardDefaults.cardColors(containerColor = animatedBg)
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp).fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = item.name,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        textDecoration = if (item.paidThisPeriod) TextDecoration.LineThrough else TextDecoration.None,
+                        color = if (item.paidThisPeriod) MaterialTheme.colorScheme.onSurfaceVariant
+                                else MaterialTheme.colorScheme.onSurface,
+                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            item.category.ifBlank { frequencyLabel(item.frequency) },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        if (item.category.isNotBlank()) {
+                            Text("·", style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(
+                                frequencyLabel(item.frequency),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        if (item.paidThisPeriod) {
+                            Text(
+                                "· оплачено · ${formatMoney(item.paidAmount)} ₽",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = ColourRegularPaid.copy(alpha = 0.85f),
+                            )
+                        }
+                    }
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        "${formatMoney(item.monthlyCost)} ₽/мес",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = if (item.paidThisPeriod)
+                            MaterialTheme.colorScheme.onSurfaceVariant else expense,
+                        textDecoration = if (item.paidThisPeriod)
+                            TextDecoration.LineThrough else TextDecoration.None,
+                    )
                 }
             }
         }

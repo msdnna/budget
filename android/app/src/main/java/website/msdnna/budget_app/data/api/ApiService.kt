@@ -120,6 +120,11 @@ interface ApiService {
     @DELETE("wishlist/{id}")
     suspend fun deleteWishlistItem(@Path("id") id: String): Response<Unit>
 
+    /** Bulk-clear wishlist_id on every linked expense in the recurring item's
+     *  current period. Backs the «Отменить» action on Регулярные расходы. */
+    @POST("wishlist/{id}/unlink-period")
+    suspend fun unlinkWishlistPeriod(@Path("id") id: String): Map<String, @JvmSuppressWildcards Any>
+
     @GET("sync/pull")
     suspend fun syncPull(
         @Query("since") since: String? = null

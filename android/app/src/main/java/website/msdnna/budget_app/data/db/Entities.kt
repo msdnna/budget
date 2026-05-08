@@ -47,6 +47,12 @@ data class TransactionEntity(
     val detailRequestStatus: String = "",
     @ColumnInfo(name = "excluded_from_stats", defaultValue = "0")
     val excludedFromStats: Boolean = false,
+
+    // Recurring-payment linkage. Set to a wishlist item's id when this expense
+    // is fulfilling a recurring planned payment (Интернет/Связь/коммуналка/…)
+    // so the forecast can mark the wishlist item as "paid this period".
+    @ColumnInfo(name = "wishlist_id", defaultValue = "''")
+    val wishlistId: String = "",
 )
 
 @Entity(tableName = "wishlist")

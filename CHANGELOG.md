@@ -20,7 +20,7 @@
 
 #### Added
 - Поле `wishlist_id` у `Transaction` — ссылка с расхода на регулярный wishlist-итем (коммуналка/связь/Интернет и т.п.). Принимается в `POST /api/transactions`, `PUT /api/transactions/:id` (пустая строка отвязывает) и round-tripит через `/api/sync/push`.
-- В ответе `GET /api/statistics/forecast` у каждого `regular_items` появились поля `paid_this_period: bool`, `paid_amount: float`, `paid_count: int` — рассчитываются по транзакциям с заданным `wishlist_id`, чьи даты попадают в текущий период (месяц / квартал / год соответственно частоте). ≥1 связанная транзакция = «оплачено».
+- В ответе `GET /api/statistics/forecast` у каждого `regular_items` появились поля `estimated_cost: float`, `paid_this_period: bool`, `paid_amount: float`, `paid_count: int` — клиенты префиллят форму расхода полным `estimated_cost`, а флаги рассчитываются по транзакциям с заданным `wishlist_id`, чьи даты попадают в текущий период (месяц / квартал / год соответственно частоте). ≥1 связанная транзакция = «оплачено».
 - `POST /api/wishlist/:id/unlink-period` — массово очищает `wishlist_id` у всех транзакций в текущем периоде регулярного итема (бэкенд для кнопки «Отменить»).
 - Индекс по `(wishlist_id, date desc)` в коллекции `transactions`.
 
@@ -153,6 +153,20 @@
 ---
 
 ## Android
+
+### [1.23.0] — 2026-05-08
+
+#### Added
+- В прогнозе появилась секция «Регулярные расходы» — карточки `regular_items` с двусторонним свайпом:
+  - **Свайп вправо → «Оплачено»** (зелёный): открывает форму добавления расхода с предзаполненными суммой (по `estimated_cost`), категорией и описанием. На сохранении транзакция сохраняется в Room с `wishlist_id` итема и уходит в sync; прогноз перезагружается, строка становится зачёркнутой с бейджем «оплачено · 800 ₽».
+  - **Свайп влево → «Отменить»** (серый, виден только когда `paid_this_period`): дёргает `POST /api/wishlist/:id/unlink-period`; следующий `sync pull` снимет привязки локально.
+- Категории расходов в `ForecastViewModel` (`expenseCategories` / `addExpenseCategory` / `deleteExpenseCategory`) — нужны для предзаполненной формы.
+- Поле `wishlistId` у `Transaction` модели и `wishlist_id` колонка у `transactions` Room-таблицы (миграция v2→v3, `DEFAULT ''`).
+- `ApiService.unlinkWishlistPeriod()` (POST /api/wishlist/:id/unlink-period).
+
+#### Changed
+- `RegularItem` DTO расширен полями `estimated_cost` / `paid_this_period` / `paid_amount` / `paid_count` (mirror новой схемы api 1.10.0).
+- `TransactionRepository.create()` принимает `wishlistId: String = ""` для linked-fulfillment'ов; дефолтное поведение остальных вызовов не меняется.
 
 ### [1.22.3] — 2026-05-08
 

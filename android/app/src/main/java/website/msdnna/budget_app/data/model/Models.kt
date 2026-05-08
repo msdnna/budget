@@ -49,6 +49,7 @@ data class Transaction(
     @SerializedName("detail_request_id") val detailRequestId: String = "",
     @SerializedName("detail_request_status") val detailRequestStatus: String = "",
     @SerializedName("excluded_from_stats") val excludedFromStats: Boolean = false,
+    @SerializedName("wishlist_id") val wishlistId: String = "",
 )
 
 // ===== Detail-request DTOs =====
@@ -90,7 +91,8 @@ data class CreateTransactionRequest(
     val category: String,
     val source: String? = null,
     val purpose: String? = null,
-    val description: String? = null
+    val description: String? = null,
+    @SerializedName("wishlist_id") val wishlistId: String? = null,
 )
 
 data class StatsSummary(
@@ -125,9 +127,13 @@ data class ForecastData(
 data class RegularItem(
     val id: String = "",
     val name: String = "",
+    @SerializedName("estimated_cost") val estimatedCost: Double = 0.0,
     @SerializedName("monthly_cost") val monthlyCost: Double = 0.0,
     val frequency: String = "monthly",
-    val category: String = ""
+    val category: String = "",
+    @SerializedName("paid_this_period") val paidThisPeriod: Boolean = false,
+    @SerializedName("paid_amount") val paidAmount: Double = 0.0,
+    @SerializedName("paid_count") val paidCount: Int = 0,
 )
 
 data class WishlistItem(
