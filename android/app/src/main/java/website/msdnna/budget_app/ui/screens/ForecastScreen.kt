@@ -402,6 +402,7 @@ fun ForecastScreen(
                 vm.markRegularPaid(req.copy(wishlistId = item.id))
                 payRegular = null
             },
+            title = "Фиксация оплаты",
         )
     }
 
@@ -424,6 +425,7 @@ fun ForecastScreen(
                 vm.purchaseWishlist(req.copy(wishlistId = item.id))
                 payWishlist = null
             },
+            title = "Фиксация покупки",
         )
     }
 }

@@ -483,7 +483,11 @@ fun AddExpenseSheet(
     onAddCategory: suspend (String) -> Category? = { null },
     onDeleteCategory: suspend (String) -> Unit = {},
     onDismiss: () -> Unit,
-    onSave: (CreateTransactionRequest) -> Unit
+    onSave: (CreateTransactionRequest) -> Unit,
+    /** Optional override for the sheet header. Used by the «Оплачено» /
+     *  «Куплено» flows on the forecast screen so the user can see WHICH
+     *  scenario they're in: «Фиксация оплаты» vs «Фиксация покупки». */
+    title: String? = null,
 ) {
     val scope    = rememberCoroutineScope()
     val today    = remember { SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date()) }
@@ -514,7 +518,8 @@ fun AddExpenseSheet(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
-                if (template != null) "Создать по шаблону" else "Добавить расход",
+                title
+                    ?: if (template != null) "Создать по шаблону" else "Добавить расход",
                 style = MaterialTheme.typography.titleLarge
             )
 
