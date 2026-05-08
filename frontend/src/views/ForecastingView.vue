@@ -405,7 +405,11 @@
                     </template>
                   </div>
                   <div v-if="!bulkMode" class="regular-row__actions">
-                    <n-button size="small" :type="item.purchased ? 'default' : 'success'" @click="wlStore.togglePurchased(item)">
+                    <n-button
+                      size="small"
+                      :type="item.purchased ? 'default' : 'success'"
+                      @click="item.purchased ? unpurchaseWishlist(item) : openPayWishlist(item)"
+                    >
                       {{ item.purchased ? 'Не куплено' : 'Куплено' }}
                     </n-button>
                     <n-popconfirm @positive-click="wlStore.remove(item.id)">
@@ -423,11 +427,13 @@
       </n-grid-item>
     </n-grid>
 
-    <!-- Prefilled expense modal for "Оплачено" on a recurring item.
-         Mirrors the same field set as the regular expense form so values
-         copy verbatim: purpose ← item.name, description ← item.notes. -->
-    <n-modal v-model:show="showPayRegular" preset="card" title="Зафиксировать оплату" style="max-width:460px">
-      <template v-if="payRegularItem">
+    <!-- Prefilled expense modal — single shared modal for "Оплачено"
+         (regular расход) and "Куплено" (wishlist purchase). Title swaps
+         based on payKind. Values copy verbatim from the source item. -->
+    <n-modal v-model:show="showPay" preset="card"
+             :title="payKind === 'wishlist' ? 'Зафиксировать покупку' : 'Зафиксировать оплату'"
+             style="max-width:460px">
+      <template v-if="payItem">
         <n-form label-placement="top">
           <n-form-item label="Сумма (₽)">
             <n-input-number v-model:value="payForm.amount" :min="1" style="width:100%" />
@@ -454,8 +460,8 @@
           </n-form-item>
         </n-form>
         <n-space justify="end">
-          <n-button @click="showPayRegular = false">Отмена</n-button>
-          <n-button type="primary" :loading="payingBusy" :disabled="!payForm.amount || !payForm.category" @click="confirmPayRegular">
+          <n-button @click="showPay = false">Отмена</n-button>
+          <n-button type="primary" :loading="payingBusy" :disabled="!payForm.amount || !payForm.category" @click="confirmPay">
             Сохранить
           </n-button>
         </n-space>
@@ -658,8 +664,14 @@ function checkboxStyle(checked) {
 //   • «Отменить» — clears wishlist_id on every linked tx in the current
 //     period via /api/wishlist/:id/unlink-period (one round-trip).
 
-const showPayRegular  = ref(false)
-const payRegularItem  = ref(null)
+// Single modal serves both flows: «Оплачено» on a recurring item AND
+// «Куплено» on a wishlist item. They are functionally identical (create
+// expense linked via wishlist_id) — `payKind` only changes the modal title
+// and whether we additionally flip the wishlist item's `purchased` flag
+// after the transaction lands.
+const showPay         = ref(false)
+const payItem         = ref(null)        // wishlist row OR forecast.regular_items entry
+const payKind         = ref('regular')   // 'regular' | 'wishlist'
 const payingBusy      = ref(false)
 const cancelingId     = ref(null)
 const payForm = ref({ amount: null, date: '', category: '', purpose: '', description: '' })
@@ -736,7 +748,8 @@ function todayStr() {
 }
 
 function openPayRegular(item) {
-  payRegularItem.value = item
+  payItem.value = item
+  payKind.value = 'regular'
   payForm.value = {
     // Prefill with the full bill amount (estimated_cost), not monthly_cost —
     // for quarterly/yearly items the user pays the full bill once per period.
@@ -744,20 +757,29 @@ function openPayRegular(item) {
     date: todayStr(),
     category: item.category || '',
     // Точное копирование: name → «Назначение», notes → «Описание».
-    // Раньше name попадал в description — фикс описанной пользователем ошибки.
     purpose: item.name || '',
     description: item.notes || '',
   }
-  showPayRegular.value = true
+  showPay.value = true
 }
 
-async function confirmPayRegular() {
-  if (!payRegularItem.value || !payForm.value.amount || !payForm.value.category) return
+function openPayWishlist(item) {
+  payItem.value = item
+  payKind.value = 'wishlist'
+  payForm.value = {
+    amount: Math.round(item.estimated_cost) || null,
+    date: todayStr(),
+    category: item.category || '',
+    purpose: item.name || '',
+    description: item.notes || '',
+  }
+  showPay.value = true
+}
+
+async function confirmPay() {
+  if (!payItem.value || !payForm.value.amount || !payForm.value.category) return
   payingBusy.value = true
   try {
-    // Auto-create the expense category if the user typed a new one (matches
-    // the existing wishlist-form behaviour — the backend would accept any
-    // string but we keep the per-section catalog in sync).
     const cat = payForm.value.category
     if (cat && !catStore.bySection.expense?.find(c => c.name === cat)) {
       await catStore.add('expense', cat).catch(() => {})
@@ -769,12 +791,18 @@ async function confirmPayRegular() {
       category: cat,
       purpose: payForm.value.purpose || '',
       description: payForm.value.description || '',
-      wishlist_id: payRegularItem.value.id,
+      wishlist_id: payItem.value.id,
     })
     catStore.recordUse('expense', cat)
-    showPayRegular.value = false
+    // For wishlist items the «Куплено» action also flips `purchased` —
+    // recurring items don't have that concept. Doing it after the tx
+    // lands keeps the two-step flow atomic enough for the UI.
+    if (payKind.value === 'wishlist') {
+      await wlStore.update(payItem.value.id, { purchased: true })
+    }
+    showPay.value = false
     await loadForecast()
-    message.success('Оплата зафиксирована')
+    message.success(payKind.value === 'wishlist' ? 'Покупка зафиксирована' : 'Оплата зафиксирована')
   } catch (e) {
     message.error(e.message)
   } finally {
@@ -792,6 +820,19 @@ async function cancelRegularPaid(item) {
     message.error(e.message)
   } finally {
     cancelingId.value = null
+  }
+}
+
+// Wishlist «Не куплено»: clear the linked transaction and reset the
+// purchased flag — keeps the original transaction in the расходы list.
+async function unpurchaseWishlist(item) {
+  try {
+    await wlApi.unlinkPeriod(item.id)
+    await wlStore.update(item.id, { purchased: false })
+    await loadForecast()
+    message.success('Запись отвязана')
+  } catch (e) {
+    message.error(e.message)
   }
 }
 
