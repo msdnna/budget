@@ -205,6 +205,7 @@ func decodeTransactionPayload(raw json.RawMessage) (*models.Transaction, error) 
 		DetailRequestID     string                 `json:"detail_request_id"`
 		DetailRequestStatus string                 `json:"detail_request_status"`
 		ExcludedFromStats   bool                   `json:"excluded_from_stats"`
+		WishlistID          string                 `json:"wishlist_id"`
 	}
 	var a alias
 	if err := json.Unmarshal(raw, &a); err != nil {
@@ -229,6 +230,7 @@ func decodeTransactionPayload(raw json.RawMessage) (*models.Transaction, error) 
 		DetailRequestID:     a.DetailRequestID,
 		DetailRequestStatus: a.DetailRequestStatus,
 		ExcludedFromStats:   a.ExcludedFromStats,
+		WishlistID:          a.WishlistID,
 	}
 	if a.DeletedAt != nil && *a.DeletedAt != "" {
 		dt := parseLooseTime(*a.DeletedAt)

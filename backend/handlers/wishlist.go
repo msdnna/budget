@@ -3,6 +3,7 @@ package handlers
 import (
 	"errors"
 	"net/http"
+	"time"
 
 	"budget-go/models"
 	"budget-go/repository"
@@ -13,11 +14,12 @@ import (
 )
 
 type WishlistHandler struct {
-	repo *repository.WishlistRepository
+	repo   *repository.WishlistRepository
+	txRepo *repository.TransactionRepository
 }
 
-func NewWishlistHandler(repo *repository.WishlistRepository) *WishlistHandler {
-	return &WishlistHandler{repo: repo}
+func NewWishlistHandler(repo *repository.WishlistRepository, txRepo *repository.TransactionRepository) *WishlistHandler {
+	return &WishlistHandler{repo: repo, txRepo: txRepo}
 }
 
 func (h *WishlistHandler) Create(c *gin.Context) {
@@ -122,4 +124,44 @@ func (h *WishlistHandler) Delete(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "deleted"})
+}
+
+// UnlinkPeriod clears wishlist_id on every linked expense in the recurring
+// item's current period. Period is derived from the item's frequency:
+// monthly = current calendar month, quarterly = current calendar quarter,
+// yearly = current calendar year. Backs the "Отменить" action.
+func (h *WishlistHandler) UnlinkPeriod(c *gin.Context) {
+	id := c.Param("id")
+	item, err := h.repo.FindByID(c.Request.Context(), id)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	now := time.Now()
+	var from, to time.Time
+	switch item.Frequency {
+	case models.FrequencyMonthly:
+		from = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+		to = from.AddDate(0, 1, 0).Add(-time.Second)
+	case models.FrequencyQuarterly:
+		q := (int(now.Month()) - 1) / 3
+		from = time.Date(now.Year(), time.Month(q*3+1), 1, 0, 0, 0, 0, time.UTC)
+		to = from.AddDate(0, 3, 0).Add(-time.Second)
+	case models.FrequencyYearly:
+		from = time.Date(now.Year(), 1, 1, 0, 0, 0, 0, time.UTC)
+		to = from.AddDate(1, 0, 0).Add(-time.Second)
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "item is not recurring"})
+		return
+	}
+	n, err := h.txRepo.UnlinkFromWishlist(c.Request.Context(), id, from, to, userInfoFromCtx(c))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"unlinked": n})
 }

@@ -27,6 +27,7 @@ func NewTransactionRepository(db *mongo.Database) *TransactionRepository {
 		{Keys: bson.D{{"category", 1}}},
 		{Keys: bson.D{{"updated_at", 1}}},
 		{Keys: bson.D{{"deleted_at", 1}}},
+		{Keys: bson.D{{"wishlist_id", 1}, {"date", -1}}},
 	})
 
 	return &TransactionRepository{col: col}
@@ -497,6 +498,106 @@ func (r *TransactionRepository) GetSummary(ctx context.Context, from, to time.Ti
 	}
 	summary.Balance = summary.TotalIncome + summary.InitialBalance - summary.TotalExpense
 	return summary, nil
+}
+
+// FindLinkedToWishlistMulti returns non-deleted expense transactions linked
+// to any of the given wishlist IDs whose date falls within [from, to]. The
+// forecast handler uses this to bucket payments per item's frequency-period
+// in Go (since monthly/quarterly/yearly items have different windows).
+func (r *TransactionRepository) FindLinkedToWishlistMulti(ctx context.Context, wishlistIDs []string, from, to time.Time) ([]models.Transaction, error) {
+	if len(wishlistIDs) == 0 {
+		return []models.Transaction{}, nil
+	}
+	filter := bson.M{
+		"wishlist_id": bson.M{"$in": wishlistIDs},
+		"deleted_at":  nil,
+		"type":        models.Expense,
+	}
+	if !from.IsZero() || !to.IsZero() {
+		df := bson.M{}
+		if !from.IsZero() {
+			df["$gte"] = from
+		}
+		if !to.IsZero() {
+			df["$lte"] = to
+		}
+		filter["date"] = df
+	}
+	cur, err := r.col.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+	var out []models.Transaction
+	if err := cur.All(ctx, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// FindLinkedToWishlist returns non-deleted expense transactions whose
+// wishlist_id matches the given id, optionally restricted to a date window.
+// Used by the bulk-unlink endpoint that backs the "Отменить" action.
+func (r *TransactionRepository) FindLinkedToWishlist(ctx context.Context, wishlistID string, from, to time.Time) ([]models.Transaction, error) {
+	filter := bson.M{
+		"wishlist_id": wishlistID,
+		"deleted_at":  nil,
+	}
+	if !from.IsZero() || !to.IsZero() {
+		df := bson.M{}
+		if !from.IsZero() {
+			df["$gte"] = from
+		}
+		if !to.IsZero() {
+			df["$lte"] = to
+		}
+		filter["date"] = df
+	}
+	cur, err := r.col.Find(ctx, filter, options.Find().SetSort(bson.D{{"date", -1}}))
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+	var out []models.Transaction
+	if err := cur.All(ctx, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// UnlinkFromWishlist clears wishlist_id on every non-deleted transaction
+// linked to the given wishlist item within [from, to]. Bumps version and
+// updated_at on each affected row so offline clients pull the change.
+// Returns the number of transactions affected.
+func (r *TransactionRepository) UnlinkFromWishlist(ctx context.Context, wishlistID string, from, to time.Time, modifiedBy *models.UserInfo) (int64, error) {
+	filter := bson.M{
+		"wishlist_id": wishlistID,
+		"deleted_at":  nil,
+	}
+	if !from.IsZero() || !to.IsZero() {
+		df := bson.M{}
+		if !from.IsZero() {
+			df["$gte"] = from
+		}
+		if !to.IsZero() {
+			df["$lte"] = to
+		}
+		filter["date"] = df
+	}
+	now := time.Now()
+	update := bson.M{
+		"$set": bson.M{
+			"wishlist_id":      "",
+			"updated_at":       now,
+			"last_modified_by": modifiedBy,
+		},
+		"$inc": bson.M{"version": 1},
+	}
+	res, err := r.col.UpdateMany(ctx, filter, update)
+	if err != nil {
+		return 0, err
+	}
+	return res.ModifiedCount, nil
 }
 
 func (r *TransactionRepository) GetAverageMonthlyCategoryExpenses(ctx context.Context, from, to time.Time) ([]models.CategoryData, error) {

@@ -44,7 +44,7 @@ func main() {
 
 	txHandler := handlers.NewTransactionHandler(txRepo)
 	statsHandler := handlers.NewStatisticsHandler(txRepo, wlRepo)
-	wlHandler := handlers.NewWishlistHandler(wlRepo)
+	wlHandler := handlers.NewWishlistHandler(wlRepo, txRepo)
 	exportHandler := handlers.NewExportHandler(txRepo, wlRepo, cfg.FontPath)
 	authHandler := handlers.NewAuthHandler(userRepo, cfg)
 	catHandler := handlers.NewCategoryHandler(catRepo)
@@ -87,6 +87,7 @@ func main() {
 			protected.GET("/wishlist", wlHandler.List)
 			protected.PUT("/wishlist/:id", wlHandler.Update)
 			protected.DELETE("/wishlist/:id", wlHandler.Delete)
+			protected.POST("/wishlist/:id/unlink-period", wlHandler.UnlinkPeriod)
 
 			protected.GET("/categories", catHandler.List)
 			protected.GET("/categories/all", catHandler.ListAll)

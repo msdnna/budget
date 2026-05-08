@@ -39,6 +39,12 @@ type Transaction struct {
 	DetailRequestID     string `bson:"detail_request_id,omitempty" json:"detail_request_id,omitempty"`
 	DetailRequestStatus string `bson:"detail_request_status,omitempty" json:"detail_request_status,omitempty"`
 	ExcludedFromStats   bool   `bson:"excluded_from_stats,omitempty" json:"excluded_from_stats,omitempty"`
+
+	// WishlistID links an expense transaction to a recurring wishlist item.
+	// Empty when the transaction is not a recurring-payment fulfillment.
+	// Forecast aggregation uses it to decide whether a recurring item is
+	// "paid this period" and should be excluded from the projected total.
+	WishlistID string `bson:"wishlist_id,omitempty" json:"wishlist_id,omitempty"`
 }
 
 type CreateTransactionRequest struct {
@@ -49,6 +55,7 @@ type CreateTransactionRequest struct {
 	Source      string          `json:"source"`
 	Purpose     string          `json:"purpose"`
 	Description string          `json:"description"`
+	WishlistID  string          `json:"wishlist_id"`
 }
 
 type UpdateTransactionRequest struct {
@@ -60,6 +67,9 @@ type UpdateTransactionRequest struct {
 	Description string    `json:"description"`
 	Hidden      *bool     `json:"hidden"`
 	CreatedBy   *UserInfo `json:"created_by"`
+	// Pointer so an empty string ("") is distinguishable from absent — empty
+	// string unlinks the transaction from its wishlist item.
+	WishlistID *string `json:"wishlist_id"`
 }
 
 type TransactionFilter struct {

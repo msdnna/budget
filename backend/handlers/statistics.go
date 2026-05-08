@@ -188,12 +188,73 @@ func (h *StatisticsHandler) Forecast(c *gin.Context) {
 		return
 	}
 
+	// Pull every expense transaction linked to any recurring wishlist item
+	// since the start of the calendar year. We then bucket per item's
+	// frequency-period in Go (monthly/quarterly/yearly windows differ).
+	yearStart := time.Date(now.Year(), 1, 1, 0, 0, 0, 0, time.UTC)
+	var recurringIDs []string
+	for _, item := range unpurchased {
+		if item.Frequency != models.FrequencyOnce {
+			recurringIDs = append(recurringIDs, item.ID)
+		}
+	}
+	payments, err := h.txRepo.FindLinkedToWishlistMulti(ctx, recurringIDs, yearStart, time.Time{})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
 	// Build history-based category map
 	catMap := make(map[string]float64)
 	var histTotal float64
 	for _, cat := range historyCats {
 		catMap[cat.Category] += cat.Amount
 		histTotal += cat.Amount
+	}
+
+	// Period bounds for "paid this period" lookup. Monthly = current calendar
+	// month, quarterly = current calendar quarter, yearly = current calendar
+	// year. ≥1 linked transaction in the window marks the item as paid; the
+	// item is then excluded from forecast totals (but still rendered so the
+	// UI can show a struck-through "оплачено" row).
+	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+	monthEnd := monthStart.AddDate(0, 1, 0)
+	q := (int(now.Month()) - 1) / 3
+	quarterStart := time.Date(now.Year(), time.Month(q*3+1), 1, 0, 0, 0, 0, time.UTC)
+	quarterEnd := quarterStart.AddDate(0, 3, 0)
+	yearEnd := yearStart.AddDate(1, 0, 0)
+
+	type paidStat struct {
+		amount float64
+		count  int
+	}
+	paidByItem := make(map[string]paidStat)
+	for _, p := range payments {
+		var inPeriod bool
+		// Find the matching item's frequency to know which window applies.
+		// (Linear scan is fine — recurringIDs is small.)
+		var freq models.Frequency
+		for _, item := range unpurchased {
+			if item.ID == p.WishlistID {
+				freq = item.Frequency
+				break
+			}
+		}
+		switch freq {
+		case models.FrequencyMonthly:
+			inPeriod = !p.Date.Before(monthStart) && p.Date.Before(monthEnd)
+		case models.FrequencyQuarterly:
+			inPeriod = !p.Date.Before(quarterStart) && p.Date.Before(quarterEnd)
+		case models.FrequencyYearly:
+			inPeriod = !p.Date.Before(yearStart) && p.Date.Before(yearEnd)
+		}
+		if !inPeriod {
+			continue
+		}
+		s := paidByItem[p.WishlistID]
+		s.amount += p.Amount
+		s.count++
+		paidByItem[p.WishlistID] = s
 	}
 
 	// Calculate monthly contribution for every unpurchased wishlist item.
@@ -212,15 +273,24 @@ func (h *StatisticsHandler) Forecast(c *gin.Context) {
 		default: // once, monthly, or empty
 			monthly = item.EstimatedCost
 		}
-		catMap[item.Category] += monthly
-		wishlistTotal += monthly
+		paid := paidByItem[item.ID]
+		isPaid := paid.count > 0
+		// Exclude paid recurring items from forecast totals — actual
+		// transactions already counted in the expense history.
+		if !isPaid {
+			catMap[item.Category] += monthly
+			wishlistTotal += monthly
+		}
 		if item.Frequency != models.FrequencyOnce {
 			regularItems = append(regularItems, models.RegularItemForecast{
-				ID:          item.ID,
-				Name:        item.Name,
-				MonthlyCost: monthly,
-				Frequency:   string(item.Frequency),
-				Category:    item.Category,
+				ID:             item.ID,
+				Name:           item.Name,
+				MonthlyCost:    monthly,
+				Frequency:      string(item.Frequency),
+				Category:       item.Category,
+				PaidThisPeriod: isPaid,
+				PaidAmount:     paid.amount,
+				PaidCount:      paid.count,
 			})
 		}
 	}

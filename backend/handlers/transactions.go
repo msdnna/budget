@@ -56,6 +56,7 @@ func (h *TransactionHandler) Create(c *gin.Context) {
 		Source:      req.Source,
 		Purpose:     req.Purpose,
 		Description: req.Description,
+		WishlistID:  req.WishlistID,
 		CreatedBy:   userInfoFromCtx(c),
 	}
 
@@ -165,6 +166,10 @@ func (h *TransactionHandler) Update(c *gin.Context) {
 	}
 	if req.CreatedBy != nil {
 		update["created_by"] = req.CreatedBy
+	}
+	if req.WishlistID != nil {
+		// Empty string unlinks the transaction from its wishlist item.
+		update["wishlist_id"] = *req.WishlistID
 	}
 
 	t, err := h.repo.Update(c.Request.Context(), id, update, 0, userInfoFromCtx(c))

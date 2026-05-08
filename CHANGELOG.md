@@ -16,6 +16,17 @@
 
 ## API (backend)
 
+### [1.10.0] — 2026-05-08
+
+#### Added
+- Поле `wishlist_id` у `Transaction` — ссылка с расхода на регулярный wishlist-итем (коммуналка/связь/Интернет и т.п.). Принимается в `POST /api/transactions`, `PUT /api/transactions/:id` (пустая строка отвязывает) и round-tripит через `/api/sync/push`.
+- В ответе `GET /api/statistics/forecast` у каждого `regular_items` появились поля `paid_this_period: bool`, `paid_amount: float`, `paid_count: int` — рассчитываются по транзакциям с заданным `wishlist_id`, чьи даты попадают в текущий период (месяц / квартал / год соответственно частоте). ≥1 связанная транзакция = «оплачено».
+- `POST /api/wishlist/:id/unlink-period` — массово очищает `wishlist_id` у всех транзакций в текущем периоде регулярного итема (бэкенд для кнопки «Отменить»).
+- Индекс по `(wishlist_id, date desc)` в коллекции `transactions`.
+
+#### Changed
+- `Forecast()` исключает «оплаченные за период» регулярные итемы из `total_monthly`, `wishlist_contrib` и категорийной разбивки — устранён двойной учёт «факт расхода + плановый wishlist».
+
 ### [1.9.0] — 2026-05-08
 
 #### Added
