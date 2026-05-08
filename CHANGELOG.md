@@ -71,6 +71,11 @@
 
 ## Web (frontend)
 
+### [1.11.2] — 2026-05-08
+
+#### Fixed
+- `DetailRequestModal` отклеивался от центра экрана и не закрывался по клику вне: `margin: 24px` на самой модалке ломал flex-центрирование Naive; `mask-closable: false` блокировал backdrop-клик. Заменено на `width: min(1024px, calc(100vw - 48px))` + `max-height: calc(100vh - 48px)` без margin, `mask-closable` возвращён к дефолту.
+
 ### [1.11.1] — 2026-05-08
 
 #### Changed
@@ -137,6 +142,16 @@
 ---
 
 ## Android
+
+### [1.22.2] — 2026-05-08
+
+#### Fixed
+- `TilePeriodPickerPopup` на `StatisticsScreen` всё равно прилипал к триггеру: вызовы передавали жёстко закодированный `anchorOffset = IntOffset(0, 110)`, перекрывая dp-аккуратный default из 1.22.1. Все три call-site'а очищены — теперь работает `38.dp + 8.dp gap` от триггера.
+- Counter-бейдж в TopAppBar (открытые ЗнД) обрезался верхним краем app-bar'а: `BadgedBox` располагает значок снаружи measured-bounds иконки, и TopAppBar клиппил overflow вверх. Заменено на ручную `Box` с `align(Alignment.TopEnd) + offset(-4dp, 6dp)` — бейдж сидит внутри 48dp action-slot'а.
+- `ExpensesScreen`: жёлтая (pinned) карточка не показывалась сразу после открытия экрана, появлялась только после ручного скролла. LazyColumn якорится на первой видимой записи: когда ЗнД-store догружается после транзакций, новые pinned-строки вставляются в head, но scroll остаётся на старом anchor'е, из-за чего pinned-ряды оказываются выше viewport. Добавлен `LaunchedEffect(myOpenParentIds.size)` с `animateScrollToItem(0)` на переход 0 → N pinned'ов.
+
+#### Added
+- Подтверждение удаления для child-расходов в `DetailRequestScreen`: `AlertDialog` с «Удалить» / «Отмена» вместо мгновенного удаления по нажатию ✕.
 
 ### [1.22.1] — 2026-05-08
 

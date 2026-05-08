@@ -96,7 +96,8 @@ fun StatisticsScreen(serverUrl: String, primaryColor: Color, valuesHidden: Boole
                                 primaryColor = primaryColor,
                                 onSelect = { y, m -> vm.selectMonth(y, m); pickerOpen = null },
                                 onDismiss = { pickerOpen = null },
-                                anchorOffset = androidx.compose.ui.unit.IntOffset(0, 110),
+                                // Default anchor offset (trigger height + 8dp gap)
+                                // is computed inside TilePeriodPickerPopup; don't override.
                             )
                             TilePeriodPickerPopup(
                                 open = pickerOpen == StatsPeriod.YEAR && p == StatsPeriod.YEAR,
@@ -106,7 +107,8 @@ fun StatisticsScreen(serverUrl: String, primaryColor: Color, valuesHidden: Boole
                                 primaryColor = primaryColor,
                                 onSelect = { y, _ -> vm.selectYear(y); pickerOpen = null },
                                 onDismiss = { pickerOpen = null },
-                                anchorOffset = androidx.compose.ui.unit.IntOffset(0, 110),
+                                // Default anchor offset (trigger height + 8dp gap)
+                                // is computed inside TilePeriodPickerPopup; don't override.
                             )
                         }
                     }

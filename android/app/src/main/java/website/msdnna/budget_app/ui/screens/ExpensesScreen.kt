@@ -100,6 +100,20 @@ fun ExpensesScreen(
         includeDetailedSeen = includeDetailed
     }
 
+    // When detail-requests load AFTER transactions, the pinned (yellow) parent
+    // rows are inserted at the head of `orderedTransactions`. LazyColumn keyed
+    // items anchor on the first visible item, so the new rows end up scrolled
+    // off-screen above the viewport. Force-scroll to 0 the first time pinned
+    // items appear so the user sees the request highlighted.
+    var pinnedSeenCount by rememberSaveable { mutableStateOf(0) }
+    LaunchedEffect(myOpenParentIds.size, uiState.transactions.size) {
+        val pinned = myOpenParentIds.size
+        if (pinned > pinnedSeenCount && uiState.transactions.isNotEmpty()) {
+            listState.animateScrollToItem(0)
+        }
+        pinnedSeenCount = pinned
+    }
+
     val expenseColor = LocalExpenseColor.current
 
     BackHandler(enabled = selectionMode) { vm.clearSelection() }

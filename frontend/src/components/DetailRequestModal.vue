@@ -4,7 +4,6 @@
     preset="card"
     :title="title"
     class="dr-modal"
-    :mask-closable="false"
     @update:show="v => !v && $emit('close')"
   >
     <n-spin :show="loading">
@@ -330,14 +329,14 @@ watch(() => [props.show, props.requestId], ([s, id]) => {
 </style>
 
 <style>
-/* Top-level (un-scoped) — affects only this modal via the unique class. */
+/* Top-level (un-scoped) — affects only this modal via the unique class.
+   Naive UI centers the modal via flex; setting `margin` would knock it off
+   center. Constrain size only — viewport gap comes from the calc(). */
 .n-modal.dr-modal {
-  /* Cap the modal so it never touches viewport edges; inner card scrolls. */
-  max-width: min(1024px, calc(100vw - 48px));
+  width: min(1024px, calc(100vw - 48px));
   max-height: calc(100vh - 48px);
-  margin: 24px;
   display: flex;
   flex-direction: column;
 }
-.n-modal.dr-modal .n-card__content { overflow-y: auto; }
+.n-modal.dr-modal > .n-card__content { overflow-y: auto; }
 </style>

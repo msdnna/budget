@@ -51,6 +51,7 @@ fun DetailRequestScreen(
     var showAddSheet by remember { mutableStateOf(false) }
     var showCloseConfirm by remember { mutableStateOf(false) }
     var showCancelConfirm by remember { mutableStateOf(false) }
+    var pendingDeleteId by remember { mutableStateOf<String?>(null) }
 
     val categories by CategoryRepository.observeBySection("expense").collectAsState(initial = emptyList())
 
@@ -161,14 +162,7 @@ fun DetailRequestScreen(
                                 ChildRow(
                                     tx = c,
                                     canDelete = isOpen && isAssignee,
-                                    onDelete = {
-                                        scope.launch {
-                                            try {
-                                                RetrofitClient.getService(serverUrl).deleteTransaction(c.id)
-                                                reload()
-                                            } catch (_: Exception) { /* ignored */ }
-                                        }
-                                    },
+                                    onDelete = { pendingDeleteId = c.id },
                                     valuesHidden = valuesHidden,
                                 )
                             }
@@ -257,6 +251,28 @@ fun DetailRequestScreen(
                 }) { Text("Готово") }
             },
             dismissButton = { TextButton(onClick = { showCloseConfirm = false }) { Text("Отмена") } },
+        )
+    }
+
+    pendingDeleteId?.let { delId ->
+        AlertDialog(
+            onDismissRequest = { pendingDeleteId = null },
+            title = { Text("Удалить расход?") },
+            text = { Text("Запись будет удалена из запроса. Действие нельзя отменить.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingDeleteId = null
+                    scope.launch {
+                        try {
+                            RetrofitClient.getService(serverUrl).deleteTransaction(delId)
+                            reload()
+                        } catch (e: Exception) {
+                            error = e.message
+                        }
+                    }
+                }) { Text("Удалить", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = { TextButton(onClick = { pendingDeleteId = null }) { Text("Отмена") } },
         )
     }
 

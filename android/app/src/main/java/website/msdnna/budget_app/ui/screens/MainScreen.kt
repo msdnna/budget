@@ -259,18 +259,38 @@ fun MainScreen(
                         exit = androidx.compose.animation.fadeOut(animationSpec = tween(160)) +
                             androidx.compose.animation.shrinkHorizontally(animationSpec = tween(180), clip = false),
                     ) {
-                        BadgedBox(
-                            badge = {
-                                Badge(containerColor = Color(0xFFF0A020)) {
-                                    Text(myOpenDrCount.toString())
-                                }
-                            }
+                        // Custom Box layout (instead of M3 BadgedBox): the
+                        // default BadgedBox positions the badge OUTSIDE the
+                        // icon at top-end with a negative offset, which gets
+                        // clipped by the TopAppBar's top edge. Box+align gives
+                        // us pixel-perfect control: the badge sits inside the
+                        // action slot's bounds.
+                        Box(
+                            modifier = Modifier.size(48.dp),
+                            contentAlignment = Alignment.Center,
                         ) {
                             IconButton(onClick = {
                                 detailRequestsListShowAll = false
                                 showDetailRequestsList = true
                             }) {
                                 Icon(Icons.AutoMirrored.Filled.Assignment, "Запросы на детализацию")
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .offset(x = (-4).dp, y = 6.dp)
+                                    .clip(androidx.compose.foundation.shape.CircleShape)
+                                    .background(Color(0xFFF0A020))
+                                    .defaultMinSize(minWidth = 16.dp, minHeight = 16.dp)
+                                    .padding(horizontal = 4.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    myOpenDrCount.toString(),
+                                    color = Color.White,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
                             }
                         }
                     }
