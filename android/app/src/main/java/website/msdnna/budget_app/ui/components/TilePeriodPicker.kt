@@ -1,5 +1,13 @@
 package website.msdnna.budget_app.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -13,8 +21,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -108,9 +118,17 @@ fun TilePeriodPickerPopup(
     primaryColor: Color,
     onSelect: (year: Int, month: Int) -> Unit,
     onDismiss: () -> Unit,
-    anchorOffset: IntOffset = IntOffset(0, 110),
+    /** Vertical gap between the trigger and the popup. Tuned by eye to look
+     *  like a small breathing space without the panel floating away. */
+    anchorGap: Dp = 8.dp,
+    /** Override the full anchor offset; defaults to "trigger height + gap"
+     *  computed from a typical 38dp trigger Surface. */
+    anchorOffset: IntOffset? = null,
 ) {
-    if (!open) return
+    val density = LocalDensity.current
+    val resolvedOffset = anchorOffset ?: with(density) {
+        IntOffset(0, (38.dp + anchorGap).roundToPx())
+    }
 
     var cursorYear by remember(open, year) { mutableStateOf(year) }
 
@@ -118,22 +136,39 @@ fun TilePeriodPickerPopup(
     val todayYear = now.get(Calendar.YEAR)
     val todayMonth = now.get(Calendar.MONTH) + 1
 
-    Popup(
-        onDismissRequest = onDismiss,
-        properties = PopupProperties(focusable = true),
-        offset = anchorOffset,
-    ) {
-        TilePanel(
-            type = type,
-            cursorYear = cursorYear,
-            selectedYear = year,
-            selectedMonth = month,
-            todayYear = todayYear,
-            todayMonth = todayMonth,
-            primaryColor = primaryColor,
-            onCursorChange = { cursorYear = it },
-            onSelect = onSelect,
-        )
+    // Drive enter/exit via MutableTransitionState so we can keep the Popup
+    // mounted during the exit animation (Popup unmounts the moment `open`
+    // flips false otherwise).
+    val transition = remember { MutableTransitionState(false) }
+    transition.targetState = open
+
+    if (transition.currentState || transition.targetState) {
+        Popup(
+            onDismissRequest = onDismiss,
+            properties = PopupProperties(focusable = true),
+            offset = resolvedOffset,
+        ) {
+            AnimatedVisibility(
+                visibleState = transition,
+                enter = fadeIn(tween(150)) +
+                    slideInVertically(tween(180)) { -it / 6 } +
+                    scaleIn(initialScale = 0.96f, animationSpec = tween(180)),
+                exit = fadeOut(tween(110)) +
+                    scaleOut(targetScale = 0.96f, animationSpec = tween(130)),
+            ) {
+                TilePanel(
+                    type = type,
+                    cursorYear = cursorYear,
+                    selectedYear = year,
+                    selectedMonth = month,
+                    todayYear = todayYear,
+                    todayMonth = todayMonth,
+                    primaryColor = primaryColor,
+                    onCursorChange = { cursorYear = it },
+                    onSelect = onSelect,
+                )
+            }
+        }
     }
 }
 

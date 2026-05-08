@@ -6,6 +6,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -43,23 +45,26 @@ fun DetailRequestsScreen(
     val items by DetailRequestStore.items.collectAsStateWithLifecycle()
     val loading by DetailRequestStore.loading.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
-    var tab by remember { mutableStateOf(0) }   // 0=open, 1=closed (only when showAll)
+    val pagerState = rememberPagerState(initialPage = 0) { if (showAll) 2 else 1 }
 
     LaunchedEffect(Unit) {
         DetailRequestStore.refresh()
     }
     BackHandler(onBack = onClose)
 
-    val visible = remember(items, tab, showAll, currentUserId) {
+    fun visibleFor(tabIdx: Int): List<DetailRequest> {
         if (!showAll) {
-            items.filter { it.status == "open" && it.assignee?.userId == currentUserId }
-        } else {
-            val targetStatus = if (tab == 0) "open" else "closed"
-            items.filter {
+            return items
+                .filter { it.status == "open" && it.assignee?.userId == currentUserId }
+                .sortedByDescending { it.createdAt }
+        }
+        val targetStatus = if (tabIdx == 0) "open" else "closed"
+        return items
+            .filter {
                 it.status == targetStatus &&
                     (it.assignee?.userId == currentUserId || it.creator?.userId == currentUserId)
             }
-        }.sortedByDescending { it.createdAt }
+            .sortedByDescending { it.createdAt }
     }
 
     Surface(
@@ -85,43 +90,48 @@ fun DetailRequestsScreen(
         ) { padding ->
             Column(modifier = Modifier.fillMaxSize().padding(padding)) {
                 if (showAll) {
-                    TabRow(
-                        selectedTabIndex = tab,
+                    PrimaryTabRow(
+                        selectedTabIndex = pagerState.currentPage,
                         containerColor = MaterialTheme.colorScheme.surface,
                         contentColor = primaryColor,
                     ) {
                         Tab(
-                            selected = tab == 0,
-                            onClick = { tab = 0 },
+                            selected = pagerState.currentPage == 0,
+                            onClick = { scope.launch { pagerState.animateScrollToPage(0) } },
                             text = { Text("Открытые") },
                         )
                         Tab(
-                            selected = tab == 1,
-                            onClick = { tab = 1 },
+                            selected = pagerState.currentPage == 1,
+                            onClick = { scope.launch { pagerState.animateScrollToPage(1) } },
                             text = { Text("Закрытые") },
                         )
                     }
                 }
 
-                if (loading && visible.isEmpty()) {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = primaryColor)
-                    }
-                } else if (visible.isEmpty()) {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(
-                            if (showAll && tab == 1) "Нет закрытых запросов" else "Нет открытых запросов",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        items(visible, key = { it.id }) { r ->
-                            DetailRequestRow(r, primaryColor, currentUserId, onOpen)
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier.fillMaxSize(),
+                    beyondViewportPageCount = 1,
+                ) { page ->
+                    val visible = visibleFor(page)
+                    when {
+                        loading && visible.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(color = primaryColor)
+                        }
+                        visible.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text(
+                                if (showAll && page == 1) "Нет закрытых запросов" else "Нет открытых запросов",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        else -> LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            items(visible, key = { it.id }) { r ->
+                                DetailRequestRow(r, primaryColor, currentUserId, onOpen)
+                            }
                         }
                     }
                 }

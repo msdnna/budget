@@ -71,6 +71,12 @@
 
 ## Web (frontend)
 
+### [1.11.1] — 2026-05-08
+
+#### Changed
+- `DetailRequestModal` — двухколоночный layout: слева форма «Добавить расход», справа список добавленных (мирроринг страницы Доходов/Расходов). Прогресс-карточка сверху, мета+кнопки в footer.
+- Модалка ограничена `max-width: min(1024px, calc(100vw - 48px))` и `max-height: calc(100vh - 48px)` с `margin: 24px` — не упирается в края экрана при высоком контенте; внутренний контент скроллится.
+
 ### [1.11.0] — 2026-05-08
 
 #### Added
@@ -131,6 +137,18 @@
 ---
 
 ## Android
+
+### [1.22.1] — 2026-05-08
+
+#### Fixed
+- `BadgedBox` в TopAppBar обрезался при `AnimatedVisibility(expandHorizontally)` — добавлено `clip = false` на enter/exit, бейдж счётчика больше не съедается клипом во время анимации.
+- TopAppBar: `currentPage` сменён на `pagerState.targetPage` для тайтла и условных кнопок (фильтр, ЗнД-бейдж). При `animateScrollToPage(...)` от тапа в bottom-nav название раздела сразу прыгает к финальной странице, а не пробегает по всем промежуточным.
+- `SwipeableTransactionCard`: переключение скрытия сумм переведено с `Crossfade` (TopStart-выравнивание) на `AnimatedContent(contentAlignment = CenterEnd)` — placeholder и Text больше не «съезжают» друг относительно друга во время фейда.
+- Карандаш-кнопка в `TransactionDetailSheet` теперь окрашивается в `primaryColor` (как в Forecast/wishlist), а не в цвет суммы.
+
+#### Added
+- Свайп между табами Открытые/Закрытые в `DetailRequestsScreen`: `HorizontalPager` + `PrimaryTabRow` (M3) с автоматически анимированным индикатором.
+- Анимация появления `TilePeriodPickerPopup` на Statistics: `MutableTransitionState` + `AnimatedVisibility(fadeIn + slideInVertically + scaleIn)` с обратным `fadeOut + scaleOut`. Отступ от триггера переведён в dp (`anchorGap = 8.dp`, базовый offset считается от 38dp-кнопки).
 
 ### [1.22.0] — 2026-05-08
 

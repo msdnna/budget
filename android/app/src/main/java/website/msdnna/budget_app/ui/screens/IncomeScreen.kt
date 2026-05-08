@@ -613,9 +613,17 @@ fun SwipeableTransactionCard(
                         )
                     }
                 }
-                Crossfade(
+                // AnimatedContent (not Crossfade) so we can pin both children
+                // to CenterEnd: the placeholder (60dp box) and the Text have
+                // different widths, and Crossfade's default TopStart alignment
+                // made the placeholder visibly slide in from the left during
+                // the fade. CenterEnd anchors both to the same right edge.
+                AnimatedContent(
                     targetState = valuesHidden,
-                    animationSpec = tween(220),
+                    transitionSpec = {
+                        fadeIn(tween(220)) togetherWith fadeOut(tween(220))
+                    },
+                    contentAlignment = Alignment.CenterEnd,
                     label = "txAmount",
                 ) { hidden ->
                     if (hidden) {
@@ -766,7 +774,10 @@ fun TransactionDetailSheet(
                             }
                         }
                         IconButton(onClick = { isEditing = true }) {
-                            Icon(Icons.Default.Edit, "Редактировать", tint = amountColor)
+                            // Pencil tinted with primary, not amountColor —
+                            // matches the wishlist (Forecast) edit affordance
+                            // and stays neutral relative to expense/income hue.
+                            Icon(Icons.Default.Edit, "Редактировать", tint = primaryColor)
                         }
                     }
                 }

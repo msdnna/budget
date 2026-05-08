@@ -111,6 +111,10 @@ fun MainScreen(
 ) {
     val pagerState = rememberPagerState(initialPage = 0) { NAV_ITEMS.size }
     val currentRoute = NAV_ITEMS[pagerState.currentPage].route
+    // For TopAppBar title and conditional actions: use targetPage so a
+    // bottom-nav tap (animateScrollToPage) snaps the title to the destination
+    // instead of cycling through every intermediate page on the way there.
+    val targetRoute = NAV_ITEMS[pagerState.targetPage].route
     var showSettings by remember { mutableStateOf(false) }
     var showConflicts by remember { mutableStateOf(false) }
     var showNotifications by remember { mutableStateOf(false) }
@@ -216,7 +220,7 @@ fun MainScreen(
                                 )
                             } else {
                                 Text(
-                                    PAGE_TITLES[currentRoute] ?: "",
+                                    PAGE_TITLES[targetRoute] ?: "",
                                     style = MaterialTheme.typography.titleMedium
                                 )
                             }
@@ -245,12 +249,15 @@ fun MainScreen(
                     }
                     // DR badge — only on Expenses (per spec) and only when
                     // there's at least one open request assigned to me.
+                    // clip = false on expand/shrink: BadgedBox renders the
+                    // count badge OUTSIDE the IconButton's measured bounds,
+                    // so the default clip rect cuts it off mid-animation.
                     androidx.compose.animation.AnimatedVisibility(
-                        visible = currentRoute == "expenses" && myOpenDrCount > 0,
+                        visible = targetRoute == "expenses" && myOpenDrCount > 0,
                         enter = androidx.compose.animation.fadeIn(animationSpec = tween(200)) +
-                            androidx.compose.animation.expandHorizontally(animationSpec = tween(220)),
+                            androidx.compose.animation.expandHorizontally(animationSpec = tween(220), clip = false),
                         exit = androidx.compose.animation.fadeOut(animationSpec = tween(160)) +
-                            androidx.compose.animation.shrinkHorizontally(animationSpec = tween(180)),
+                            androidx.compose.animation.shrinkHorizontally(animationSpec = tween(180), clip = false),
                     ) {
                         BadgedBox(
                             badge = {
@@ -268,11 +275,11 @@ fun MainScreen(
                         }
                     }
                     androidx.compose.animation.AnimatedVisibility(
-                        visible = currentRoute == "income" || currentRoute == "expenses",
+                        visible = targetRoute == "income" || targetRoute == "expenses",
                         enter = androidx.compose.animation.fadeIn(animationSpec = tween(200)) +
-                            androidx.compose.animation.expandHorizontally(animationSpec = tween(220)),
+                            androidx.compose.animation.expandHorizontally(animationSpec = tween(220), clip = false),
                         exit = androidx.compose.animation.fadeOut(animationSpec = tween(160)) +
-                            androidx.compose.animation.shrinkHorizontally(animationSpec = tween(180)),
+                            androidx.compose.animation.shrinkHorizontally(animationSpec = tween(180), clip = false),
                     ) {
                         IconButton(onClick = { filtersVisible = !filtersVisible }) {
                             // Outlined variants match the visual weight of the

@@ -3,12 +3,12 @@
     :show="show"
     preset="card"
     :title="title"
-    style="max-width: 720px"
+    class="dr-modal"
     :mask-closable="false"
     @update:show="v => !v && $emit('close')"
   >
     <n-spin :show="loading">
-      <div v-if="view">
+      <div v-if="view" class="dr-body">
         <!-- Progress card -->
         <div class="dr-progress" :style="progressCardStyle">
           <div class="dr-progress-row">
@@ -36,81 +36,85 @@
           </div>
         </div>
 
-        <!-- Children list -->
-        <n-card title="Расходы по запросу" size="small" style="margin-top: 12px" :bordered="false">
-          <n-empty v-if="!(view.children?.length)" description="Пока нет расходов" />
-          <n-list v-else hoverable bordered>
-            <n-list-item v-for="c in view.children" :key="c.id">
-              <n-space align="center" justify="space-between" style="width: 100%">
-                <div>
-                  <n-text strong>{{ c.category }}</n-text>
-                  <n-text depth="3" style="font-size: 12px; margin-left: 8px">
-                    {{ new Date(c.date).toLocaleDateString('ru-RU') }}
-                  </n-text>
-                  <div v-if="c.purpose || c.description" style="font-size: 12px; opacity: 0.7; margin-top: 2px">
-                    {{ c.purpose }}<span v-if="c.purpose && c.description"> · </span>{{ c.description }}
-                  </div>
-                </div>
-                <n-space :size="6" align="center">
-                  <n-text :style="{ color: palette.expense, fontWeight: 600 }" :class="{ blurred: valuesHidden }">
-                    −{{ c.amount.toLocaleString('ru-RU') }} ₽
-                  </n-text>
-                  <n-popconfirm
-                    v-if="canEdit"
-                    @positive-click="removeChild(c.id)"
-                  >
-                    <template #trigger>
-                      <n-button size="tiny" quaternary type="error">✕</n-button>
-                    </template>
-                    Удалить расход?
-                  </n-popconfirm>
-                </n-space>
-              </n-space>
-            </n-list-item>
-          </n-list>
-        </n-card>
+        <!-- Two-column body: form on the left, children on the right
+             (mirrors the Income/Expenses page layout). -->
+        <div class="dr-cols">
+          <n-card v-if="canEdit" title="Добавить расход" size="small" :bordered="false" class="dr-col">
+            <n-form :model="childForm" :rules="childRules" ref="childFormRef" label-placement="top">
+              <n-grid :cols="2" :x-gap="12" :item-responsive="true">
+                <n-grid-item span="2 s:1">
+                  <n-form-item label="Сумма (₽)" path="amount">
+                    <n-input-number v-model:value="childForm.amount" :min="0.01" :precision="2" style="width:100%" placeholder="0.00" />
+                  </n-form-item>
+                </n-grid-item>
+                <n-grid-item span="2 s:1">
+                  <n-form-item label="Дата" path="date">
+                    <n-date-picker v-model:value="childForm.date" type="date" style="width:100%" />
+                  </n-form-item>
+                </n-grid-item>
+                <n-grid-item span="2">
+                  <n-form-item label="Категория" path="category">
+                    <n-select
+                      v-model:value="childForm.category"
+                      :options="categoryOptions"
+                      filterable
+                      tag
+                      :on-create="v => ({ label: v, value: v, id: null, is_default: false })"
+                      to="body"
+                      placeholder="Выберите или введите категорию"
+                    />
+                  </n-form-item>
+                </n-grid-item>
+                <n-grid-item span="2">
+                  <n-form-item label="Назначение">
+                    <n-input v-model:value="childForm.purpose" placeholder="Куда потрачено" />
+                  </n-form-item>
+                </n-grid-item>
+                <n-grid-item span="2">
+                  <n-form-item label="Описание">
+                    <n-input v-model:value="childForm.description" placeholder="Дополнительно" />
+                  </n-form-item>
+                </n-grid-item>
+              </n-grid>
+              <n-button type="primary" :loading="adding" @click="addChild" block>
+                Добавить расход
+              </n-button>
+            </n-form>
+          </n-card>
 
-        <!-- Add child form -->
-        <n-card v-if="canEdit" title="Добавить расход" size="small" style="margin-top: 12px" :bordered="false">
-          <n-form :model="childForm" :rules="childRules" ref="childFormRef" label-placement="top">
-            <n-grid :cols="2" :x-gap="12" :item-responsive="true">
-              <n-grid-item span="2 s:1">
-                <n-form-item label="Сумма (₽)" path="amount">
-                  <n-input-number v-model:value="childForm.amount" :min="0.01" :precision="2" style="width:100%" placeholder="0.00" />
-                </n-form-item>
-              </n-grid-item>
-              <n-grid-item span="2 s:1">
-                <n-form-item label="Дата" path="date">
-                  <n-date-picker v-model:value="childForm.date" type="date" style="width:100%" />
-                </n-form-item>
-              </n-grid-item>
-              <n-grid-item span="2 s:1">
-                <n-form-item label="Категория" path="category">
-                  <n-select
-                    v-model:value="childForm.category"
-                    :options="categoryOptions"
-                    filterable
-                    tag
-                    :on-create="v => ({ label: v, value: v, id: null, is_default: false })"
-                    to="body"
-                    placeholder="Выберите или введите категорию"
-                  />
-                </n-form-item>
-              </n-grid-item>
-              <n-grid-item span="2 s:1">
-                <n-form-item label="Назначение">
-                  <n-input v-model:value="childForm.purpose" placeholder="Куда потрачено" />
-                </n-form-item>
-              </n-grid-item>
-              <n-grid-item span="2">
-                <n-form-item label="Описание">
-                  <n-input v-model:value="childForm.description" placeholder="Дополнительно" />
-                </n-form-item>
-              </n-grid-item>
-            </n-grid>
-            <n-button type="primary" :loading="adding" @click="addChild" block>Добавить расход</n-button>
-          </n-form>
-        </n-card>
+          <n-card title="Расходы по запросу" size="small" :bordered="false" class="dr-col">
+            <n-empty v-if="!(view.children?.length)" description="Пока нет расходов" />
+            <n-list v-else hoverable bordered>
+              <n-list-item v-for="c in view.children" :key="c.id">
+                <n-space align="center" justify="space-between" style="width: 100%; flex-wrap: nowrap">
+                  <div style="min-width: 0">
+                    <n-text strong>{{ c.category }}</n-text>
+                    <n-text depth="3" style="font-size: 12px; margin-left: 8px">
+                      {{ new Date(c.date).toLocaleDateString('ru-RU') }}
+                    </n-text>
+                    <div v-if="c.purpose || c.description" style="font-size: 12px; opacity: 0.7; margin-top: 2px">
+                      {{ c.purpose }}<span v-if="c.purpose && c.description"> · </span>{{ c.description }}
+                    </div>
+                  </div>
+                  <n-space :size="6" align="center" style="flex-shrink: 0">
+                    <n-text :style="{ color: palette.expense, fontWeight: 600 }" :class="{ blurred: valuesHidden }">
+                      −{{ c.amount.toLocaleString('ru-RU') }} ₽
+                    </n-text>
+                    <n-popconfirm
+                      v-if="canEdit"
+                      @positive-click="removeChild(c.id)"
+                    >
+                      <template #trigger>
+                        <n-button size="tiny" quaternary type="error">✕</n-button>
+                      </template>
+                      Удалить расход?
+                    </n-popconfirm>
+                  </n-space>
+                </n-space>
+              </n-list-item>
+            </n-list>
+          </n-card>
+        </div>
       </div>
     </n-spin>
 
@@ -316,4 +320,24 @@ watch(() => [props.show, props.requestId], ([s, id]) => {
 .dr-overshoot { color: var(--n-color-warning, #f0a020); }
 .dr-remainder { font-style: italic; }
 .blurred { filter: blur(7px); user-select: none; }
+
+.dr-body { display: flex; flex-direction: column; gap: 12px; }
+.dr-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
+.dr-col { min-width: 0; }
+@media (max-width: 720px) {
+  .dr-cols { grid-template-columns: 1fr; }
+}
+</style>
+
+<style>
+/* Top-level (un-scoped) — affects only this modal via the unique class. */
+.n-modal.dr-modal {
+  /* Cap the modal so it never touches viewport edges; inner card scrolls. */
+  max-width: min(1024px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+  margin: 24px;
+  display: flex;
+  flex-direction: column;
+}
+.n-modal.dr-modal .n-card__content { overflow-y: auto; }
 </style>
