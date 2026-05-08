@@ -36,61 +36,83 @@
       </n-grid-item>
 
       <n-grid-item span="2 m:1">
-        <n-card title="Регулярные расходы">
-          <n-spin :show="loadingForecast">
-            <n-empty v-if="!forecast.regular_items?.length" description="Нет регулярных позиций" style="padding: 30px 0;" />
-            <n-list v-else>
-              <n-list-item v-for="item in forecast.regular_items" :key="item.id">
-                <n-thing>
-                  <template #header>
+        <!-- Heading outside the card; each regular item is its own card so
+             actions and amounts line up consistently across rows. -->
+        <div style="margin: 0 0 10px 4px">
+          <n-text strong style="font-size:15px">Регулярные расходы</n-text>
+        </div>
+        <n-spin :show="loadingForecast">
+          <n-empty v-if="!forecast.regular_items?.length" description="Нет регулярных позиций" style="padding: 30px 0;" />
+          <n-space v-else vertical :size="8">
+            <n-card v-for="item in forecast.regular_items" :key="item.id" size="small" :bordered="true">
+              <div class="regular-row">
+                <div class="regular-row__main">
+                  <div class="regular-row__title">
                     <n-text :style="{
+                      fontWeight: 500,
                       textDecoration: item.paid_this_period ? 'line-through' : 'none',
-                      color: item.paid_this_period ? palette.text3 : 'inherit'
+                      color: item.paid_this_period ? palette.text3 : 'inherit',
                     }">{{ item.name }}</n-text>
-                  </template>
-                  <template #description>
-                    <n-space align="center" :size="6">
-                      <n-text depth="3" style="font-size:12px">{{ item.category }}</n-text>
-                      <n-tag v-if="item.paid_this_period" type="success" size="small" round>
-                        Оплачено · {{ Math.round(item.paid_amount).toLocaleString('ru-RU') }} ₽
-                      </n-tag>
-                    </n-space>
-                  </template>
-                  <template #header-extra>
-                    <n-space align="center" :size="8">
-                      <n-tag type="info" size="small">{{ freqLabel(item.frequency) }}</n-tag>
-                      <n-text strong :style="{
-                        color: item.paid_this_period ? palette.text3 : palette.expense,
-                        textDecoration: item.paid_this_period ? 'line-through' : 'none',
-                      }">{{ Math.round(item.monthly_cost).toLocaleString('ru-RU') }} ₽/мес</n-text>
-                    </n-space>
-                  </template>
-                  <template #action>
-                    <n-space size="small">
-                      <n-button size="tiny" type="success" @click="openPayRegular(item)">Оплачено</n-button>
-                      <ConfirmActionButton
-                        v-if="item.paid_this_period"
-                        label="Отменить"
-                        type="default"
-                        :loading="cancelingId === item.id"
-                        @confirm="cancelRegularPaid(item)"
-                      />
-                    </n-space>
-                  </template>
-                </n-thing>
-              </n-list-item>
-            </n-list>
-          </n-spin>
-        </n-card>
+                    <n-tag type="info" size="small">{{ freqLabel(item.frequency) }}</n-tag>
+                    <n-tag v-if="item.paid_this_period" type="success" size="small" round>
+                      Оплачено · {{ Math.round(item.paid_amount).toLocaleString('ru-RU') }} ₽
+                    </n-tag>
+                  </div>
+                  <n-text depth="3" style="font-size:12px">
+                    {{ item.category }}<template v-if="item.paid_this_period && item.next_due_date">
+                      &nbsp;·&nbsp;следующая оплата: {{ formatDueDate(item.next_due_date) }}
+                    </template>
+                  </n-text>
+                </div>
+                <div class="regular-row__amount">
+                  <n-text strong :style="{
+                    color: item.paid_this_period ? palette.text3 : palette.expense,
+                    textDecoration: item.paid_this_period ? 'line-through' : 'none',
+                    whiteSpace: 'nowrap',
+                  }">
+                    {{ Math.round(item.monthly_cost).toLocaleString('ru-RU') }} {{ freqUnit(item.frequency) }}
+                  </n-text>
+                </div>
+                <div class="regular-row__actions">
+                  <n-button size="small" type="success" @click="openPayRegular(item)">Оплачено</n-button>
+                  <ConfirmActionButton
+                    v-if="item.paid_this_period"
+                    label="Отменить"
+                    type="default"
+                    size="small"
+                    :loading="cancelingId === item.id"
+                    @confirm="cancelRegularPaid(item)"
+                  />
+                  <n-popconfirm @positive-click="wlStore.remove(item.id).then(loadForecast)">
+                    <template #trigger>
+                      <n-button size="small" type="error" quaternary title="Удалить">✕</n-button>
+                    </template>
+                    Удалить эту позицию?
+                  </n-popconfirm>
+                </div>
+              </div>
+            </n-card>
+          </n-space>
+        </n-spin>
       </n-grid-item>
     </n-grid>
 
     <!-- Wishlist management -->
     <n-grid :cols="2" :x-gap="16" :y-gap="16" responsive="screen" :item-responsive="true">
       <n-grid-item span="2 m:1">
-        <n-card title="Добавить в список желаний">
+        <n-card title="Добавить">
           <n-form ref="formRef" :model="form" :rules="rules" label-placement="top">
-            <n-grid :cols="2" :x-gap="12" :item-responsive="true">
+            <!-- Type segmented selector decides whether the entry goes into
+                 «Список желаний» (frequency=once) or «Регулярные расходы»
+                 (monthly/quarterly/yearly). The frequency picker only
+                 appears for the recurring branch. -->
+            <n-form-item label="Тип" :show-feedback="false">
+              <n-radio-group v-model:value="form.kind" name="kind">
+                <n-radio-button value="wishlist">Желаемая покупка</n-radio-button>
+                <n-radio-button value="regular">Регулярный расход</n-radio-button>
+              </n-radio-group>
+            </n-form-item>
+            <n-grid :cols="2" :x-gap="12" :item-responsive="true" style="margin-top:12px">
               <n-grid-item span="2">
                 <n-form-item label="Название" path="name">
                   <n-input v-model:value="form.name" placeholder="Что хочу купить" />
@@ -115,14 +137,9 @@
                   />
                 </n-form-item>
               </n-grid-item>
-              <n-grid-item span="2 s:1">
+              <n-grid-item v-if="form.kind === 'regular'" span="2 s:1">
                 <n-form-item label="Частота">
-                  <n-select v-model:value="form.frequency" :options="frequencyOptions" />
-                </n-form-item>
-              </n-grid-item>
-              <n-grid-item v-if="form.frequency === 'once'" span="2">
-                <n-form-item label="Куплено">
-                  <n-switch v-model:value="form.purchased" />
+                  <n-select v-model:value="form.frequency" :options="recurringFrequencyOptions" />
                 </n-form-item>
               </n-grid-item>
               <n-grid-item span="2">
@@ -132,7 +149,7 @@
               </n-grid-item>
             </n-grid>
             <n-button type="primary" :loading="saving" @click="submit" block>
-              Добавить в список
+              {{ form.kind === 'regular' ? 'Добавить в регулярные' : 'Добавить в список' }}
             </n-button>
           </n-form>
         </n-card>
@@ -146,7 +163,7 @@
               <n-text strong>Список желаний</n-text>
               <n-space align="center" :size="8">
                 <template v-if="!bulkMode">
-                  <n-button size="small" :disabled="!wlStore.items.length" @click="enterBulkMode">
+                  <n-button size="small" :disabled="!wishlistOnly.length" @click="enterBulkMode">
                     Пакетное редактирование
                   </n-button>
                 </template>
@@ -175,10 +192,10 @@
             </n-space>
           </template>
           <n-spin :show="wlStore.loading">
-            <n-empty v-if="!wlStore.items.length" description="Список пуст" style="padding: 40px 0;" />
+            <n-empty v-if="!wishlistOnly.length" description="Список пуст" style="padding: 40px 0;" />
             <n-list v-else>
               <n-list-item
-                v-for="item in wlStore.items"
+                v-for="item in wishlistOnly"
                 :key="item.id"
                 :style="bulkMode && selectedIds.has(item.id) ? `background:${primaryColor}1f` : ''"
               >
@@ -333,7 +350,8 @@ import VChart from 'vue-echarts'
 import {
   NCard, NGrid, NGridItem, NStatistic, NSpin, NEmpty, NList, NListItem, NThing,
   NText, NTag, NSpace, NButton, NPopconfirm, NForm, NFormItem, NInput,
-  NInputNumber, NSelect, NSwitch, NModal, NTooltip, NDatePicker
+  NInputNumber, NSelect, NModal, NTooltip, NDatePicker,
+  NRadioGroup, NRadioButton
 } from 'naive-ui'
 import { useWishlistStore } from '@/stores/wishlist'
 import { useCategoriesStore } from '@/stores/categories'
@@ -359,10 +377,18 @@ const forecast = ref({
   breakdown: [], regular_items: [], unpurchased_wishlist: []
 })
 
+// `kind` selects the destination section: 'wishlist' = one-off purchase,
+// 'regular' = recurring expense. The backend still stores both as wishlist
+// rows distinguished only by `frequency` — `kind` is purely a UI affordance.
 const form = ref({
-  name: '', estimated_cost: null, category: '',
-  frequency: 'once', purchased: false, notes: ''
+  kind: 'wishlist', name: '', estimated_cost: null, category: '',
+  frequency: 'monthly', notes: ''
 })
+
+// Wishlist list excludes recurring items — those live in «Регулярные расходы».
+const wishlistOnly = computed(() =>
+  wlStore.items.filter(it => !it.frequency || it.frequency === 'once')
+)
 
 // ── Inline cost editing ───────────────────────────────────────────────────────
 
@@ -617,8 +643,10 @@ function renderCategoryOption({ node, option }) {
   ])
 }
 
-const frequencyOptions = [
-  { label: 'Однократно', value: 'once' },
+// Frequency options shown in the "Регулярный расход" branch — `once` is
+// no longer offered through this dropdown (it's implicit for the
+// «Желаемая покупка» branch).
+const recurringFrequencyOptions = [
   { label: 'Ежемесячно', value: 'monthly' },
   { label: 'Ежеквартально', value: 'quarterly' },
   { label: 'Ежегодно', value: 'yearly' },
@@ -635,6 +663,20 @@ function freqLabel(f) {
   return map[f] || f
 }
 
+// Per-period suffix for displayed amounts in «Регулярные расходы» rows.
+function freqUnit(f) {
+  if (f === 'quarterly') return '₽/кв'
+  if (f === 'yearly')    return '₽/год'
+  return '₽/мес'
+}
+
+function formatDueDate(iso) {
+  if (!iso) return ''
+  // iso is YYYY-MM-DD; render as DD.MM.YYYY for Russian locale.
+  const [y, m, d] = iso.split('-')
+  return `${d}.${m}.${y}`
+}
+
 async function submit() {
   try { await formRef.value?.validate() } catch { return }
   saving.value = true
@@ -643,11 +685,24 @@ async function submit() {
     if (cat && !catStore.bySection.wishlist.find(c => c.name === cat)) {
       await catStore.add('wishlist', cat).catch(() => {})
     }
-    await wlStore.create({ ...form.value })
+    // Derive frequency from the type pill: wishlist branch is always 'once'.
+    const frequency = form.value.kind === 'regular' ? form.value.frequency : 'once'
+    await wlStore.create({
+      name: form.value.name,
+      estimated_cost: form.value.estimated_cost,
+      category: cat,
+      frequency,
+      notes: form.value.notes,
+    })
     catStore.recordUse('wishlist', cat)
     await loadForecast()
-    message.success('Добавлено в список желаний')
-    form.value = { name: '', estimated_cost: null, category: '', frequency: 'once', purchased: false, notes: '' }
+    message.success(form.value.kind === 'regular' ? 'Добавлено в регулярные расходы' : 'Добавлено в список желаний')
+    form.value = {
+      kind: form.value.kind, // keep the user's last choice for quick repeat entry
+      name: '', estimated_cost: null, category: '',
+      frequency: form.value.kind === 'regular' ? form.value.frequency : 'monthly',
+      notes: '',
+    }
   } catch (e) {
     message.error(e.message)
   } finally {
@@ -730,5 +785,47 @@ onMounted(async () => {
 }
 .user-assign-btn.no-user:hover {
   opacity: 0.65;
+}
+
+/* «Регулярные расходы» card — three-column flex with consistent action sizes */
+.regular-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.regular-row__main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.regular-row__title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.regular-row__amount {
+  flex: 0 0 auto;
+  text-align: right;
+}
+.regular-row__actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+@media (max-width: 600px) {
+  .regular-row {
+    flex-wrap: wrap;
+  }
+  .regular-row__amount {
+    order: 0;
+  }
+  .regular-row__actions {
+    flex-basis: 100%;
+    justify-content: flex-end;
+  }
 }
 </style>
