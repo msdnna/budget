@@ -126,10 +126,18 @@ func (h *WishlistHandler) Delete(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "deleted"})
 }
 
-// UnlinkPeriod clears wishlist_id on every linked expense in the recurring
-// item's current period. Period is derived from the item's frequency:
-// monthly = current calendar month, quarterly = current calendar quarter,
-// yearly = current calendar year. Backs the "Отменить" action.
+// UnlinkPeriod clears wishlist_id on linked expense transactions whose date
+// falls in the item's current period. Period is derived from the item's
+// frequency:
+//
+//	once       → no date filter — wishlist purchases are one-off, all
+//	             linked tx are cleared (used by «Не куплено»).
+//	monthly    → current calendar month
+//	quarterly  → current calendar quarter
+//	yearly     → current calendar year
+//
+// Backs the "Отменить" action on regular расходы AND the "Не куплено"
+// action on wishlist items.
 func (h *WishlistHandler) UnlinkPeriod(c *gin.Context) {
 	id := c.Param("id")
 	item, err := h.repo.FindByID(c.Request.Context(), id)
@@ -154,8 +162,13 @@ func (h *WishlistHandler) UnlinkPeriod(c *gin.Context) {
 	case models.FrequencyYearly:
 		from = time.Date(now.Year(), 1, 1, 0, 0, 0, 0, time.UTC)
 		to = from.AddDate(1, 0, 0).Add(-time.Second)
+	case models.FrequencyOnce, "":
+		// Wishlist one-off — only ever has a single linked tx; clear it
+		// regardless of date so reverting «Куплено» works at any point.
+		from = time.Time{}
+		to = time.Time{}
 	default:
-		c.JSON(http.StatusBadRequest, gin.H{"error": "item is not recurring"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "unknown frequency"})
 		return
 	}
 	n, err := h.txRepo.UnlinkFromWishlist(c.Request.Context(), id, from, to, userInfoFromCtx(c))
