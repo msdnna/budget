@@ -293,9 +293,20 @@ private val AVATAR_PALETTE = listOf(
 )
 
 private fun avatarBgColor(name: String): Color {
-    var hash = 0
-    for (ch in name) hash = ch.code + ((hash shl 5) - hash)
-    return AVATAR_PALETTE[kotlin.math.abs(hash) % AVATAR_PALETTE.size]
+    // Mirror the JS hash in frontend/src/components/UserAvatar.vue so the same
+    // displayName lands on the same palette entry on both clients. JS keeps
+    // `hash` as a Number (double); only `hash << 5` truncates to Int32. A pure
+    // `Int` hash here wraps every iteration and produces a different palette
+    // index for names whose intermediate hash exceeds Int32 (~7+ Cyrillic
+    // chars), so distinct users can collide on Android while looking fine on
+    // web. Long preserves JS-equivalent precision for any displayName < 2^53.
+    var hash = 0L
+    for (ch in name) {
+        val shifted: Long = (hash.toInt() shl 5).toLong()
+        hash = ch.code.toLong() + (shifted - hash)
+    }
+    val idx = (kotlin.math.abs(hash) % AVATAR_PALETTE.size).toInt()
+    return AVATAR_PALETTE[idx]
 }
 
 @Composable
