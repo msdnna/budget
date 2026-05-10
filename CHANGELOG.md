@@ -224,6 +224,14 @@
 
 ## Android
 
+### [1.29.1] — 2026-05-11
+
+#### Fixed
+- Системный жест «назад» в режиме inline-редактирования записи (расход / доход / wishlist) теперь возвращает в режим просмотра, а не закрывает bottom-sheet целиком. Добавлен `BackHandler(enabled = isEditing)` в `TransactionDetailSheet` и `WishlistInteractiveSheet` — до этого ModalBottomSheet перехватывал back и звал `onDismiss` независимо от состояния редактирования.
+
+#### Changed
+- Переход «PinScreen → Главный экран» стал плавнее: `AnimatedContent` для lock→main теперь использует `tween(520, FastOutSlowInEasing)` + `scaleIn(0.90f)` (раньше — `tween(280)` + `scaleIn(0.96f)`), что делает анимацию заметной поверх внутренней индикации разблокировки PIN. Для остальных смен фаз — прежний быстрый `tween(320)` + `scaleIn(0.96f)`.
+
 ### [1.29.0] — 2026-05-11
 
 #### Changed

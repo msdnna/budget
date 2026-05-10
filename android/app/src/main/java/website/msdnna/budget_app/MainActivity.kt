@@ -231,13 +231,21 @@ class MainActivity : FragmentActivity() {
                     androidx.compose.animation.AnimatedContent(
                         targetState = phase,
                         transitionSpec = {
+                            val enterDur = if (initialState == "lock") 520 else 320
+                            val exitDur  = if (initialState == "lock") 340 else 220
                             (androidx.compose.animation.fadeIn(
-                                animationSpec = androidx.compose.animation.core.tween(280)
+                                animationSpec = androidx.compose.animation.core.tween(
+                                    durationMillis = enterDur,
+                                    easing = androidx.compose.animation.core.FastOutSlowInEasing,
+                                )
                             ) + androidx.compose.animation.scaleIn(
-                                initialScale = 0.96f,
-                                animationSpec = androidx.compose.animation.core.tween(280)
+                                initialScale = if (initialState == "lock") 0.90f else 0.96f,
+                                animationSpec = androidx.compose.animation.core.tween(
+                                    durationMillis = enterDur,
+                                    easing = androidx.compose.animation.core.FastOutSlowInEasing,
+                                )
                             )) togetherWith androidx.compose.animation.fadeOut(
-                                animationSpec = androidx.compose.animation.core.tween(180)
+                                animationSpec = androidx.compose.animation.core.tween(durationMillis = exitDur)
                             )
                         },
                         label = "appPhase",

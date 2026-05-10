@@ -714,6 +714,7 @@ fun TransactionDetailSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
     ) {
+        BackHandler(enabled = isEditing) { isEditing = false }
         Column(
             modifier = Modifier
                 .padding(horizontal = 20.dp)
