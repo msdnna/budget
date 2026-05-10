@@ -151,8 +151,18 @@ class ForecastViewModel(private val serverUrl: String) : ViewModel() {
      */
     fun bulkSetPurchased(ids: Collection<String>, targetPurchased: Boolean) {
         viewModelScope.launch {
+            // For bulk-«Не куплено» mirror the single-item behaviour:
+            // clear linked transactions on the server (best-effort, ignore
+            // per-item failures so one bad row doesn't block the rest).
+            // The transactions themselves stay in Расходах.
+            if (!targetPurchased) {
+                ids.forEach { id ->
+                    runCatching { service.unlinkWishlistPeriod(id) }
+                }
+            }
             WishlistRepository.bulkSetPurchased(ids, targetPurchased)
             _selectedIds.value = emptySet()
+            if (!targetPurchased) reload()
         }
     }
 

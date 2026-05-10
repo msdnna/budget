@@ -2,16 +2,20 @@ package website.msdnna.budget_app.ui.screens
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -112,6 +116,11 @@ fun ForecastScreen(
     val expenseColor = LocalExpenseColor.current
     var showAdd      by remember { mutableStateOf(false) }
     var detailItem   by remember { mutableStateOf<WishlistItem?>(null) }
+    // When the detail sheet opens from a regular card we also remember the
+    // server-computed forecast context (paid_this_period / next_due_date)
+    // so the sheet shows «Оплачено / Не оплачено» вместо «Не куплено».
+    // null when opened from a one-off wishlist row.
+    var detailRegularCtx by remember { mutableStateOf<RegularItem?>(null) }
     // When non-null, opens AddExpenseSheet prefilled from a recurring item.
     var payRegular   by remember { mutableStateOf<RegularItem?>(null) }
     // Same idea for «Куплено» on a one-off wishlist row.
@@ -156,30 +165,23 @@ fun ForecastScreen(
         floatingActionButton = {
             when {
                 selectionMode -> {
-                    val canPurchase = purchasableSelected.isNotEmpty()
+                    // Bulk-purchase убран в android 1.28.0 — теперь покупка
+                    // фиксируется через bottom-sheet (требует prefill-данных
+                    // на каждый итем). Bulk-«Не куплено» оставлен (по
+                    // аналогии с регулярным «Отменить»): отвязывает все
+                    // привязанные txs у выбранных и сбрасывает purchased.
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        if (canPurchase) {
+                        if (purchasableSelected.isNotEmpty() && allPurchased) {
                             FloatingActionButton(
                                 onClick = {
                                     vm.bulkSetPurchased(
                                         ids = purchasableSelected.map { it.id },
-                                        targetPurchased = !allPurchased
+                                        targetPurchased = false,
                                     )
                                 },
-                                containerColor = ColourPurchased,
+                                containerColor = Color(0xFF757575),
                                 contentColor   = Color.White,
-                            ) {
-                                Crossfade(
-                                    targetState = allPurchased,
-                                    animationSpec = tween(180),
-                                    label = "bulkPurchaseIcon",
-                                ) { purchased ->
-                                    Icon(
-                                        if (purchased) Icons.Default.RadioButtonUnchecked else Icons.Default.CheckCircle,
-                                        contentDescription = if (purchased) "Снять отметку «куплено»" else "Отметить как купленное"
-                                    )
-                                }
-                            }
+                            ) { Icon(Icons.Default.RadioButtonUnchecked, "Снять отметку «куплено»") }
                         }
                         FloatingActionButton(
                             onClick = { vm.bulkDeleteSelected() },
@@ -287,9 +289,29 @@ fun ForecastScreen(
                 }
 
                 // Регулярные расходы (heading + flat list of swipeable cards).
-                // Each item is its own LazyColumn item so the cards line up
-                // with the same visual rhythm as wishlist rows below.
-                val regular = uiState.forecast?.regularItems.orEmpty()
+                // Two data paths:
+                //   • online — server-computed forecast.regular_items carries
+                //     paid_this_period / next_due_date / paid_amount.
+                //   • offline — synthesise a minimal RegularItem from the
+                //     locally-cached wishlist (Room) so the user can still
+                //     edit / delete и видеть свои регулярные платежи.
+                //     paid_this_period and next_due_date stay default; the
+                //     «Оплачено» action still queues a linked tx locally.
+                val regular: List<RegularItem> = uiState.forecast?.regularItems
+                    ?.takeIf { it.isNotEmpty() }
+                    ?: uiState.wishlist
+                        .filter { isRecurring(it.frequency) }
+                        .map { wl ->
+                            RegularItem(
+                                id = wl.id,
+                                name = wl.name,
+                                estimatedCost = wl.estimatedCost,
+                                monthlyCost = wl.estimatedCost, // full per-period cost
+                                frequency = wl.frequency,
+                                category = wl.category,
+                                notes = wl.notes ?: "",
+                            )
+                        }
                 if (regular.isNotEmpty()) {
                     item {
                         Text(
@@ -312,7 +334,10 @@ fun ForecastScreen(
                                 // the hood regular расходы и wishlist — это
                                 // одна и та же запись с разной частотой.
                                 uiState.wishlist.firstOrNull { it.id == reg.id }
-                                    ?.let { detailItem = it }
+                                    ?.let {
+                                        detailItem = it
+                                        detailRegularCtx = reg
+                                    }
                             },
                             onMarkPaid   = { payRegular = regItem },
                             onCancelPaid = { vm.unlinkRegularPeriod(regItem.id) },
@@ -374,8 +399,12 @@ fun ForecastScreen(
             onDeleteCategory = { id -> vm.deleteCategory(id) },
             onSave     = { req -> vm.updateWishlistItem(item.id, req) },
             onGetUsers = { vm.getUsers() },
-            onDismiss  = { detailItem = null },
-            onSaved    = { detailItem = null; vm.reload() }
+            onDismiss  = { detailItem = null; detailRegularCtx = null },
+            onSaved    = { detailItem = null; detailRegularCtx = null; vm.reload() },
+            // Forecast-aware status row for recurring items. null for wishlist
+            // (one-off) — sheet falls back to «Куплено / Не куплено».
+            paidThisPeriod = detailRegularCtx?.paidThisPeriod,
+            nextDueDate    = detailRegularCtx?.nextDueDate.orEmpty(),
         )
     }
 
@@ -1036,7 +1065,15 @@ fun WishlistInteractiveSheet(
     onSave: suspend (UpdateWishlistRequest) -> Unit,
     onGetUsers: suspend () -> List<UserInfo>,
     onDismiss: () -> Unit,
-    onSaved: () -> Unit
+    onSaved: () -> Unit,
+    /** Opening from a regular расход — overrides the «Куплено» status row
+     *  with «Оплачено / Не оплачено» semantics derived from the forecast.
+     *  null when the sheet was opened from a one-off wishlist item. */
+    paidThisPeriod: Boolean? = null,
+    /** Next due date string (YYYY-MM-DD) for recurring items. Surfaced
+     *  alongside the status row so the user knows when the next payment
+     *  rolls around. Empty = don't render. */
+    nextDueDate: String = "",
 ) {
     val scope = rememberCoroutineScope()
     var isEditing by remember { mutableStateOf(false) }
@@ -1109,10 +1146,30 @@ fun WishlistInteractiveSheet(
 
                 WishlistDetailRow("Категория", item.category)
                 WishlistDetailRow("Периодичность", frequencyLabel(item.frequency))
-                if ((item.frequency == "quarterly" || item.frequency == "yearly") && !item.purchased) {
+                // «Ежемес. вклад» is informational only and applies to
+                // quarterly/yearly schedules — for monthly the value is
+                // identical to the price already shown above.
+                if (item.frequency == "quarterly" || item.frequency == "yearly") {
                     WishlistDetailRow("Ежемес. вклад", "≈ ${formatMoney(monthlyContribution(item))} ₽/мес")
                 }
-                WishlistDetailRow("Статус", if (item.purchased) "Куплено ✓" else "Не куплено")
+                // Status row semantics depend on what the sheet was opened
+                // from: a one-off wishlist row uses purchased flag («Куплено
+                // ✓ / Не куплено»); a recurring расход uses the forecast's
+                // paid_this_period («Оплачено / Не оплачено»). When opened
+                // for a recurring item without forecast context (e.g. from
+                // a transaction back-link offline), the status row is
+                // hidden — `purchased` is meaningless for recurring rows.
+                when {
+                    paidThisPeriod != null -> {
+                        WishlistDetailRow("Статус", if (paidThisPeriod) "Оплачено ✓" else "Не оплачено")
+                        if (nextDueDate.isNotBlank()) {
+                            WishlistDetailRow("Следующая оплата", formatDueDate(nextDueDate))
+                        }
+                    }
+                    item.frequency == "once" || item.frequency.isBlank() -> {
+                        WishlistDetailRow("Статус", if (item.purchased) "Куплено ✓" else "Не куплено")
+                    }
+                }
                 if (!item.notes.isNullOrBlank()) {
                     WishlistDetailRow("Заметки", item.notes)
                 }
@@ -1389,10 +1446,22 @@ fun AddWishlistSheet(
                 .padding(bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text(
-                if (kind == "regular") "Добавить регулярный расход" else "Добавить в список желаний",
-                style = MaterialTheme.typography.titleLarge
-            )
+            // Title cross-fades between the two flows so the chip change
+            // feels like a smooth scene swap rather than a hard re-render.
+            AnimatedContent(
+                targetState = kind,
+                transitionSpec = {
+                    (fadeIn(tween(200)) togetherWith fadeOut(tween(140))).using(
+                        SizeTransform(clip = false)
+                    )
+                },
+                label = "addSheetTitle",
+            ) { k ->
+                Text(
+                    if (k == "regular") "Добавить регулярный расход" else "Добавить в список желаний",
+                    style = MaterialTheme.typography.titleLarge
+                )
+            }
 
             // Type selector (FilterChip pair, mirroring the Statistics period
             // pattern). Default «Желаемая покупка»; switching to «Регулярный
@@ -1473,32 +1542,41 @@ fun AddWishlistSheet(
                 }
             }
 
-            if (kind == "regular") {
-                ExposedDropdownMenuBox(expanded = freqExpanded, onExpandedChange = { freqExpanded = it }) {
-                    OutlinedTextField(
-                        value = frequencyLabel(frequency), onValueChange = {}, readOnly = true,
-                        label = { Text("Периодичность") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(freqExpanded) },
-                        modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
-                        colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(focusedBorderColor = primaryColor)
-                    )
-                    ExposedDropdownMenu(expanded = freqExpanded, onDismissRequest = { freqExpanded = false }) {
-                        recurringFrequencies.forEach { (key, label) ->
-                            DropdownMenuItem(text = { Text(label) }, onClick = { frequency = key; freqExpanded = false })
+            // Periodicity picker (only meaningful for regular расход) slides
+            // in/out vertically when the user flips the kind chips, so the
+            // form animates rather than jumping.
+            AnimatedVisibility(
+                visible = kind == "regular",
+                enter = expandVertically(animationSpec = tween(220)) + fadeIn(tween(220)),
+                exit  = shrinkVertically(animationSpec = tween(180)) + fadeOut(tween(160)),
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    ExposedDropdownMenuBox(expanded = freqExpanded, onExpandedChange = { freqExpanded = it }) {
+                        OutlinedTextField(
+                            value = frequencyLabel(frequency), onValueChange = {}, readOnly = true,
+                            label = { Text("Периодичность") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(freqExpanded) },
+                            modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
+                            colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(focusedBorderColor = primaryColor)
+                        )
+                        ExposedDropdownMenu(expanded = freqExpanded, onDismissRequest = { freqExpanded = false }) {
+                            recurringFrequencies.forEach { (key, label) ->
+                                DropdownMenuItem(text = { Text(label) }, onClick = { frequency = key; freqExpanded = false })
+                            }
                         }
                     }
-                }
 
-                val hint = when (frequency) {
-                    "monthly"   -> "Полная стоимость учтётся в прогнозе на следующий месяц."
-                    "quarterly" -> "Стоимость учтётся в прогнозе на месяц перед следующей оплатой (раз в квартал)."
-                    "yearly"    -> "Стоимость учтётся в прогнозе на месяц перед следующей оплатой (раз в год)."
-                    else        -> ""
-                }
-                if (hint.isNotEmpty()) {
-                    Text(hint,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    val hint = when (frequency) {
+                        "monthly"   -> "Полная стоимость учтётся в прогнозе на следующий месяц."
+                        "quarterly" -> "Стоимость учтётся в прогнозе на месяц перед следующей оплатой (раз в квартал)."
+                        "yearly"    -> "Стоимость учтётся в прогнозе на месяц перед следующей оплатой (раз в год)."
+                        else        -> ""
+                    }
+                    if (hint.isNotEmpty()) {
+                        Text(hint,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
             }
 
