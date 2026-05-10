@@ -33,6 +33,7 @@ import website.msdnna.budget_app.data.preferences.AppPreferences
 import website.msdnna.budget_app.data.repository.CategoryRepository
 import website.msdnna.budget_app.data.security.AppLock
 import website.msdnna.budget_app.data.security.PinSecurity
+import website.msdnna.budget_app.data.sync.ReachabilityGate
 import website.msdnna.budget_app.notifications.NotificationReceiver
 import website.msdnna.budget_app.notifications.NotificationScheduler
 import website.msdnna.budget_app.ui.components.MbLogo
@@ -108,6 +109,14 @@ class MainActivity : FragmentActivity() {
                 pinHash     = storedPin
                 pinSalt     = storedSalt
                 if (storedPin.isNullOrBlank()) AppLock.unlock()
+                // Kick off the reachability probe BEFORE any HTTP fan-out so
+                // the OkHttp interceptor has a chance to fail-fast cold-start
+                // requests when the server is refusing/resetting connections.
+                val initialUrl = snap.url
+                if (!initialUrl.isNullOrBlank()) {
+                    ReachabilityGate.setServerUrl(initialUrl)
+                    ReachabilityGate.refresh()
+                }
                 prefsReady  = true
 
                 // Keep PIN state live for runtime changes (settings toggles, recovery).
@@ -156,6 +165,17 @@ class MainActivity : FragmentActivity() {
                 }
             }
 
+            // Keep the reachability gate's server URL in sync with the saved
+            // one. Re-binding triggers a fresh probe so we don't show stale
+            // offline state after switching servers / re-login.
+            LaunchedEffect(serverUrl) {
+                val url = serverUrl
+                if (!url.isNullOrBlank()) {
+                    ReachabilityGate.setServerUrl(url)
+                    ReachabilityGate.refresh()
+                }
+            }
+
             // App-lock state. pinHash/pinSalt are managed in the loader effect above
             // (not here) to avoid a race where collectAsStateWithLifecycle's
             // initialValue=null caused the lock gate to slip past.
@@ -172,12 +192,27 @@ class MainActivity : FragmentActivity() {
                 val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
                     when (event) {
                         androidx.lifecycle.Lifecycle.Event.ON_PAUSE  -> AppLock.onPause()
-                        androidx.lifecycle.Lifecycle.Event.ON_RESUME -> AppLock.onResume(lockTimeoutSec, hasPin)
+                        androidx.lifecycle.Lifecycle.Event.ON_RESUME -> {
+                            AppLock.onResume(lockTimeoutSec, hasPin)
+                            // Foreground resume: refresh reachability so the
+                            // user sees the live state immediately (server may
+                            // have come back up while we were backgrounded, or
+                            // gone down).
+                            ReachabilityGate.refresh()
+                        }
                         else -> Unit
                     }
                 }
                 lifecycleOwner.lifecycle.addObserver(observer)
                 onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+            }
+
+            // Unlock transition (PIN / biometric / no-PIN auto-unlock): the
+            // user just engaged with the app, re-probe so the home screen
+            // reflects the live online state rather than a stale one from
+            // before the lock.
+            LaunchedEffect(isUnlocked) {
+                if (isUnlocked) ReachabilityGate.refresh()
             }
 
             // Identifier for AnimatedContent so transitions between phases

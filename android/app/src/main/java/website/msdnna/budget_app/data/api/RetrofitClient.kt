@@ -4,6 +4,8 @@ import okhttp3.Dispatcher
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
+import website.msdnna.budget_app.data.sync.ReachabilityGate
+import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 object RetrofitClient {
@@ -47,6 +49,18 @@ object RetrofitClient {
         val dispatcher = Dispatcher().apply { maxRequestsPerHost = 10 }
         val client = OkHttpClient.Builder()
             .dispatcher(dispatcher)
+            .addInterceptor { chain ->
+                // Reachability gate: short-circuit when a fast TCP probe has
+                // determined the server is unreachable (Connection refused /
+                // reset / unknown host). Avoids 30s callTimeout pile-ups on
+                // cold start when the API is down.
+                when (ReachabilityGate.awaitFirstBlocking()) {
+                    ReachabilityGate.State.Offline ->
+                        throw IOException("offline: reachability gate")
+                    else -> Unit
+                }
+                chain.proceed(chain.request())
+            }
             .addInterceptor { chain ->
                 val token = authToken
                 val request = if (token.isNotBlank()) {

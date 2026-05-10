@@ -224,6 +224,15 @@
 
 ## Android
 
+### [1.29.0] — 2026-05-11
+
+#### Changed
+- **Reachability gate перед HTTP-трафиком.** Раньше при недоступном API холодный старт фанаутил 5+ параллельных запросов с `callTimeout=30s` — UI висел до 30 секунд, прежде чем перейти к офлайн-кэшу. Теперь перед первым запросом запускается единичный TCP-probe (`Socket.connect(host:port, 3s)`):
+  - `Connection refused` / `Reset` / `UnknownHost` / `NoRouteToHost` (мгновенные сетевые отказы) → state=Offline, OkHttp interceptor мгновенно бросает `IOException` для всех последующих запросов, ViewModel'и читают из Room.
+  - `SocketTimeoutException` пробы (handshake висит) → state=Online, обычный 30с-флоу (сервер может быть просто медленным).
+  - Успешный TCP-connect → state=Online.
+- Probe рефрешится: на холодном старте, при `ON_RESUME` (свёртывание / разворачивание приложения), после `AppLock.unlock()` (разблокировка PIN/biometric, в т.ч. после блокировки экрана смартфона), при открытии overlay-экранов (Настройки, Безопасность, Уведомления, Конфликты, Запросы на детализацию), и после каждой CRUD-операции (хук в `SyncWorker.enqueue`, который зовётся из всех Repository.create/update/delete). Свайпы между основными вкладками probe не триггерят (слишком частая нагрузка).
+
 ### [1.28.1] — 2026-05-11
 
 #### Fixed

@@ -41,6 +41,7 @@ import website.msdnna.budget_app.data.repository.DetailRequestStore
 import website.msdnna.budget_app.data.repository.TransactionRepository
 import website.msdnna.budget_app.data.repository.WishlistRepository
 import website.msdnna.budget_app.data.AppContainer
+import website.msdnna.budget_app.data.sync.ReachabilityGate
 import website.msdnna.budget_app.notifications.NotificationPrefs
 import website.msdnna.budget_app.notifications.NotificationScheduler
 import website.msdnna.budget_app.data.update.ApkDownloader
@@ -124,6 +125,19 @@ fun MainScreen(
     var showDetailRequestsList by remember { mutableStateOf(false) }
     var detailRequestsListShowAll by remember { mutableStateOf(false) }
     var openDetailRequestId by remember { mutableStateOf<String?>(null) }
+
+    // Refresh reachability whenever an overlay screen becomes visible. Each
+    // overlay is a separate state flag, but only the becoming-visible edge
+    // matters — `LaunchedEffect(key)` re-runs naturally on flag changes.
+    // Pager swipes (Statistics / Income / Expenses / Forecast / Export) are
+    // intentionally skipped: swipes are too frequent to probe on every tick.
+    LaunchedEffect(showSettings) { if (showSettings) ReachabilityGate.refresh() }
+    LaunchedEffect(showConflicts) { if (showConflicts) ReachabilityGate.refresh() }
+    LaunchedEffect(showNotifications) { if (showNotifications) ReachabilityGate.refresh() }
+    LaunchedEffect(showSecurity) { if (showSecurity) ReachabilityGate.refresh() }
+    LaunchedEffect(showDetailRequestsList) { if (showDetailRequestsList) ReachabilityGate.refresh() }
+    LaunchedEffect(openDetailRequestId) { if (openDetailRequestId != null) ReachabilityGate.refresh() }
+
     val currentUserId by prefs.userId.collectAsStateWithLifecycle(initialValue = "")
     val drItems by DetailRequestStore.items.collectAsStateWithLifecycle()
     val myOpenDrCount = drItems.count { it.status == "open" && it.assignee?.userId == currentUserId }

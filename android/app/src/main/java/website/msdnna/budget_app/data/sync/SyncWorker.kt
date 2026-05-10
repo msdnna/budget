@@ -32,6 +32,11 @@ class SyncWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, 
         private const val UNIQUE_NAME = "msdnna_budget_sync"
 
         fun enqueue(context: Context) {
+            // Piggyback a reachability re-probe on every mutation. Repositories
+            // call enqueue() after every create/update/delete, so this covers
+            // the "re-check after working with records" requirement without
+            // needing each call-site to remember to ping.
+            ReachabilityGate.refresh()
             val request = OneTimeWorkRequestBuilder<SyncWorker>()
                 .setConstraints(
                     Constraints.Builder()
