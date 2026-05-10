@@ -56,6 +56,8 @@ import website.msdnna.budget_app.data.model.Transaction
 import website.msdnna.budget_app.data.model.UpdateWishlistRequest
 import website.msdnna.budget_app.data.model.UserInfo
 import website.msdnna.budget_app.data.model.WishlistItem
+import website.msdnna.budget_app.data.repository.TransactionRepository
+import java.time.LocalDate
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import website.msdnna.budget_app.ui.components.*
 import website.msdnna.budget_app.ui.theme.LocalExpenseColor
@@ -83,6 +85,76 @@ private fun monthlyContribution(item: WishlistItem): Double = when (item.frequen
     "yearly"    -> item.estimatedCost / 12
     else        -> item.estimatedCost   // once / monthly / empty
 }
+
+/** Returns the start (inclusive) and exclusive end of the calendar period
+ *  enclosing [now] for the given [frequency]. Mirrors the backend's bucket
+ *  logic so paid_this_period stays consistent online and offline. */
+private fun periodBounds(frequency: String, now: LocalDate): Pair<LocalDate, LocalDate> = when (frequency) {
+    "monthly" -> {
+        val start = now.withDayOfMonth(1)
+        start to start.plusMonths(1)
+    }
+    "quarterly" -> {
+        val q = (now.monthValue - 1) / 3
+        val start = LocalDate.of(now.year, q * 3 + 1, 1)
+        start to start.plusMonths(3)
+    }
+    "yearly" -> {
+        val start = LocalDate.of(now.year, 1, 1)
+        start to start.plusYears(1)
+    }
+    else -> now to now
+}
+
+/** Best-effort YYYY-MM-DD parser for transaction.date. Tolerates trailing
+ *  time/zone parts (RFC3339) by taking the first ten chars. */
+private fun parseTxDate(s: String): LocalDate? = runCatching {
+    LocalDate.parse(s.take(10))
+}.getOrNull()
+
+/** Local synthesis of `forecast.regular_items` when the server endpoint is
+ *  unreachable. Reads the Room-cached wishlist + transactions and computes
+ *  paid_this_period / paid_amount / paid_count / next_due_date the same
+ *  way the backend does, so the offline view feels consistent.
+ *
+ *  Excluded fields: monthly cost (we store full per-period cost),
+ *  forecast totals (we never compute the historical_avg side offline). */
+private fun synthesizeRegularItems(
+    wishlist: List<WishlistItem>,
+    transactions: List<Transaction>,
+    now: LocalDate = LocalDate.now(),
+): List<RegularItem> = wishlist
+    .filter { isRecurring(it.frequency) }
+    .map { wl ->
+        val linked = transactions.filter { it.wishlistId == wl.id && it.deletedAt == null }
+        val (start, end) = periodBounds(wl.frequency, now)
+        val inPeriod = linked.filter { tx ->
+            val d = parseTxDate(tx.date) ?: return@filter false
+            !d.isBefore(start) && d.isBefore(end)
+        }
+        val latest = linked.mapNotNull { parseTxDate(it.date) }.maxOrNull()
+        val nextDue = latest?.let {
+            when (wl.frequency) {
+                "monthly"   -> it.plusMonths(1)
+                "quarterly" -> it.plusMonths(3)
+                "yearly"    -> it.plusYears(1)
+                else        -> it
+            }
+        }
+        RegularItem(
+            id = wl.id,
+            name = wl.name,
+            estimatedCost = wl.estimatedCost,
+            monthlyCost = wl.estimatedCost, // full per-period cost
+            frequency = wl.frequency,
+            category = wl.category,
+            notes = wl.notes ?: "",
+            paidThisPeriod = inPeriod.isNotEmpty(),
+            paidAmount = inPeriod.sumOf { it.amount },
+            paidCount = inPeriod.size,
+            nextDueDate = nextDue?.toString() ?: "",
+        )
+    }
 
 private val ColourPurchased = Color(0xFF388E3C)   // right swipe: mark purchased
 private val ColourWlDelete  = Color(0xFFE53935)   // left  swipe: delete
@@ -112,6 +184,11 @@ fun ForecastScreen(
     val wishlistOneOff = remember(uiState.wishlist) {
         uiState.wishlist.filter { !isRecurring(it.frequency) }
     }
+
+    // Local transactions feed the offline synth of regular_items so
+    // paid_this_period / next_due_date stay populated when the forecast
+    // endpoint is unreachable.
+    val localTransactions by TransactionRepository.observeAll().collectAsState(initial = emptyList())
 
     val expenseColor = LocalExpenseColor.current
     var showAdd      by remember { mutableStateOf(false) }
@@ -292,26 +369,13 @@ fun ForecastScreen(
                 // Two data paths:
                 //   • online — server-computed forecast.regular_items carries
                 //     paid_this_period / next_due_date / paid_amount.
-                //   • offline — synthesise a minimal RegularItem from the
-                //     locally-cached wishlist (Room) so the user can still
-                //     edit / delete и видеть свои регулярные платежи.
-                //     paid_this_period and next_due_date stay default; the
-                //     «Оплачено» action still queues a linked tx locally.
+                //   • offline — synthesise from the locally-cached wishlist +
+                //     transactions (Room). `synthesizeRegularItems` mirrors
+                //     the backend's calendar-period bucketing so paid badges
+                //     and «след. оплата» stay consistent without the network.
                 val regular: List<RegularItem> = uiState.forecast?.regularItems
                     ?.takeIf { it.isNotEmpty() }
-                    ?: uiState.wishlist
-                        .filter { isRecurring(it.frequency) }
-                        .map { wl ->
-                            RegularItem(
-                                id = wl.id,
-                                name = wl.name,
-                                estimatedCost = wl.estimatedCost,
-                                monthlyCost = wl.estimatedCost, // full per-period cost
-                                frequency = wl.frequency,
-                                category = wl.category,
-                                notes = wl.notes ?: "",
-                            )
-                        }
+                    ?: synthesizeRegularItems(uiState.wishlist, localTransactions)
                 if (regular.isNotEmpty()) {
                     item {
                         Text(
