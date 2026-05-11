@@ -96,6 +96,24 @@ mongo-up: ## Start only MongoDB in Docker for local dev
 mongo-down: ## Stop local dev MongoDB
 	docker compose stop mongodb
 
+# ─── Lint / Test ─────────────────────────────────────────────────────────────
+
+GOLANGCI_LINT := $(shell command -v golangci-lint 2>/dev/null || echo $$(go env GOPATH)/bin/golangci-lint)
+
+.PHONY: lint-backend
+lint-backend: ## Run gofmt + go vet + golangci-lint on the Go backend
+	@cd $(BACKEND_DIR) && \
+	  diff=$$(gofmt -l . 2>&1); \
+	  if [ -n "$$diff" ]; then echo "gofmt drift:"; echo "$$diff"; exit 1; fi
+	cd $(BACKEND_DIR) && $(GO) vet ./...
+	@test -x "$(GOLANGCI_LINT)" || { \
+	  echo "golangci-lint not found — install: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest"; \
+	  exit 1; }
+	cd $(BACKEND_DIR) && $(GOLANGCI_LINT) run ./...
+
+.PHONY: lint
+lint: lint-backend ## Run all linters (currently backend only — web/android coming)
+
 # ─── Install / Update ────────────────────────────────────────────────────────
 
 .PHONY: install

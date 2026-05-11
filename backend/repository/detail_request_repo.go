@@ -21,10 +21,10 @@ func NewDetailRequestRepository(db *mongo.Database) *DetailRequestRepository {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	col.Indexes().CreateMany(ctx, []mongo.IndexModel{
-		{Keys: bson.D{{"parent_transaction_id", 1}}},
-		{Keys: bson.D{{"assignee.user_id", 1}, {"status", 1}}},
-		{Keys: bson.D{{"creator.user_id", 1}}},
-		{Keys: bson.D{{"status", 1}}},
+		{Keys: bson.D{{Key: "parent_transaction_id", Value: 1}}},
+		{Keys: bson.D{{Key: "assignee.user_id", Value: 1}, {Key: "status", Value: 1}}},
+		{Keys: bson.D{{Key: "creator.user_id", Value: 1}}},
+		{Keys: bson.D{{Key: "status", Value: 1}}},
 	})
 	return &DetailRequestRepository{col: col}
 }
@@ -71,7 +71,7 @@ func (r *DetailRequestRepository) Find(ctx context.Context, f DetailRequestFilte
 	if f.Status != "" {
 		filter["status"] = f.Status
 	}
-	cur, err := r.col.Find(ctx, filter, options.Find().SetSort(bson.D{{"created_at", -1}}))
+	cur, err := r.col.Find(ctx, filter, options.Find().SetSort(bson.D{{Key: "created_at", Value: -1}}))
 	if err != nil {
 		return nil, err
 	}

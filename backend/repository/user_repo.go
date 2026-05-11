@@ -22,7 +22,7 @@ func NewUserRepository(db *mongo.Database) *UserRepository {
 	defer cancel()
 
 	col.Indexes().CreateMany(ctx, []mongo.IndexModel{
-		{Keys: bson.D{{"login", 1}}, Options: options.Index().SetUnique(true)},
+		{Keys: bson.D{{Key: "login", Value: 1}}, Options: options.Index().SetUnique(true)},
 	})
 
 	return &UserRepository{col: col}

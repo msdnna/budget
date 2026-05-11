@@ -21,7 +21,7 @@ type Transaction struct {
 	Source         string          `bson:"source,omitempty" json:"source,omitempty"`
 	Purpose        string          `bson:"purpose,omitempty" json:"purpose,omitempty"`
 	Description    string          `bson:"description,omitempty" json:"description,omitempty"`
-	Hidden         bool             `bson:"hidden,omitempty" json:"hidden,omitempty"`
+	Hidden         bool            `bson:"hidden,omitempty" json:"hidden,omitempty"`
 	CreatedBy      *UserInfo       `bson:"created_by,omitempty" json:"created_by,omitempty"`
 	CreatedAt      time.Time       `bson:"created_at" json:"created_at"`
 	Version        int             `bson:"version" json:"version"`
@@ -73,13 +73,13 @@ type UpdateTransactionRequest struct {
 }
 
 type TransactionFilter struct {
-	Type           string
-	From           *time.Time
-	To             *time.Time
-	Category       string
-	Categories     []string
-	Limit          int64
-	Skip           int64
+	Type       string
+	From       *time.Time
+	To         *time.Time
+	Category   string
+	Categories []string
+	Limit      int64
+	Skip       int64
 	// IncludeDetailed: when false, parents of closed detail-requests are
 	// hidden (they're historical and superseded by their children in stats).
 	IncludeDetailed bool

@@ -441,12 +441,12 @@ func txTypeLabel(t models.TransactionType) string {
 	}
 }
 
-func truncate(s string, max int) string {
+func truncate(s string, maxLen int) string {
 	runes := []rune(s)
-	if len(runes) <= max {
+	if len(runes) <= maxLen {
 		return s
 	}
-	return string(runes[:max-1]) + "…"
+	return string(runes[:maxLen-1]) + "…"
 }
 
 // resolveDejaVuPaths returns paths to DejaVuSans regular and bold fonts.

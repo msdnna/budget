@@ -16,6 +16,17 @@
 
 ## API (backend)
 
+### [1.14.2] — 2026-05-12
+
+#### Changed
+- **Линтеры backend подняты до чистого состояния.** Добавлен `backend/.golangci.yml` (govet, errcheck, staticcheck, ineffassign, unused, bodyclose, gocritic, revive, misspell, unconvert, prealloc + gofmt-formatter); `make lint` / `make lint-backend` запускают `gofmt -l . + go vet + golangci-lint run` и зелёные.
+- Все `bson.D{{"key", v}}` переведены на keyed-форму `bson.D{{Key: "key", Value: v}}` — `go vet` теперь чистый по `composites`.
+- `handlers/sync.go`: `finishOp[T]` — `context.Context` первым параметром (revive `context-as-argument`).
+- `handlers/export.go`: параметр `truncate(max int)` → `maxLen` (revive `redefines-builtin-id`).
+- `cmd/seed_loadtest`: флаг-переменная `clear` → `clearDB` (revive `redefines-builtin-id`).
+- `repository/transaction_repo.go`: `x = x / months` → `x /= months` (gocritic `assignOp`).
+- `main.go`: `r.SetTrustedProxies` теперь обрабатывает ошибку.
+
 ### [1.14.1] — 2026-05-12
 
 #### Changed

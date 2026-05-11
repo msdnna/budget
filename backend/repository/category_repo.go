@@ -40,8 +40,8 @@ func NewCategoryRepository(db *mongo.Database) *CategoryRepository {
 			Keys:    bson.D{{Key: "section", Value: 1}, {Key: "name", Value: 1}},
 			Options: options.Index().SetUnique(true).SetPartialFilterExpression(bson.M{"deleted_at": nil}),
 		},
-		{Keys: bson.D{{"updated_at", 1}}},
-		{Keys: bson.D{{"deleted_at", 1}}},
+		{Keys: bson.D{{Key: "updated_at", Value: 1}}},
+		{Keys: bson.D{{Key: "deleted_at", Value: 1}}},
 	})
 
 	return &CategoryRepository{col: col}

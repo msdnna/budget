@@ -74,7 +74,9 @@ func main() {
 	drHandler := handlers.NewDetailRequestHandler(drRepo, txRepo, userRepo)
 
 	r := gin.Default()
-	r.SetTrustedProxies([]string{"127.0.0.1", "::1"})
+	if err := r.SetTrustedProxies([]string{"127.0.0.1", "::1"}); err != nil {
+		log.Printf("Warning: failed to set trusted proxies: %v", err)
+	}
 	r.Use(middleware.CORS())
 
 	// OpenAPI 3.1 spec + Swagger UI (UI грузится с CDN, спека — embed).
@@ -144,7 +146,7 @@ func main() {
 
 	log.Printf("Server starting on :%s", cfg.Port)
 	if err := r.Run(":" + cfg.Port); err != nil {
-		log.Fatal(err)
+		log.Fatal(err) //nolint:gocritic // seedCancel ran long before this; leaked ctx is harmless on shutdown
 	}
 }
 

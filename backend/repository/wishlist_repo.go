@@ -22,10 +22,10 @@ func NewWishlistRepository(db *mongo.Database) *WishlistRepository {
 	defer cancel()
 
 	col.Indexes().CreateMany(ctx, []mongo.IndexModel{
-		{Keys: bson.D{{"purchased", 1}}},
-		{Keys: bson.D{{"priority", 1}}},
-		{Keys: bson.D{{"updated_at", 1}}},
-		{Keys: bson.D{{"deleted_at", 1}}},
+		{Keys: bson.D{{Key: "purchased", Value: 1}}},
+		{Keys: bson.D{{Key: "priority", Value: 1}}},
+		{Keys: bson.D{{Key: "updated_at", Value: 1}}},
+		{Keys: bson.D{{Key: "deleted_at", Value: 1}}},
 	})
 
 	return &WishlistRepository{col: col}
@@ -160,7 +160,7 @@ func (r *WishlistRepository) Upsert(ctx context.Context, item *models.WishlistIt
 }
 
 func (r *WishlistRepository) FindAll(ctx context.Context) ([]models.WishlistItem, error) {
-	opts := options.Find().SetSort(bson.D{{"priority", 1}, {"created_at", -1}})
+	opts := options.Find().SetSort(bson.D{{Key: "priority", Value: 1}, {Key: "created_at", Value: -1}})
 	cur, err := r.col.Find(ctx, bson.M{"deleted_at": nil}, opts)
 	if err != nil {
 		return nil, err
@@ -175,7 +175,7 @@ func (r *WishlistRepository) FindAll(ctx context.Context) ([]models.WishlistItem
 }
 
 func (r *WishlistRepository) FindUnpurchased(ctx context.Context) ([]models.WishlistItem, error) {
-	opts := options.Find().SetSort(bson.D{{"priority", 1}, {"created_at", -1}})
+	opts := options.Find().SetSort(bson.D{{Key: "priority", Value: 1}, {Key: "created_at", Value: -1}})
 	cur, err := r.col.Find(ctx, bson.M{"purchased": false, "deleted_at": nil}, opts)
 	if err != nil {
 		return nil, err

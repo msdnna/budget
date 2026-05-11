@@ -173,7 +173,7 @@ func (h *SyncHandler) applyTransaction(ctx context.Context, op models.SyncOperat
 	switch op.Type {
 	case models.SyncOpDelete:
 		t, err := h.txRepo.Delete(ctx, op.ID, baseVersion, modifiedBy)
-		return finishOp(res, t, err, h.txRepo.FindByID, ctx, op.ID)
+		return finishOp(ctx, res, t, err, h.txRepo.FindByID, op.ID)
 
 	case models.SyncOpCreate, models.SyncOpUpdate:
 		t, err := decodeTransactionPayload(op.Payload)
@@ -190,7 +190,7 @@ func (h *SyncHandler) applyTransaction(ctx context.Context, op models.SyncOperat
 			t.CreatedBy = modifiedBy
 		}
 		out, err := h.txRepo.Upsert(ctx, t, baseVersion, op.Type == models.SyncOpCreate)
-		return finishOp(res, out, err, h.txRepo.FindByID, ctx, op.ID)
+		return finishOp(ctx, res, out, err, h.txRepo.FindByID, op.ID)
 	}
 
 	res.Status = models.SyncStatusError
@@ -357,7 +357,7 @@ func (h *SyncHandler) applyWishlist(ctx context.Context, op models.SyncOperation
 	switch op.Type {
 	case models.SyncOpDelete:
 		item, err := h.wlRepo.Delete(ctx, op.ID, baseVersion, modifiedBy)
-		return finishOp(res, item, err, h.wlRepo.FindByID, ctx, op.ID)
+		return finishOp(ctx, res, item, err, h.wlRepo.FindByID, op.ID)
 
 	case models.SyncOpCreate, models.SyncOpUpdate:
 		item, err := decodeWishlistPayload(op.Payload)
@@ -374,7 +374,7 @@ func (h *SyncHandler) applyWishlist(ctx context.Context, op models.SyncOperation
 			item.CreatedBy = modifiedBy
 		}
 		out, err := h.wlRepo.Upsert(ctx, item, baseVersion, op.Type == models.SyncOpCreate)
-		return finishOp(res, out, err, h.wlRepo.FindByID, ctx, op.ID)
+		return finishOp(ctx, res, out, err, h.wlRepo.FindByID, op.ID)
 	}
 
 	res.Status = models.SyncStatusError
@@ -388,7 +388,7 @@ func (h *SyncHandler) applyCategory(ctx context.Context, op models.SyncOperation
 	switch op.Type {
 	case models.SyncOpDelete:
 		cat, err := h.catRepo.Delete(ctx, op.ID, baseVersion, modifiedBy)
-		return finishOp(res, cat, err, h.catRepo.FindByID, ctx, op.ID)
+		return finishOp(ctx, res, cat, err, h.catRepo.FindByID, op.ID)
 
 	case models.SyncOpCreate, models.SyncOpUpdate:
 		cat, err := decodeCategoryPayload(op.Payload)
@@ -402,7 +402,7 @@ func (h *SyncHandler) applyCategory(ctx context.Context, op models.SyncOperation
 			cat.LastModifiedBy = modifiedBy
 		}
 		out, err := h.catRepo.Upsert(ctx, cat, baseVersion, op.Type == models.SyncOpCreate)
-		return finishOp(res, out, err, h.catRepo.FindByID, ctx, op.ID)
+		return finishOp(ctx, res, out, err, h.catRepo.FindByID, op.ID)
 	}
 
 	res.Status = models.SyncStatusError
@@ -412,7 +412,7 @@ func (h *SyncHandler) applyCategory(ctx context.Context, op models.SyncOperation
 
 // finishOp packs the (record, err) tuple into a SyncOperationResult, fetching
 // the current server document on conflict so the client can show the diff.
-func finishOp[T any](res models.SyncOperationResult, ok any, err error, refetch func(context.Context, string) (*T, error), ctx context.Context, id string) models.SyncOperationResult {
+func finishOp[T any](ctx context.Context, res models.SyncOperationResult, ok any, err error, refetch func(context.Context, string) (*T, error), id string) models.SyncOperationResult {
 	if err == nil {
 		res.Status = models.SyncStatusOK
 		res.Record = recordToMap(ok)

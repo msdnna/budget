@@ -56,12 +56,12 @@ var seedUsers = []seedUser{
 // ─── Templates: ~10 expense, ~5 income, ~10 wishlist ─────────────────────────
 
 type expenseTemplate struct {
-	Category   string
-	Source     string  // "shop / payee" – Source field on transaction
-	Purpose    string  // free text
-	MinAmount  float64
-	MaxAmount  float64
-	Weight     int     // relative frequency
+	Category  string
+	Source    string // "shop / payee" – Source field on transaction
+	Purpose   string // free text
+	MinAmount float64
+	MaxAmount float64
+	Weight    int // relative frequency
 }
 
 type incomeTemplate struct {
@@ -159,7 +159,7 @@ func main() {
 	expensesN := flag.Int("expenses", 4000, "Number of expense transactions")
 	incomesN := flag.Int("incomes", 1800, "Number of income transactions")
 	wishlistN := flag.Int("wishlist", 60, "Number of wishlist items")
-	clear := flag.Bool("clear", false, "Drop the target database before seeding")
+	clearDB := flag.Bool("clear", false, "Drop the target database before seeding")
 	seed := flag.Int64("seed", 42, "Random seed for reproducible runs")
 	flag.Parse()
 
@@ -195,7 +195,7 @@ func main() {
 
 	db := client.Database(*dbName)
 
-	if *clear {
+	if *clearDB {
 		log.Printf("Dropping database %q…", *dbName)
 		if err := db.Drop(ctx); err != nil {
 			log.Fatalf("drop: %v", err)
@@ -374,19 +374,19 @@ func seedInitialBalances(ctx context.Context, db *mongo.Database, users []models
 	for i := range users {
 		amount := float64(50000+rng.Intn(450000)) / 1.0 // 50k–500k
 		docs = append(docs, models.Transaction{
-			ID:          uuid.NewString(),
-			Type:        models.InitialBalance,
-			Amount:      amount,
-			Date:        balDate,
-			Category:    "Прочее",
-			Source:      "Стартовый баланс",
-			Purpose:     "Начальный баланс счёта",
-			Description: "",
-			CreatedBy:   &users[i],
+			ID:             uuid.NewString(),
+			Type:           models.InitialBalance,
+			Amount:         amount,
+			Date:           balDate,
+			Category:       "Прочее",
+			Source:         "Стартовый баланс",
+			Purpose:        "Начальный баланс счёта",
+			Description:    "",
+			CreatedBy:      &users[i],
 			LastModifiedBy: &users[i],
-			CreatedAt:   now,
-			UpdatedAt:   now,
-			Version:     1,
+			CreatedAt:      now,
+			UpdatedAt:      now,
+			Version:        1,
 		})
 	}
 	_, err := col.InsertMany(ctx, docs)

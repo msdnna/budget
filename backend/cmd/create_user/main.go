@@ -40,9 +40,9 @@ func main() {
 
 	client, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
 	if err != nil {
-		log.Fatalf("connect: %v", err)
+		log.Fatalf("connect: %v", err) //nolint:gocritic // short-lived CLI; leaked ctx is harmless
 	}
-	defer client.Disconnect(ctx)
+	defer func() { _ = client.Disconnect(ctx) }()
 
 	if err := client.Ping(ctx, nil); err != nil {
 		log.Fatalf("ping: %v", err)
@@ -52,7 +52,7 @@ func main() {
 
 	// Ensure unique index exists
 	col.Indexes().CreateOne(ctx, mongo.IndexModel{
-		Keys:    bson.D{{"login", 1}},
+		Keys:    bson.D{{Key: "login", Value: 1}},
 		Options: options.Index().SetUnique(true),
 	})
 

@@ -22,12 +22,12 @@ func NewTransactionRepository(db *mongo.Database) *TransactionRepository {
 	defer cancel()
 
 	col.Indexes().CreateMany(ctx, []mongo.IndexModel{
-		{Keys: bson.D{{"date", -1}}},
-		{Keys: bson.D{{"type", 1}}},
-		{Keys: bson.D{{"category", 1}}},
-		{Keys: bson.D{{"updated_at", 1}}},
-		{Keys: bson.D{{"deleted_at", 1}}},
-		{Keys: bson.D{{"wishlist_id", 1}, {"date", -1}}},
+		{Keys: bson.D{{Key: "date", Value: -1}}},
+		{Keys: bson.D{{Key: "type", Value: 1}}},
+		{Keys: bson.D{{Key: "category", Value: 1}}},
+		{Keys: bson.D{{Key: "updated_at", Value: 1}}},
+		{Keys: bson.D{{Key: "deleted_at", Value: 1}}},
+		{Keys: bson.D{{Key: "wishlist_id", Value: 1}, {Key: "date", Value: -1}}},
 	})
 
 	return &TransactionRepository{col: col}
@@ -189,7 +189,7 @@ func (r *TransactionRepository) Find(ctx context.Context, f models.TransactionFi
 	}
 
 	opts := options.Find().
-		SetSort(bson.D{{"date", -1}}).
+		SetSort(bson.D{{Key: "date", Value: -1}}).
 		SetLimit(f.Limit).
 		SetSkip(f.Skip)
 
@@ -222,7 +222,7 @@ func (r *TransactionRepository) FindAll(ctx context.Context, from, to time.Time,
 		filter["date"] = dateFilter
 	}
 
-	cur, err := r.col.Find(ctx, filter, options.Find().SetSort(bson.D{{"date", -1}}))
+	cur, err := r.col.Find(ctx, filter, options.Find().SetSort(bson.D{{Key: "date", Value: -1}}))
 	if err != nil {
 		return nil, err
 	}
@@ -260,7 +260,7 @@ func (r *TransactionRepository) FindModifiedSince(ctx context.Context, since tim
 // FindChildren returns the non-deleted child transactions of a parent.
 func (r *TransactionRepository) FindChildren(ctx context.Context, parentID string) ([]models.Transaction, error) {
 	cur, err := r.col.Find(ctx, bson.M{"parent_id": parentID, "deleted_at": nil},
-		options.Find().SetSort(bson.D{{"date", -1}, {"created_at", -1}}))
+		options.Find().SetSort(bson.D{{Key: "date", Value: -1}, {Key: "created_at", Value: -1}}))
 	if err != nil {
 		return nil, err
 	}
@@ -308,15 +308,15 @@ func (r *TransactionRepository) SoftDeleteChildren(ctx context.Context, parentID
 }
 
 func (r *TransactionRepository) AggregateByCategory(ctx context.Context, txType string, from, to time.Time) ([]models.CategoryData, error) {
-	matchStage := bson.D{{"$match", buildDateFilter(txType, from, to)}}
+	matchStage := bson.D{{Key: "$match", Value: buildDateFilter(txType, from, to)}}
 
-	groupStage := bson.D{{"$group", bson.D{
-		{"_id", "$category"},
-		{"total", bson.D{{"$sum", "$amount"}}},
-		{"count", bson.D{{"$sum", 1}}},
+	groupStage := bson.D{{Key: "$group", Value: bson.D{
+		{Key: "_id", Value: "$category"},
+		{Key: "total", Value: bson.D{{Key: "$sum", Value: "$amount"}}},
+		{Key: "count", Value: bson.D{{Key: "$sum", Value: 1}}},
 	}}}
 
-	sortStage := bson.D{{"$sort", bson.D{{"total", -1}}}}
+	sortStage := bson.D{{Key: "$sort", Value: bson.D{{Key: "total", Value: -1}}}}
 
 	pipeline := mongo.Pipeline{matchStage, groupStage, sortStage}
 
@@ -373,19 +373,19 @@ func (r *TransactionRepository) AggregateMonthlyRange(ctx context.Context, from,
 	}
 
 	pipeline := mongo.Pipeline{
-		{{"$match", bson.D{
-			{"date", bson.D{{"$gte", from}, {"$lte", to}}},
-			{"hidden", bson.D{{"$ne", true}}},
-			{"deleted_at", nil},
-			{"excluded_from_stats", bson.D{{"$ne", true}}},
+		{{Key: "$match", Value: bson.D{
+			{Key: "date", Value: bson.D{{Key: "$gte", Value: from}, {Key: "$lte", Value: to}}},
+			{Key: "hidden", Value: bson.D{{Key: "$ne", Value: true}}},
+			{Key: "deleted_at", Value: nil},
+			{Key: "excluded_from_stats", Value: bson.D{{Key: "$ne", Value: true}}},
 		}}},
-		{{"$group", bson.D{
-			{"_id", bson.D{
-				{"year", bson.D{{"$year", "$date"}}},
-				{"month", bson.D{{"$month", "$date"}}},
-				{"type", "$type"},
+		{{Key: "$group", Value: bson.D{
+			{Key: "_id", Value: bson.D{
+				{Key: "year", Value: bson.D{{Key: "$year", Value: "$date"}}},
+				{Key: "month", Value: bson.D{{Key: "$month", Value: "$date"}}},
+				{Key: "type", Value: "$type"},
 			}},
-			{"total", bson.D{{"$sum", "$amount"}}},
+			{Key: "total", Value: bson.D{{Key: "$sum", Value: "$amount"}}},
 		}}},
 	}
 
@@ -457,11 +457,11 @@ func (r *TransactionRepository) GetSummary(ctx context.Context, from, to time.Ti
 	}
 
 	pipeline := mongo.Pipeline{
-		{{"$match", filter}},
-		{{"$group", bson.D{
-			{"_id", "$type"},
-			{"total", bson.D{{"$sum", "$amount"}}},
-			{"count", bson.D{{"$sum", 1}}},
+		{{Key: "$match", Value: filter}},
+		{{Key: "$group", Value: bson.D{
+			{Key: "_id", Value: "$type"},
+			{Key: "total", Value: bson.D{{Key: "$sum", Value: "$amount"}}},
+			{Key: "count", Value: bson.D{{Key: "$sum", Value: 1}}},
 		}}},
 	}
 
@@ -553,7 +553,7 @@ func (r *TransactionRepository) FindLinkedToWishlist(ctx context.Context, wishli
 		}
 		filter["date"] = df
 	}
-	cur, err := r.col.Find(ctx, filter, options.Find().SetSort(bson.D{{"date", -1}}))
+	cur, err := r.col.Find(ctx, filter, options.Find().SetSort(bson.D{{Key: "date", Value: -1}}))
 	if err != nil {
 		return nil, err
 	}
@@ -612,7 +612,7 @@ func (r *TransactionRepository) GetAverageMonthlyCategoryExpenses(ctx context.Co
 	}
 
 	for i := range rawData {
-		rawData[i].Amount = rawData[i].Amount / months
+		rawData[i].Amount /= months
 	}
 
 	return rawData, nil
@@ -651,13 +651,13 @@ func (r *TransactionRepository) GetAverageMonthlyCategoryExpensesUnlinked(ctx co
 	}
 
 	pipeline := mongo.Pipeline{
-		{{"$match", match}},
-		{{"$group", bson.D{
-			{"_id", "$category"},
-			{"total", bson.D{{"$sum", "$amount"}}},
-			{"count", bson.D{{"$sum", 1}}},
+		{{Key: "$match", Value: match}},
+		{{Key: "$group", Value: bson.D{
+			{Key: "_id", Value: "$category"},
+			{Key: "total", Value: bson.D{{Key: "$sum", Value: "$amount"}}},
+			{Key: "count", Value: bson.D{{Key: "$sum", Value: 1}}},
 		}}},
-		{{"$sort", bson.D{{"total", -1}}}},
+		{{Key: "$sort", Value: bson.D{{Key: "total", Value: -1}}}},
 	}
 
 	cur, err := r.col.Aggregate(ctx, pipeline)

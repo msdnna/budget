@@ -7,7 +7,9 @@
 // number of times safely.
 //
 // Usage:
-//   go run ./cmd/migrate
+//
+//	go run ./cmd/migrate
+//
 // Reads MongoDB URI/DB from .env or env (MONGO_URI, MONGO_DB).
 package main
 
@@ -39,7 +41,7 @@ func main() {
 
 	client, err := mongo.Connect(ctx, options.Client().ApplyURI(cfg.MongoURI))
 	if err != nil {
-		log.Fatalf("connect: %v", err)
+		log.Fatalf("connect: %v", err) //nolint:gocritic // short-lived CLI; leaked ctx is harmless
 	}
 	defer client.Disconnect(context.Background())
 
