@@ -28,6 +28,19 @@ func NewStatisticsHandler(txRepo *repository.TransactionRepository, wlRepo *repo
 	return &StatisticsHandler{txRepo: txRepo, wlRepo: wlRepo}
 }
 
+// Summary godoc
+// @Summary      Сводка за период
+// @Description  Итоговые суммы доходов / расходов / баланса. Период задаётся `from`+`to`, либо `month=YYYY-MM`, либо `year=YYYY` (последний выигрывает).
+// @Tags         statistics
+// @Produce      json
+// @Security     BearerAuth
+// @Param        from   query     string  false  "YYYY-MM-DD"
+// @Param        to     query     string  false  "YYYY-MM-DD"
+// @Param        month  query     string  false  "YYYY-MM"
+// @Param        year   query     int     false  "YYYY"
+// @Success      200    {object}  models.SummaryData
+// @Failure      401    {object}  map[string]string
+// @Router       /statistics/summary [get]
 func (h *StatisticsHandler) Summary(c *gin.Context) {
 	from, to := parsePeriodParams(c)
 
@@ -40,6 +53,20 @@ func (h *StatisticsHandler) Summary(c *gin.Context) {
 	c.JSON(http.StatusOK, summary)
 }
 
+// ByCategory godoc
+// @Summary      Агрегация по категориям
+// @Description  Сумма, доля и количество транзакций в разрезе категории. По умолчанию `type=expense`.
+// @Tags         statistics
+// @Produce      json
+// @Security     BearerAuth
+// @Param        type   query     string  false  "income|expense|initial_balance"  default(expense)
+// @Param        from   query     string  false  "YYYY-MM-DD"
+// @Param        to     query     string  false  "YYYY-MM-DD"
+// @Param        month  query     string  false  "YYYY-MM"
+// @Param        year   query     int     false  "YYYY"
+// @Success      200    {array}   models.CategoryData
+// @Failure      401    {object}  map[string]string
+// @Router       /statistics/by-category [get]
 func (h *StatisticsHandler) ByCategory(c *gin.Context) {
 	txType := c.Query("type")
 	if txType == "" {
@@ -61,6 +88,19 @@ func (h *StatisticsHandler) ByCategory(c *gin.Context) {
 	c.JSON(http.StatusOK, data)
 }
 
+// Monthly godoc
+// @Summary      Помесячная динамика
+// @Description  Возвращает массив `{year, month, income, expense, balance}` по месяцам. Если задан только `month`, диапазон расширяется до полного года ради контекста на графике.
+// @Tags         statistics
+// @Produce      json
+// @Security     BearerAuth
+// @Param        from   query     string  false  "YYYY-MM-DD"
+// @Param        to     query     string  false  "YYYY-MM-DD"
+// @Param        month  query     string  false  "YYYY-MM"
+// @Param        year   query     int     false  "YYYY"
+// @Success      200    {array}   models.MonthlyData
+// @Failure      401    {object}  map[string]string
+// @Router       /statistics/monthly [get]
 func (h *StatisticsHandler) Monthly(c *gin.Context) {
 	from, to := parsePeriodParams(c)
 
@@ -93,6 +133,19 @@ func (h *StatisticsHandler) Monthly(c *gin.Context) {
 // Overview combines summary + by-category(expense) + by-category(income) + monthly
 // into a single response so the Android Stats screen can fetch everything in one
 // round-trip instead of four sequential calls. Sub-queries run in parallel.
+// Overview godoc
+// @Summary      Сводка + by-category(expense/income) + monthly за один запрос
+// @Description  Объединённый ответ для экрана статистики Android, чтобы не делать 4 последовательных запроса. Подзапросы выполняются параллельно.
+// @Tags         statistics
+// @Produce      json
+// @Security     BearerAuth
+// @Param        from   query     string  false  "YYYY-MM-DD"
+// @Param        to     query     string  false  "YYYY-MM-DD"
+// @Param        month  query     string  false  "YYYY-MM"
+// @Param        year   query     int     false  "YYYY"
+// @Success      200    {object}  StatisticsOverviewResponse
+// @Failure      401    {object}  map[string]string
+// @Router       /statistics/overview [get]
 func (h *StatisticsHandler) Overview(c *gin.Context) {
 	from, to := parsePeriodParams(c)
 
@@ -170,6 +223,15 @@ func (h *StatisticsHandler) Overview(c *gin.Context) {
 	})
 }
 
+// Forecast godoc
+// @Summary      Прогноз расходов на месяц
+// @Description  Историческое среднее (3 мес, без транзакций, связанных с wishlist) + вклад регулярных wishlist-итемов по next-due модели. Возвращает per-item breakdown с `paid_this_period` для UI-бейджей.
+// @Tags         statistics
+// @Produce      json
+// @Security     BearerAuth
+// @Success      200  {object}  models.ForecastResponse
+// @Failure      401  {object}  map[string]string
+// @Router       /statistics/forecast [get]
 func (h *StatisticsHandler) Forecast(c *gin.Context) {
 	ctx := c.Request.Context()
 	now := time.Now()

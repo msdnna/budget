@@ -28,6 +28,16 @@ func NewCategoryHandler(repo *repository.CategoryRepository) *CategoryHandler {
 	return &CategoryHandler{repo: repo}
 }
 
+// List godoc
+// @Summary      Категории одной секции
+// @Tags         categories
+// @Produce      json
+// @Security     BearerAuth
+// @Param        section  query     string  true  "expense|income|wishlist"
+// @Success      200      {array}   models.Category
+// @Failure      400      {object}  map[string]string
+// @Failure      401      {object}  map[string]string
+// @Router       /categories [get]
 func (h *CategoryHandler) List(c *gin.Context) {
 	section := c.Query("section")
 	if section == "" {
@@ -53,6 +63,15 @@ func (h *CategoryHandler) List(c *gin.Context) {
 // ListAll returns categories for all three sections in a single response so the
 // Android client can warm a shared category cache without firing three parallel
 // requests on cold start. Sections are queried concurrently.
+// ListAll godoc
+// @Summary      Категории всех секций одним запросом
+// @Description  Прогревает кеш Android-клиента без 3 параллельных запросов. Секции запрашиваются конкурентно.
+// @Tags         categories
+// @Produce      json
+// @Security     BearerAuth
+// @Success      200  {object}  CategoriesAllResponse
+// @Failure      401  {object}  map[string]string
+// @Router       /categories/all [get]
 func (h *CategoryHandler) ListAll(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -110,6 +129,18 @@ func (h *CategoryHandler) ListAll(c *gin.Context) {
 	})
 }
 
+// Create godoc
+// @Summary      Создать пользовательскую категорию
+// @Tags         categories
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        body  body      models.CreateCategoryRequest  true  "Тело"
+// @Success      201   {object}  models.Category
+// @Failure      400   {object}  map[string]string
+// @Failure      401   {object}  map[string]string
+// @Failure      409   {object}  map[string]string  "Категория уже существует"
+// @Router       /categories [post]
 func (h *CategoryHandler) Create(c *gin.Context) {
 	var req models.CreateCategoryRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -139,6 +170,17 @@ func (h *CategoryHandler) Create(c *gin.Context) {
 	c.JSON(http.StatusCreated, cat)
 }
 
+// Delete godoc
+// @Summary      Удалить пользовательскую категорию
+// @Description  Дефолтные категории удалить нельзя — handler вернёт 404.
+// @Tags         categories
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id   path      string  true  "Category ID"
+// @Success      200  {object}  map[string]bool
+// @Failure      401  {object}  map[string]string
+// @Failure      404  {object}  map[string]string
+// @Router       /categories/{id} [delete]
 func (h *CategoryHandler) Delete(c *gin.Context) {
 	id := c.Param("id")
 

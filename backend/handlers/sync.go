@@ -24,9 +24,17 @@ func NewSyncHandler(tx *repository.TransactionRepository, wl *repository.Wishlis
 	return &SyncHandler{txRepo: tx, wlRepo: wl, catRepo: cat}
 }
 
-// Pull returns every record across the three syncable collections that has
-// been touched (created, updated, or soft-deleted) after `since`. The first
-// call by a client uses an empty `since` and gets the full non-deleted set.
+// Pull godoc
+// @Summary      Pull-фаза синка: всё, что менялось после `since`
+// @Description  Возвращает все записи трёх syncable-коллекций (transactions, wishlist, categories), включая soft-deleted. Первый вызов без `since` отдаёт полный набор без удалённых.
+// @Tags         sync
+// @Produce      json
+// @Security     BearerAuth
+// @Param        since  query     string  false  "RFC3339(Nano) timestamp"
+// @Success      200    {object}  models.SyncPullResponse
+// @Failure      400    {object}  map[string]string
+// @Failure      401    {object}  map[string]string
+// @Router       /sync/pull [get]
 func (h *SyncHandler) Pull(c *gin.Context) {
 	var since time.Time
 	if v := c.Query("since"); v != "" {
@@ -87,8 +95,18 @@ func (h *SyncHandler) Pull(c *gin.Context) {
 	})
 }
 
-// Push applies a batch of client mutations. Each operation is independent; a
-// per-op result lets the client mark which rows synced and which conflicted.
+// Push godoc
+// @Summary      Push-фаза синка: батч клиентских мутаций
+// @Description  Каждая операция независима; результат на операцию позволяет клиенту пометить, что синканулось, а что — конфликт. `force=true` обходит version-check.
+// @Tags         sync
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        body  body      models.SyncPushRequest  true  "Батч операций"
+// @Success      200   {object}  models.SyncPushResponse
+// @Failure      400   {object}  map[string]string
+// @Failure      401   {object}  map[string]string
+// @Router       /sync/push [post]
 func (h *SyncHandler) Push(c *gin.Context) {
 	var req models.SyncPushRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -241,20 +259,20 @@ func decodeTransactionPayload(raw json.RawMessage) (*models.Transaction, error) 
 
 func decodeWishlistPayload(raw json.RawMessage) (*models.WishlistItem, error) {
 	type alias struct {
-		ID             string            `json:"id"`
-		Name           string            `json:"name"`
-		EstimatedCost  float64           `json:"estimated_cost"`
-		Category       string            `json:"category"`
-		Priority       int               `json:"priority"`
-		Frequency      models.Frequency  `json:"frequency"`
-		Purchased      bool              `json:"purchased"`
-		Notes          string            `json:"notes"`
-		CreatedBy      *models.UserInfo  `json:"created_by"`
-		CreatedAt      string            `json:"created_at"`
-		Version        int               `json:"version"`
-		UpdatedAt      string            `json:"updated_at"`
-		DeletedAt      *string           `json:"deleted_at"`
-		LastModifiedBy *models.UserInfo  `json:"last_modified_by"`
+		ID             string           `json:"id"`
+		Name           string           `json:"name"`
+		EstimatedCost  float64          `json:"estimated_cost"`
+		Category       string           `json:"category"`
+		Priority       int              `json:"priority"`
+		Frequency      models.Frequency `json:"frequency"`
+		Purchased      bool             `json:"purchased"`
+		Notes          string           `json:"notes"`
+		CreatedBy      *models.UserInfo `json:"created_by"`
+		CreatedAt      string           `json:"created_at"`
+		Version        int              `json:"version"`
+		UpdatedAt      string           `json:"updated_at"`
+		DeletedAt      *string          `json:"deleted_at"`
+		LastModifiedBy *models.UserInfo `json:"last_modified_by"`
 	}
 	var a alias
 	if err := json.Unmarshal(raw, &a); err != nil {
@@ -411,4 +429,3 @@ func finishOp[T any](res models.SyncOperationResult, ok any, err error, refetch 
 	res.Error = err.Error()
 	return res
 }
-

@@ -22,6 +22,18 @@ func NewWishlistHandler(repo *repository.WishlistRepository, txRepo *repository.
 	return &WishlistHandler{repo: repo, txRepo: txRepo}
 }
 
+// Create godoc
+// @Summary      Создать wishlist-итем (одноразовый или регулярный)
+// @Description  `frequency=once` — обычная покупка из списка желаний. `monthly|quarterly|yearly` — регулярный платёж (коммуналка, связь и т.п.).
+// @Tags         wishlist
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        body  body      models.CreateWishlistRequest  true  "Тело"
+// @Success      201   {object}  models.WishlistItem
+// @Failure      400   {object}  map[string]string
+// @Failure      401   {object}  map[string]string
+// @Router       /wishlist [post]
 func (h *WishlistHandler) Create(c *gin.Context) {
 	var req models.CreateWishlistRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -52,6 +64,14 @@ func (h *WishlistHandler) Create(c *gin.Context) {
 	c.JSON(http.StatusCreated, item)
 }
 
+// List godoc
+// @Summary      Все wishlist-итемы (без soft-deleted)
+// @Tags         wishlist
+// @Produce      json
+// @Security     BearerAuth
+// @Success      200  {array}   models.WishlistItem
+// @Failure      401  {object}  map[string]string
+// @Router       /wishlist [get]
 func (h *WishlistHandler) List(c *gin.Context) {
 	items, err := h.repo.FindAll(c.Request.Context())
 	if err != nil {
@@ -66,6 +86,20 @@ func (h *WishlistHandler) List(c *gin.Context) {
 	c.JSON(http.StatusOK, items)
 }
 
+// Update godoc
+// @Summary      Обновить wishlist-итем
+// @Description  Patch-семантика. `purchased=true` помечает «куплено» (используется UI-кнопкой); транзакция списания создаётся отдельным `POST /transactions`.
+// @Tags         wishlist
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id    path      string                       true  "Wishlist ID"
+// @Param        body  body      models.UpdateWishlistRequest true  "Поля"
+// @Success      200   {object}  models.WishlistItem
+// @Failure      400   {object}  map[string]string
+// @Failure      401   {object}  map[string]string
+// @Failure      404   {object}  map[string]string
+// @Router       /wishlist/{id} [put]
 func (h *WishlistHandler) Update(c *gin.Context) {
 	id := c.Param("id")
 	var req models.UpdateWishlistRequest
@@ -113,6 +147,16 @@ func (h *WishlistHandler) Update(c *gin.Context) {
 	c.JSON(http.StatusOK, item)
 }
 
+// Delete godoc
+// @Summary      Удалить wishlist-итем (soft-delete)
+// @Tags         wishlist
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id   path      string  true  "Wishlist ID"
+// @Success      200  {object}  map[string]string
+// @Failure      401  {object}  map[string]string
+// @Failure      404  {object}  map[string]string
+// @Router       /wishlist/{id} [delete]
 func (h *WishlistHandler) Delete(c *gin.Context) {
 	id := c.Param("id")
 	if _, err := h.repo.Delete(c.Request.Context(), id, 0, userInfoFromCtx(c)); err != nil {
@@ -138,6 +182,18 @@ func (h *WishlistHandler) Delete(c *gin.Context) {
 //
 // Backs the "Отменить" action on regular расходы AND the "Не куплено"
 // action on wishlist items.
+// UnlinkPeriod godoc
+// @Summary      Отвязать транзакции wishlist-итема за текущий период
+// @Description  Очищает `wishlist_id` у транзакций в текущем месяце/квартале/году (по `frequency`). Для `once` — отвязывает единственную привязанную транзакцию без date-filter. Бэкенд для кнопок «Не куплено» и «Отменить».
+// @Tags         wishlist
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id   path      string  true  "Wishlist ID"
+// @Success      200  {object}  map[string]int
+// @Failure      400  {object}  map[string]string
+// @Failure      401  {object}  map[string]string
+// @Failure      404  {object}  map[string]string
+// @Router       /wishlist/{id}/unlink-period [post]
 func (h *WishlistHandler) UnlinkPeriod(c *gin.Context) {
 	id := c.Param("id")
 	item, err := h.repo.FindByID(c.Request.Context(), id)

@@ -1,0 +1,14 @@
+.git
+.gitignore
+.env
+.env.*
+*.local.env
+bin/
+migrate
+seed_loadtest
+create_user
+*.exe
+*.test
+*.out
+coverage.txt
+README.md

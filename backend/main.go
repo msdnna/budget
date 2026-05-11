@@ -1,8 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	_ "embed"
+	"fmt"
 	"log"
+	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -16,6 +22,21 @@ import (
 	"budget-go/repository"
 )
 
+//go:embed docs/swagger.json
+var swaggerSpec []byte
+
+// @title       msdnna Budget API
+// @version     1.0
+// @description REST API семейного бюджет-приложения (Go + MongoDB). JWT (Bearer) — защищённые ручки требуют заголовок `Authorization: Bearer <token>`, полученный через `POST /api/auth/login`.
+// @contact.name msdnna
+// @contact.url  https://github.com/msdnna/budget
+// @license.name Apache 2.0
+// @license.url  https://www.apache.org/licenses/LICENSE-2.0
+// @BasePath     /api
+// @securityDefinitions.apikey BearerAuth
+// @in           header
+// @name         Authorization
+// @description  Заголовок вида `Bearer <jwt>` (получить через `/auth/login`).
 func main() {
 	_ = godotenv.Load()
 
@@ -56,12 +77,24 @@ func main() {
 	r.SetTrustedProxies([]string{"127.0.0.1", "::1"})
 	r.Use(middleware.CORS())
 
+	// OpenAPI 3.1 spec + Swagger UI (UI грузится с CDN, спека — embed).
+	// Выключается env-флагом SWAGGER_ENABLED=false.
+	if !strings.EqualFold(os.Getenv("SWAGGER_ENABLED"), "false") {
+		spec := bytes.Replace(swaggerSpec, []byte(`"version": "1.0"`), []byte(fmt.Sprintf(`"version": %q`, appVersion)), 1)
+		r.GET("/swagger/doc.json", func(c *gin.Context) {
+			c.Data(http.StatusOK, "application/json; charset=utf-8", spec)
+		})
+		r.GET("/swagger/", func(c *gin.Context) { c.Redirect(http.StatusMovedPermanently, "/swagger/index.html") })
+		r.GET("/swagger", func(c *gin.Context) { c.Redirect(http.StatusMovedPermanently, "/swagger/index.html") })
+		r.GET("/swagger/index.html", func(c *gin.Context) {
+			c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(swaggerUIHTML))
+		})
+	}
+
 	api := r.Group("/api")
 	{
 		// Public — no auth required
-		api.GET("/health", func(c *gin.Context) {
-			c.JSON(200, gin.H{"ok": true, "app": "msdnna-budget"})
-		})
+		api.GET("/health", healthHandler)
 		api.GET("/version", versionHandler.Get)
 		api.POST("/auth/login", authHandler.Login)
 
@@ -114,6 +147,31 @@ func main() {
 		log.Fatal(err)
 	}
 }
+
+// swaggerUIHTML — минимальный UI на Swagger UI 5 (поддерживает OpenAPI 3.1) с CDN.
+// Спека грузится локально с `/swagger/doc.json`.
+const swaggerUIHTML = `<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>msdnna Budget API</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css">
+  <style>body{margin:0}</style>
+</head>
+<body>
+  <div id="swagger-ui"></div>
+  <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+  <script>
+    window.ui = SwaggerUIBundle({
+      url: "/swagger/doc.json",
+      dom_id: "#swagger-ui",
+      deepLinking: true,
+      persistAuthorization: true,
+      tryItOutEnabled: true
+    });
+  </script>
+</body>
+</html>`
 
 func connectMongo(uri string) *mongo.Client {
 	var client *mongo.Client

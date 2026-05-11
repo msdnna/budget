@@ -351,4 +351,4 @@ make prod-up    # docker compose сам пересоздаст контейне�
 
 ## Лицензия
 
-Внутренний проект; лицензия не определена.
+[Apache License 2.0](LICENSE). © msdnna.

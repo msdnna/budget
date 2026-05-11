@@ -23,8 +23,20 @@ func NewDetailRequestHandler(repo *repository.DetailRequestRepository, txRepo *r
 	return &DetailRequestHandler{repo: repo, txRepo: txRepo, userRepo: userRepo}
 }
 
-// Create opens a new detail-request over an existing expense transaction.
-// The creator can assign it to anyone in the family, including themselves.
+// Create godoc
+// @Summary      Открыть detail-request над существующей expense-транзакцией
+// @Description  Создатель может назначить request на любого пользователя семьи (включая себя). Транзакция должна быть expense без уже открытого request.
+// @Tags         detail-requests
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        body  body      models.CreateDetailRequestPayload  true  "transaction_id + assignee_id"
+// @Success      201   {object}  models.DetailRequest
+// @Failure      400   {object}  map[string]string
+// @Failure      401   {object}  map[string]string
+// @Failure      404   {object}  map[string]string
+// @Failure      409   {object}  map[string]string
+// @Router       /detail-requests [post]
 func (h *DetailRequestHandler) Create(c *gin.Context) {
 	var req models.CreateDetailRequestPayload
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -82,8 +94,18 @@ func (h *DetailRequestHandler) Create(c *gin.Context) {
 	c.JSON(http.StatusCreated, dr)
 }
 
-// List returns detail-requests filtered by ?assignee_id, ?creator_id, ?status.
-// Pass assignee_id=me to refer to the current user.
+// List godoc
+// @Summary      Список detail-requests
+// @Description  Фильтры комбинируются по И. `assignee_id=me` / `creator_id=me` — сокращение для текущего пользователя.
+// @Tags         detail-requests
+// @Produce      json
+// @Security     BearerAuth
+// @Param        assignee_id  query     string  false  "User ID или 'me'"
+// @Param        creator_id   query     string  false  "User ID или 'me'"
+// @Param        status       query     string  false  "open|closed"
+// @Success      200          {array}   models.DetailRequest
+// @Failure      401          {object}  map[string]string
+// @Router       /detail-requests [get]
 func (h *DetailRequestHandler) List(c *gin.Context) {
 	uid := c.GetString("user_id")
 	f := repository.DetailRequestFilter{
@@ -105,7 +127,16 @@ func (h *DetailRequestHandler) List(c *gin.Context) {
 	c.JSON(http.StatusOK, out)
 }
 
-// Get returns the request together with its parent and child transactions.
+// Get godoc
+// @Summary      Detail-request с parent- и child-транзакциями
+// @Tags         detail-requests
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id   path      string  true  "Detail-request ID"
+// @Success      200  {object}  models.DetailRequestView
+// @Failure      401  {object}  map[string]string
+// @Failure      404  {object}  map[string]string
+// @Router       /detail-requests/{id} [get]
 func (h *DetailRequestHandler) Get(c *gin.Context) {
 	id := c.Param("id")
 	dr, err := h.repo.FindByID(c.Request.Context(), id)
@@ -126,8 +157,22 @@ func (h *DetailRequestHandler) Get(c *gin.Context) {
 	c.JSON(http.StatusOK, models.DetailRequestView{Request: dr, Parent: parent, Children: children})
 }
 
-// AddChild creates a child transaction within an open detail-request. Only
-// the assignee may call this, and only while the request is open.
+// AddChild godoc
+// @Summary      Добавить child-транзакцию в открытый detail-request
+// @Description  Только assignee и только пока request `open`. Child создаётся с `excluded_from_stats=true` — попадёт в статистику после `Close`.
+// @Tags         detail-requests
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id    path      string                           true  "Detail-request ID"
+// @Param        body  body      models.CreateTransactionRequest  true  "Тело child-транзакции"
+// @Success      201   {object}  models.Transaction
+// @Failure      400   {object}  map[string]string
+// @Failure      401   {object}  map[string]string
+// @Failure      403   {object}  map[string]string  "Только assignee может добавлять"
+// @Failure      404   {object}  map[string]string
+// @Failure      409   {object}  map[string]string  "Request не open"
+// @Router       /detail-requests/{id}/transactions [post]
 func (h *DetailRequestHandler) AddChild(c *gin.Context) {
 	id := c.Param("id")
 	dr, err := h.repo.FindByID(c.Request.Context(), id)
@@ -175,9 +220,20 @@ func (h *DetailRequestHandler) AddChild(c *gin.Context) {
 	c.JSON(http.StatusCreated, t)
 }
 
-// Close finalizes the detail-request: parent is excluded from stats, all
-// children become canonical (excluded_from_stats=false). At least one child
-// is required.
+// Close godoc
+// @Summary      Закрыть detail-request (финализация)
+// @Description  Parent помечается `excluded_from_stats=true`, дети — `false` (становятся каноничными). Требуется ≥1 child. Только assignee.
+// @Tags         detail-requests
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id   path      string  true  "Detail-request ID"
+// @Success      200  {object}  models.DetailRequest
+// @Failure      400   {object}  map[string]string  "Нет ни одного child"
+// @Failure      401  {object}  map[string]string
+// @Failure      403  {object}  map[string]string
+// @Failure      404  {object}  map[string]string
+// @Failure      409  {object}  map[string]string
+// @Router       /detail-requests/{id}/close [post]
 func (h *DetailRequestHandler) Close(c *gin.Context) {
 	id := c.Param("id")
 	dr, err := h.repo.FindByID(c.Request.Context(), id)
@@ -224,8 +280,19 @@ func (h *DetailRequestHandler) Close(c *gin.Context) {
 	c.JSON(http.StatusOK, out)
 }
 
-// Cancel removes an open request: children are soft-deleted, parent flags
-// reset, and the request itself is deleted. Only the creator may cancel.
+// Cancel godoc
+// @Summary      Отменить открытый detail-request
+// @Description  Children soft-удаляются, флаги parent'а сбрасываются, request удаляется. Только creator.
+// @Tags         detail-requests
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id   path      string  true  "Detail-request ID"
+// @Success      200  {object}  map[string]string
+// @Failure      401  {object}  map[string]string
+// @Failure      403  {object}  map[string]string
+// @Failure      404  {object}  map[string]string
+// @Failure      409  {object}  map[string]string
+// @Router       /detail-requests/{id}/cancel [post]
 func (h *DetailRequestHandler) Cancel(c *gin.Context) {
 	id := c.Param("id")
 	dr, err := h.repo.FindByID(c.Request.Context(), id)

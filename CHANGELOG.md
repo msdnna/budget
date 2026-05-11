@@ -16,6 +16,31 @@
 
 ## API (backend)
 
+### [1.14.1] — 2026-05-12
+
+#### Changed
+- Лицензия проекта изменена с Proprietary на **Apache 2.0**. `@license.name Apache 2.0` + `@license.url` в swag-аннотациях, спека перегенерирована. `Dockerfile.prod` label `org.opencontainers.image.licenses="Apache-2.0"`, `image.source` → `https://github.com/msdnna/budget`.
+
+### [1.14.0] — 2026-05-12
+
+#### Security
+- **Fail-closed на критичных env в prod.** При `APP_ENV=production` отсутствие `JWT_SECRET` или `MONGO_URI` приводит к `log.Fatal` на старте (раньше — silently boot с dev-defaults `"dev-secret-change-in-production-min32chars!"` и `mongodb://admin:password@localhost...`). `JWT_SECRET` короче 32 символов теперь логирует warning.
+- `docker-compose.prod.yml`: `JWT_SECRET=${JWT_SECRET:?...}`, `MONGO_USERNAME/PASSWORD` тоже required — compose отказывается стартовать без них.
+- `GIN_MODE=release` и `SWAGGER_ENABLED=false` форсятся через env в prod-compose: убирает debug-логирование запросов и закрывает `/swagger/*` (он уже был недоступен через nginx, теперь — defense-in-depth).
+- `backend/Dockerfile.prod`: переход на `gcr.io/distroless/static-debian12:nonroot` — контейнер крутится под uid 65532 вместо root.
+
+#### Added
+- OCI image labels (`org.opencontainers.image.{title,version,revision,source,description,licenses}`) в обоих Dockerfile-ах — будут заполняться из `make prod-build` (читает VERSION + `git rev-parse --short HEAD`). Готово к публикации в GHCR.
+- `backend/.dockerignore` и `frontend/.dockerignore` — `.env`, `.git`, `node_modules`, локальные cmd-бинарники не попадают в build-context.
+
+### [1.13.0] — 2026-05-11
+
+#### Added
+- **OpenAPI 3.1 + Swagger UI.** Бэкенд аннотирован комментариями `swaggo/swag` v2; спека генерируется в `backend/docs/swagger.{json,yaml}` (OpenAPI 3.1.0) и отдаётся через `GET /swagger/index.html` (UI на Swagger UI 5 с CDN) и `GET /swagger/doc.json` (raw spec). Покрыты все ручки: auth / transactions / wishlist / categories / statistics / sync / detail-requests / export / meta.
+- Спека embed-ится в бинарь (`//go:embed docs/swagger.json`); `info.version` подставляется из `backend/VERSION` в рантайме. Никаких runtime-зависимостей от `swaggo/*` — UI на 100% статичен.
+- Перегенерация — `make swag` (CLI ставится через `make swag-install` → `swaggo/swag/v2`).
+- Env-флаг `SWAGGER_ENABLED=false` отключает UI и JSON-эндпоинт (например, в prod). По умолчанию включено.
+
 ### [1.12.1] — 2026-05-08
 
 #### Changed
@@ -102,6 +127,17 @@
 ---
 
 ## Web (frontend)
+
+### [1.16.2] — 2026-05-12
+
+#### Changed
+- Лицензия Apache 2.0: `frontend/Dockerfile` label `org.opencontainers.image.licenses="Apache-2.0"`, `image.source` → `https://github.com/msdnna/budget`.
+
+### [1.16.1] — 2026-05-12
+
+#### Security
+- `frontend/nginx.conf`: `server_tokens off`, плюс `X-Content-Type-Options nosniff`, `X-Frame-Options DENY`, `Referrer-Policy strict-origin-when-cross-origin`, `Permissions-Policy geolocation=(), microphone=(), camera=()`. Headers продублированы в `location /` и `/apks/` — иначе nginx replaces (не merges) при per-location `add_header`.
+- `frontend/Dockerfile` — OCI labels (`org.opencontainers.image.*`), build args `WEB_VERSION` + `VCS_REF`.
 
 ### [1.16.0] — 2026-05-08
 
@@ -223,6 +259,11 @@
 ---
 
 ## Android
+
+### [1.29.3] — 2026-05-12
+
+#### Changed
+- Лицензия Apache 2.0 (без изменений в коде приложения; bump для синхронизации релизного тега со сменой лицензии монорепо).
 
 ### [1.29.2] — 2026-05-11
 

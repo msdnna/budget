@@ -22,6 +22,17 @@ func NewAuthHandler(repo *repository.UserRepository, cfg *config.Config) *AuthHa
 	return &AuthHandler{repo: repo, cfg: cfg}
 }
 
+// Login godoc
+// @Summary      Логин и выдача JWT
+// @Description  Возвращает 24-часовой JWT. Тот же текст ошибки для несуществующего логина и неверного пароля (anti-enumeration).
+// @Tags         auth
+// @Accept       json
+// @Produce      json
+// @Param        body  body      models.LoginRequest   true  "Креды"
+// @Success      200   {object}  models.LoginResponse
+// @Failure      400   {object}  map[string]string
+// @Failure      401   {object}  map[string]string
+// @Router       /auth/login [post]
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req models.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -69,6 +80,15 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	})
 }
 
+// Me godoc
+// @Summary      Текущий пользователь
+// @Description  Возвращает claims текущего JWT.
+// @Tags         auth
+// @Produce      json
+// @Security     BearerAuth
+// @Success      200  {object}  map[string]string
+// @Failure      401  {object}  map[string]string
+// @Router       /auth/me [get]
 func (h *AuthHandler) Me(c *gin.Context) {
 	claims := c.MustGet("claims").(*models.Claims)
 	c.JSON(http.StatusOK, gin.H{
@@ -79,6 +99,15 @@ func (h *AuthHandler) Me(c *gin.Context) {
 	})
 }
 
+// ListUsers godoc
+// @Summary      Список пользователей семьи
+// @Description  Усечённая публичная информация — без password_hash и email.
+// @Tags         auth
+// @Produce      json
+// @Security     BearerAuth
+// @Success      200  {array}   models.UserInfo
+// @Failure      401  {object}  map[string]string
+// @Router       /users [get]
 func (h *AuthHandler) ListUsers(c *gin.Context) {
 	users, err := h.repo.FindAll(c.Request.Context())
 	if err != nil {

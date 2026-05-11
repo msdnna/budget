@@ -25,6 +25,21 @@ func NewExportHandler(txRepo *repository.TransactionRepository, wlRepo *reposito
 	return &ExportHandler{txRepo: txRepo, wlRepo: wlRepo, fontPath: fontPath}
 }
 
+// Excel godoc
+// @Summary      Выгрузить транзакции в .xlsx
+// @Description  4 листа: Транзакции / Доходы по категориям / Расходы по категориям / Месячная сводка. Параметры периода — как у `/statistics/summary`.
+// @Tags         export
+// @Produce      application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+// @Security     BearerAuth
+// @Param        from   query     string  false  "YYYY-MM-DD"
+// @Param        to     query     string  false  "YYYY-MM-DD"
+// @Param        month  query     string  false  "YYYY-MM"
+// @Param        year   query     int     false  "YYYY"
+// @Param        type   query     string  false  "income|expense|initial_balance"
+// @Param        theme  query     string  false  "blue|green|red|orange|purple|teal|pink"  default(blue)
+// @Success      200    {file}    file
+// @Failure      401    {object}  map[string]string
+// @Router       /export/excel [get]
 func (h *ExportHandler) Excel(c *gin.Context) {
 	from, to := parsePeriodParams(c)
 	txType := c.Query("type")
@@ -135,6 +150,21 @@ var pdfThemes = map[string]pdfTheme{
 	"pink":   {235, 47, 150, 196, 29, 127, 255, 232, 246},
 }
 
+// PDF godoc
+// @Summary      Выгрузить отчёт в PDF
+// @Description  Заголовок + сводка + табличный список транзакций. Параметры — те же, что у /export/excel.
+// @Tags         export
+// @Produce      application/pdf
+// @Security     BearerAuth
+// @Param        from   query     string  false  "YYYY-MM-DD"
+// @Param        to     query     string  false  "YYYY-MM-DD"
+// @Param        month  query     string  false  "YYYY-MM"
+// @Param        year   query     int     false  "YYYY"
+// @Param        type   query     string  false  "income|expense|initial_balance"
+// @Param        theme  query     string  false  "blue|green|red|orange|purple|teal|pink"  default(blue)
+// @Success      200    {file}    file
+// @Failure      401    {object}  map[string]string
+// @Router       /export/pdf [get]
 func (h *ExportHandler) PDF(c *gin.Context) {
 	from, to := parsePeriodParams(c)
 	txType := c.Query("type")

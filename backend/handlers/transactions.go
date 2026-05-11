@@ -35,6 +35,18 @@ func userInfoFromCtx(c *gin.Context) *models.UserInfo {
 	}
 }
 
+// Create godoc
+// @Summary      Создать транзакцию
+// @Description  Создаёт доход / расход / начальный баланс. `date` принимается в формате YYYY-MM-DD.
+// @Tags         transactions
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        body  body      models.CreateTransactionRequest  true  "Тело"
+// @Success      201   {object}  models.Transaction
+// @Failure      400   {object}  map[string]string
+// @Failure      401   {object}  map[string]string
+// @Router       /transactions [post]
 func (h *TransactionHandler) Create(c *gin.Context) {
 	var req models.CreateTransactionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -68,6 +80,23 @@ func (h *TransactionHandler) Create(c *gin.Context) {
 	c.JSON(http.StatusCreated, t)
 }
 
+// List godoc
+// @Summary      Список транзакций с пагинацией
+// @Description  Фильтры комбинируются по И. `categories` — список через запятую (приоритетнее `category`). `include_detailed=true` показывает родителей закрытых detail-requests.
+// @Tags         transactions
+// @Produce      json
+// @Security     BearerAuth
+// @Param        type              query     string  false  "income|expense|initial_balance"
+// @Param        category          query     string  false  "Имя категории"
+// @Param        categories        query     string  false  "CSV категорий"
+// @Param        from              query     string  false  "YYYY-MM-DD"
+// @Param        to                query     string  false  "YYYY-MM-DD"
+// @Param        page              query     int     false  "Страница (1-based)"  default(1)
+// @Param        limit             query     int     false  "Размер страницы (1-100)"  default(20)
+// @Param        include_detailed  query     bool    false  "Показывать родителей закрытых detail-requests"
+// @Success      200  {object}  map[string]interface{}
+// @Failure      401  {object}  map[string]string
+// @Router       /transactions [get]
 func (h *TransactionHandler) List(c *gin.Context) {
 	filter := models.TransactionFilter{
 		Type:     c.Query("type"),
@@ -131,6 +160,20 @@ func (h *TransactionHandler) List(c *gin.Context) {
 	})
 }
 
+// Update godoc
+// @Summary      Обновить транзакцию
+// @Description  Patch-семантика — пустые поля игнорируются, кроме `wishlist_id` (пустая строка отвязывает от wishlist-итема).
+// @Tags         transactions
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id    path      string                            true  "Transaction ID (UUID)"
+// @Param        body  body      models.UpdateTransactionRequest   true  "Поля для обновления"
+// @Success      200   {object}  models.Transaction
+// @Failure      400   {object}  map[string]string
+// @Failure      401   {object}  map[string]string
+// @Failure      404   {object}  map[string]string
+// @Router       /transactions/{id} [put]
 func (h *TransactionHandler) Update(c *gin.Context) {
 	id := c.Param("id")
 	var req models.UpdateTransactionRequest
@@ -185,6 +228,17 @@ func (h *TransactionHandler) Update(c *gin.Context) {
 	c.JSON(http.StatusOK, t)
 }
 
+// Delete godoc
+// @Summary      Удалить транзакцию (soft-delete)
+// @Description  Запись помечается `deleted_at`; синк-клиенты увидят её при следующем pull.
+// @Tags         transactions
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id   path      string  true  "Transaction ID"
+// @Success      200  {object}  map[string]string
+// @Failure      401  {object}  map[string]string
+// @Failure      404  {object}  map[string]string
+// @Router       /transactions/{id} [delete]
 func (h *TransactionHandler) Delete(c *gin.Context) {
 	id := c.Param("id")
 	if _, err := h.repo.Delete(c.Request.Context(), id, 0, userInfoFromCtx(c)); err != nil {

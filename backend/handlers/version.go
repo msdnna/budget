@@ -22,6 +22,13 @@ func NewVersionHandler(apiVersion string) *VersionHandler {
 	}
 }
 
+// Get godoc
+// @Summary      Версии: API + последняя/минимальная Android
+// @Description  Публичный эндпоинт. `android_latest` / `android_min_required` берутся из env-переменных бэкенда — клиент-обновление и gate-проверка.
+// @Tags         meta
+// @Produce      json
+// @Success      200  {object}  map[string]string
+// @Router       /version [get]
 func (h *VersionHandler) Get(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"api":                  h.apiVersion,

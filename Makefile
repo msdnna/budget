@@ -51,7 +51,10 @@ logs: ## Tail Docker logs
 
 .PHONY: prod-build
 prod-build: ## Build production images (distroless backend + nginx frontend)
-	docker compose -f docker-compose.prod.yml build
+	@API_VERSION=$$(cat $(BACKEND_DIR)/VERSION) \
+	 WEB_VERSION=$$(cat $(FRONTEND_DIR)/VERSION) \
+	 VCS_REF=$$(git rev-parse --short HEAD 2>/dev/null || echo unknown) \
+	  docker compose -f docker-compose.prod.yml build
 
 .PHONY: prod-up
 prod-up: ## Start production environment (detached)
@@ -180,6 +183,22 @@ loadtest-drop: ## Drop the $(LOADTEST_DB) database entirely
 	  --authenticationDatabase admin \
 	  --quiet --eval 'db.getSiblingDB("$(LOADTEST_DB)").dropDatabase()'
 	@echo "Dropped database: $(LOADTEST_DB)"
+
+# ─── Swagger / OpenAPI ───────────────────────────────────────────────────────
+
+SWAG := $(shell command -v swag 2>/dev/null || echo $$(go env GOPATH)/bin/swag)
+
+.PHONY: swag-install
+swag-install: ## Install swag v2 CLI (swaggo/swag/v2 — OpenAPI 3.1 support)
+	GOPROXY=https://proxy.golang.org,direct $(GO) install github.com/swaggo/swag/v2/cmd/swag@latest
+
+.PHONY: swag
+swag: ## Regenerate backend/docs/swagger.{json,yaml} from handler annotations (OpenAPI 3.1)
+	@test -x "$(SWAG)" || { echo "swag not found — run 'make swag-install'"; exit 1; }
+	cd $(BACKEND_DIR) && $(SWAG) init --v3.1 --parseDependency --parseInternal --generatedTime=false -o ./docs -g main.go
+	@# docs.go импортируется только при использовании swag.Register() runtime —
+	@# мы embed-им swagger.json напрямую, поэтому удаляем сгенерированный stub.
+	@rm -f $(BACKEND_DIR)/docs/docs.go
 
 # ─── Versioning ──────────────────────────────────────────────────────────────
 

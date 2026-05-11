@@ -1,0 +1,3174 @@
+{
+    "components": {
+        "schemas": {
+            "handlers.CategoriesAllResponse": {
+                "properties": {
+                    "expense": {
+                        "items": {
+                            "$ref": "#/components/schemas/models.Category"
+                        },
+                        "type": "array",
+                        "uniqueItems": false
+                    },
+                    "income": {
+                        "items": {
+                            "$ref": "#/components/schemas/models.Category"
+                        },
+                        "type": "array",
+                        "uniqueItems": false
+                    },
+                    "wishlist": {
+                        "items": {
+                            "$ref": "#/components/schemas/models.Category"
+                        },
+                        "type": "array",
+                        "uniqueItems": false
+                    }
+                },
+                "type": "object"
+            },
+            "handlers.StatisticsOverviewResponse": {
+                "properties": {
+                    "expenseByCategory": {
+                        "items": {
+                            "$ref": "#/components/schemas/models.CategoryData"
+                        },
+                        "type": "array",
+                        "uniqueItems": false
+                    },
+                    "incomeByCategory": {
+                        "items": {
+                            "$ref": "#/components/schemas/models.CategoryData"
+                        },
+                        "type": "array",
+                        "uniqueItems": false
+                    },
+                    "monthly": {
+                        "items": {
+                            "$ref": "#/components/schemas/models.MonthlyData"
+                        },
+                        "type": "array",
+                        "uniqueItems": false
+                    },
+                    "summary": {
+                        "$ref": "#/components/schemas/models.SummaryData"
+                    }
+                },
+                "type": "object"
+            },
+            "models.Category": {
+                "properties": {
+                    "created_at": {
+                        "type": "string"
+                    },
+                    "deleted_at": {
+                        "type": "string"
+                    },
+                    "id": {
+                        "type": "string"
+                    },
+                    "is_default": {
+                        "type": "boolean"
+                    },
+                    "last_modified_by": {
+                        "$ref": "#/components/schemas/models.UserInfo"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "section": {
+                        "type": "string"
+                    },
+                    "updated_at": {
+                        "type": "string"
+                    },
+                    "version": {
+                        "type": "integer"
+                    }
+                },
+                "type": "object"
+            },
+            "models.CategoryData": {
+                "properties": {
+                    "amount": {
+                        "type": "number"
+                    },
+                    "category": {
+                        "type": "string"
+                    },
+                    "count": {
+                        "type": "integer"
+                    },
+                    "percentage": {
+                        "type": "number"
+                    }
+                },
+                "type": "object"
+            },
+            "models.CreateCategoryRequest": {
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "section": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "name",
+                    "section"
+                ],
+                "type": "object"
+            },
+            "models.CreateDetailRequestPayload": {
+                "properties": {
+                    "assignee_id": {
+                        "type": "string"
+                    },
+                    "transaction_id": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "assignee_id",
+                    "transaction_id"
+                ],
+                "type": "object"
+            },
+            "models.CreateTransactionRequest": {
+                "properties": {
+                    "amount": {
+                        "type": "number"
+                    },
+                    "category": {
+                        "type": "string"
+                    },
+                    "date": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "purpose": {
+                        "type": "string"
+                    },
+                    "source": {
+                        "type": "string"
+                    },
+                    "type": {
+                        "$ref": "#/components/schemas/models.TransactionType"
+                    },
+                    "wishlist_id": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "amount",
+                    "category",
+                    "date",
+                    "type"
+                ],
+                "type": "object"
+            },
+            "models.CreateWishlistRequest": {
+                "properties": {
+                    "category": {
+                        "type": "string"
+                    },
+                    "estimated_cost": {
+                        "type": "number"
+                    },
+                    "frequency": {
+                        "$ref": "#/components/schemas/models.Frequency"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "notes": {
+                        "type": "string"
+                    },
+                    "priority": {
+                        "type": "integer"
+                    },
+                    "purchased": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "category",
+                    "estimated_cost",
+                    "name"
+                ],
+                "type": "object"
+            },
+            "models.DetailRequest": {
+                "properties": {
+                    "assignee": {
+                        "$ref": "#/components/schemas/models.UserInfo"
+                    },
+                    "closed_at": {
+                        "type": "string"
+                    },
+                    "created_at": {
+                        "type": "string"
+                    },
+                    "creator": {
+                        "$ref": "#/components/schemas/models.UserInfo"
+                    },
+                    "id": {
+                        "type": "string"
+                    },
+                    "parent_transaction_id": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "$ref": "#/components/schemas/models.DetailRequestStatus"
+                    },
+                    "target_amount": {
+                        "type": "number"
+                    },
+                    "updated_at": {
+                        "type": "string"
+                    }
+                },
+                "type": "object"
+            },
+            "models.DetailRequestStatus": {
+                "enum": [
+                    "open",
+                    "closed"
+                ],
+                "type": "string",
+                "x-enum-varnames": [
+                    "DetailRequestOpen",
+                    "DetailRequestClosed"
+                ]
+            },
+            "models.DetailRequestView": {
+                "properties": {
+                    "children": {
+                        "items": {
+                            "$ref": "#/components/schemas/models.Transaction"
+                        },
+                        "type": "array",
+                        "uniqueItems": false
+                    },
+                    "parent": {
+                        "$ref": "#/components/schemas/models.Transaction"
+                    },
+                    "request": {
+                        "$ref": "#/components/schemas/models.DetailRequest"
+                    }
+                },
+                "type": "object"
+            },
+            "models.ForecastResponse": {
+                "properties": {
+                    "breakdown": {
+                        "items": {
+                            "$ref": "#/components/schemas/models.CategoryData"
+                        },
+                        "type": "array",
+                        "uniqueItems": false
+                    },
+                    "historical_avg": {
+                        "type": "number"
+                    },
+                    "regular_contrib": {
+                        "description": "RegularContrib is the subset coming from recurring items only —\nclients use it to render two separate summary cards\n«Регулярные расходы / мес» (= regular_contrib) and\n«Список желаний / мес» (= wishlist_contrib − regular_contrib).",
+                        "type": "number"
+                    },
+                    "regular_items": {
+                        "items": {
+                            "$ref": "#/components/schemas/models.RegularItemForecast"
+                        },
+                        "type": "array",
+                        "uniqueItems": false
+                    },
+                    "total_monthly": {
+                        "type": "number"
+                    },
+                    "unpurchased_wishlist": {
+                        "items": {
+                            "$ref": "#/components/schemas/models.WishlistItem"
+                        },
+                        "type": "array",
+                        "uniqueItems": false
+                    },
+                    "wishlist_contrib": {
+                        "description": "WishlistContrib is the SUM of contributions from all wishlist items\n(recurring + one-off). Kept for backward compat with older clients.",
+                        "type": "number"
+                    }
+                },
+                "type": "object"
+            },
+            "models.Frequency": {
+                "enum": [
+                    "once",
+                    "monthly",
+                    "quarterly",
+                    "yearly"
+                ],
+                "type": "string",
+                "x-enum-varnames": [
+                    "FrequencyOnce",
+                    "FrequencyMonthly",
+                    "FrequencyQuarterly",
+                    "FrequencyYearly"
+                ]
+            },
+            "models.LoginRequest": {
+                "properties": {
+                    "login": {
+                        "type": "string"
+                    },
+                    "password": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "login",
+                    "password"
+                ],
+                "type": "object"
+            },
+            "models.LoginResponse": {
+                "properties": {
+                    "avatar_url": {
+                        "type": "string"
+                    },
+                    "display_name": {
+                        "type": "string"
+                    },
+                    "expires_at": {
+                        "type": "string"
+                    },
+                    "token": {
+                        "type": "string"
+                    },
+                    "user_id": {
+                        "type": "string"
+                    }
+                },
+                "type": "object"
+            },
+            "models.MonthlyData": {
+                "properties": {
+                    "balance": {
+                        "type": "number"
+                    },
+                    "expense": {
+                        "type": "number"
+                    },
+                    "income": {
+                        "type": "number"
+                    },
+                    "initial_balance": {
+                        "type": "number"
+                    },
+                    "month": {
+                        "type": "integer"
+                    },
+                    "year": {
+                        "type": "integer"
+                    }
+                },
+                "type": "object"
+            },
+            "models.RegularItemForecast": {
+                "properties": {
+                    "category": {
+                        "type": "string"
+                    },
+                    "estimated_cost": {
+                        "type": "number"
+                    },
+                    "frequency": {
+                        "type": "string"
+                    },
+                    "id": {
+                        "type": "string"
+                    },
+                    "monthly_cost": {
+                        "description": "MonthlyCost is now the FULL cost per period (not divided across\nmonths) — clients display it with a frequency-specific suffix:\nmonthly → \"₽/мес\", quarterly → \"₽/кв\", yearly → \"₽/год\".",
+                        "type": "number"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "next_due_date": {
+                        "description": "NextDueDate is when the item is next expected to be paid, derived\nfrom latest linked transaction + period (or \"now\" if never paid).\nEmpty when not applicable. Forecast contribution = full\nestimated_cost when the item is monthly, OR NextDueDate ≤ now+1\nmonth — otherwise the recurring schedule is far enough out that\nit doesn't affect the upcoming month's projection.",
+                        "type": "string"
+                    },
+                    "notes": {
+                        "description": "Notes mirrors the wishlist item's notes verbatim. Surfaced here so\nthe «Оплачено» flow can prefill the expense form's «Описание»\n(description) without an extra wishlist lookup on the client.",
+                        "type": "string"
+                    },
+                    "paid_amount": {
+                        "type": "number"
+                    },
+                    "paid_count": {
+                        "type": "integer"
+                    },
+                    "paid_this_period": {
+                        "description": "PaidThisPeriod is true when ≥1 linked expense exists in the current\ncalendar period (month/quarter/year per frequency). Used by the UI\nfor the \"оплачено · X ₽\" badge and strike-through styling.",
+                        "type": "boolean"
+                    }
+                },
+                "type": "object"
+            },
+            "models.SummaryData": {
+                "properties": {
+                    "balance": {
+                        "type": "number"
+                    },
+                    "expense_count": {
+                        "type": "integer"
+                    },
+                    "income_count": {
+                        "type": "integer"
+                    },
+                    "initial_balance": {
+                        "type": "number"
+                    },
+                    "initial_balance_count": {
+                        "type": "integer"
+                    },
+                    "total_expense": {
+                        "type": "number"
+                    },
+                    "total_income": {
+                        "type": "number"
+                    }
+                },
+                "type": "object"
+            },
+            "models.SyncEntityType": {
+                "enum": [
+                    "transaction",
+                    "wishlist",
+                    "category"
+                ],
+                "type": "string",
+                "x-enum-varnames": [
+                    "SyncEntityTransaction",
+                    "SyncEntityWishlist",
+                    "SyncEntityCategory"
+                ]
+            },
+            "models.SyncOpStatus": {
+                "enum": [
+                    "ok",
+                    "conflict",
+                    "error"
+                ],
+                "type": "string",
+                "x-enum-varnames": [
+                    "SyncStatusOK",
+                    "SyncStatusConflict",
+                    "SyncStatusError"
+                ]
+            },
+            "models.SyncOpType": {
+                "enum": [
+                    "create",
+                    "update",
+                    "delete"
+                ],
+                "type": "string",
+                "x-enum-varnames": [
+                    "SyncOpCreate",
+                    "SyncOpUpdate",
+                    "SyncOpDelete"
+                ]
+            },
+            "models.SyncOperation": {
+                "properties": {
+                    "base_version": {
+                        "type": "integer"
+                    },
+                    "entity": {
+                        "$ref": "#/components/schemas/models.SyncEntityType"
+                    },
+                    "force": {
+                        "type": "boolean"
+                    },
+                    "id": {
+                        "type": "string"
+                    },
+                    "op_id": {
+                        "type": "string"
+                    },
+                    "payload": {
+                        "items": {
+                            "type": "integer"
+                        },
+                        "type": "array",
+                        "uniqueItems": false
+                    },
+                    "type": {
+                        "$ref": "#/components/schemas/models.SyncOpType"
+                    }
+                },
+                "required": [
+                    "entity",
+                    "id",
+                    "op_id",
+                    "type"
+                ],
+                "type": "object"
+            },
+            "models.SyncOperationResult": {
+                "properties": {
+                    "error": {
+                        "type": "string"
+                    },
+                    "op_id": {
+                        "type": "string"
+                    },
+                    "record": {
+                        "additionalProperties": {},
+                        "type": "object"
+                    },
+                    "status": {
+                        "$ref": "#/components/schemas/models.SyncOpStatus"
+                    }
+                },
+                "type": "object"
+            },
+            "models.SyncPullResponse": {
+                "properties": {
+                    "categories": {
+                        "items": {
+                            "$ref": "#/components/schemas/models.Category"
+                        },
+                        "type": "array",
+                        "uniqueItems": false
+                    },
+                    "server_time": {
+                        "type": "string"
+                    },
+                    "transactions": {
+                        "items": {
+                            "$ref": "#/components/schemas/models.Transaction"
+                        },
+                        "type": "array",
+                        "uniqueItems": false
+                    },
+                    "wishlist": {
+                        "items": {
+                            "$ref": "#/components/schemas/models.WishlistItem"
+                        },
+                        "type": "array",
+                        "uniqueItems": false
+                    }
+                },
+                "type": "object"
+            },
+            "models.SyncPushRequest": {
+                "properties": {
+                    "operations": {
+                        "items": {
+                            "$ref": "#/components/schemas/models.SyncOperation"
+                        },
+                        "type": "array",
+                        "uniqueItems": false
+                    }
+                },
+                "required": [
+                    "operations"
+                ],
+                "type": "object"
+            },
+            "models.SyncPushResponse": {
+                "properties": {
+                    "results": {
+                        "items": {
+                            "$ref": "#/components/schemas/models.SyncOperationResult"
+                        },
+                        "type": "array",
+                        "uniqueItems": false
+                    },
+                    "server_time": {
+                        "type": "string"
+                    }
+                },
+                "type": "object"
+            },
+            "models.Transaction": {
+                "properties": {
+                    "amount": {
+                        "type": "number"
+                    },
+                    "category": {
+                        "type": "string"
+                    },
+                    "created_at": {
+                        "type": "string"
+                    },
+                    "created_by": {
+                        "$ref": "#/components/schemas/models.UserInfo"
+                    },
+                    "date": {
+                        "type": "string"
+                    },
+                    "deleted_at": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "detail_request_id": {
+                        "type": "string"
+                    },
+                    "detail_request_status": {
+                        "type": "string"
+                    },
+                    "excluded_from_stats": {
+                        "type": "boolean"
+                    },
+                    "hidden": {
+                        "type": "boolean"
+                    },
+                    "id": {
+                        "type": "string"
+                    },
+                    "last_modified_by": {
+                        "$ref": "#/components/schemas/models.UserInfo"
+                    },
+                    "parent_id": {
+                        "description": "Detail-request linkage. ParentID is set on child transactions; it\nreferences the lump-sum parent. DetailRequestID/Status are set on the\nparent transaction once a detail-request is opened over it.\nExcludedFromStats is denormalized so aggregation queries stay simple:\nwhile a request is open, children are excluded; once closed, the parent\nis excluded and the children become canonical.",
+                        "type": "string"
+                    },
+                    "purpose": {
+                        "type": "string"
+                    },
+                    "source": {
+                        "type": "string"
+                    },
+                    "type": {
+                        "$ref": "#/components/schemas/models.TransactionType"
+                    },
+                    "updated_at": {
+                        "type": "string"
+                    },
+                    "version": {
+                        "type": "integer"
+                    },
+                    "wishlist_id": {
+                        "description": "WishlistID links an expense transaction to a recurring wishlist item.\nEmpty when the transaction is not a recurring-payment fulfillment.\nForecast aggregation uses it to decide whether a recurring item is\n\"paid this period\" and should be excluded from the projected total.",
+                        "type": "string"
+                    }
+                },
+                "type": "object"
+            },
+            "models.TransactionType": {
+                "enum": [
+                    "income",
+                    "expense",
+                    "initial_balance"
+                ],
+                "type": "string",
+                "x-enum-varnames": [
+                    "Income",
+                    "Expense",
+                    "InitialBalance"
+                ]
+            },
+            "models.UpdateTransactionRequest": {
+                "properties": {
+                    "amount": {
+                        "type": "number"
+                    },
+                    "category": {
+                        "type": "string"
+                    },
+                    "created_by": {
+                        "$ref": "#/components/schemas/models.UserInfo"
+                    },
+                    "date": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "hidden": {
+                        "type": "boolean"
+                    },
+                    "purpose": {
+                        "type": "string"
+                    },
+                    "source": {
+                        "type": "string"
+                    },
+                    "wishlist_id": {
+                        "description": "Pointer so an empty string (\"\") is distinguishable from absent — empty\nstring unlinks the transaction from its wishlist item.",
+                        "type": "string"
+                    }
+                },
+                "type": "object"
+            },
+            "models.UpdateWishlistRequest": {
+                "properties": {
+                    "category": {
+                        "type": "string"
+                    },
+                    "created_by": {
+                        "$ref": "#/components/schemas/models.UserInfo"
+                    },
+                    "estimated_cost": {
+                        "type": "number"
+                    },
+                    "frequency": {
+                        "$ref": "#/components/schemas/models.Frequency"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "notes": {
+                        "type": "string"
+                    },
+                    "priority": {
+                        "type": "integer"
+                    },
+                    "purchased": {
+                        "type": "boolean"
+                    }
+                },
+                "type": "object"
+            },
+            "models.UserInfo": {
+                "properties": {
+                    "avatar_url": {
+                        "type": "string"
+                    },
+                    "display_name": {
+                        "type": "string"
+                    },
+                    "user_id": {
+                        "type": "string"
+                    }
+                },
+                "type": "object"
+            },
+            "models.WishlistItem": {
+                "properties": {
+                    "category": {
+                        "type": "string"
+                    },
+                    "created_at": {
+                        "type": "string"
+                    },
+                    "created_by": {
+                        "$ref": "#/components/schemas/models.UserInfo"
+                    },
+                    "deleted_at": {
+                        "type": "string"
+                    },
+                    "estimated_cost": {
+                        "type": "number"
+                    },
+                    "frequency": {
+                        "$ref": "#/components/schemas/models.Frequency"
+                    },
+                    "id": {
+                        "type": "string"
+                    },
+                    "last_modified_by": {
+                        "$ref": "#/components/schemas/models.UserInfo"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "notes": {
+                        "type": "string"
+                    },
+                    "priority": {
+                        "type": "integer"
+                    },
+                    "purchased": {
+                        "type": "boolean"
+                    },
+                    "updated_at": {
+                        "type": "string"
+                    },
+                    "version": {
+                        "type": "integer"
+                    }
+                },
+                "type": "object"
+            }
+        },
+        "securitySchemes": {
+            "BearerAuth": {
+                "description": "Заголовок вида `Bearer \u003cjwt\u003e` (получить через `/auth/login`).",
+                "in": "header",
+                "name": "Authorization",
+                "type": "apiKey"
+            }
+        }
+    },
+    "info": {
+        "contact": {
+            "name": "msdnna",
+            "url": "https://github.com/msdnna/budget"
+        },
+        "description": "REST API семейного бюджет-приложения (Go + MongoDB). JWT (Bearer) — защищённые ручки требуют заголовок `Authorization: Bearer \u003ctoken\u003e`, полученный через `POST /api/auth/login`.",
+        "license": {
+            "name": "Apache 2.0",
+            "url": "https://www.apache.org/licenses/LICENSE-2.0"
+        },
+        "title": "msdnna Budget API",
+        "version": "1.0"
+    },
+    "externalDocs": {
+        "description": "",
+        "url": ""
+    },
+    "paths": {
+        "/auth/login": {
+            "post": {
+                "description": "Возвращает 24-часовой JWT. Тот же текст ошибки для несуществующего логина и неверного пароля (anti-enumeration).",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "oneOf": [
+                                    {
+                                        "type": "object"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/models.LoginRequest",
+                                        "summary": "body",
+                                        "description": "Креды"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "description": "Креды",
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.LoginResponse"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Bad Request"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized"
+                    }
+                },
+                "summary": "Логин и выдача JWT",
+                "tags": [
+                    "auth"
+                ]
+            }
+        },
+        "/auth/me": {
+            "get": {
+                "description": "Возвращает claims текущего JWT.",
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Текущий пользователь",
+                "tags": [
+                    "auth"
+                ]
+            }
+        },
+        "/categories": {
+            "get": {
+                "parameters": [
+                    {
+                        "description": "expense|income|wishlist",
+                        "in": "query",
+                        "name": "section",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "items": {
+                                        "$ref": "#/components/schemas/models.Category"
+                                    },
+                                    "type": "array"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Bad Request"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Категории одной секции",
+                "tags": [
+                    "categories"
+                ]
+            },
+            "post": {
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "oneOf": [
+                                    {
+                                        "type": "object"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/models.CreateCategoryRequest",
+                                        "summary": "body",
+                                        "description": "Тело"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "description": "Тело",
+                    "required": true
+                },
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.Category"
+                                }
+                            }
+                        },
+                        "description": "Created"
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Bad Request"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized"
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Категория уже существует"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Создать пользовательскую категорию",
+                "tags": [
+                    "categories"
+                ]
+            }
+        },
+        "/categories/all": {
+            "get": {
+                "description": "Прогревает кеш Android-клиента без 3 параллельных запросов. Секции запрашиваются конкурентно.",
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.CategoriesAllResponse"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Категории всех секций одним запросом",
+                "tags": [
+                    "categories"
+                ]
+            }
+        },
+        "/categories/{id}": {
+            "delete": {
+                "description": "Дефолтные категории удалить нельзя — handler вернёт 404.",
+                "parameters": [
+                    {
+                        "description": "Category ID",
+                        "in": "path",
+                        "name": "id",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "boolean"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized"
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Not Found"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Удалить пользовательскую категорию",
+                "tags": [
+                    "categories"
+                ]
+            }
+        },
+        "/detail-requests": {
+            "get": {
+                "description": "Фильтры комбинируются по И. `assignee_id=me` / `creator_id=me` — сокращение для текущего пользователя.",
+                "parameters": [
+                    {
+                        "description": "User ID или 'me'",
+                        "in": "query",
+                        "name": "assignee_id",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "User ID или 'me'",
+                        "in": "query",
+                        "name": "creator_id",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "open|closed",
+                        "in": "query",
+                        "name": "status",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "items": {
+                                        "$ref": "#/components/schemas/models.DetailRequest"
+                                    },
+                                    "type": "array"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Список detail-requests",
+                "tags": [
+                    "detail-requests"
+                ]
+            },
+            "post": {
+                "description": "Создатель может назначить request на любого пользователя семьи (включая себя). Транзакция должна быть expense без уже открытого request.",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "oneOf": [
+                                    {
+                                        "type": "object"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/models.CreateDetailRequestPayload",
+                                        "summary": "body",
+                                        "description": "transaction_id + assignee_id"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "description": "transaction_id + assignee_id",
+                    "required": true
+                },
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.DetailRequest"
+                                }
+                            }
+                        },
+                        "description": "Created"
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Bad Request"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized"
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Not Found"
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Conflict"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Открыть detail-request над существующей expense-транзакцией",
+                "tags": [
+                    "detail-requests"
+                ]
+            }
+        },
+        "/detail-requests/{id}": {
+            "get": {
+                "parameters": [
+                    {
+                        "description": "Detail-request ID",
+                        "in": "path",
+                        "name": "id",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.DetailRequestView"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized"
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Not Found"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Detail-request с parent- и child-транзакциями",
+                "tags": [
+                    "detail-requests"
+                ]
+            }
+        },
+        "/detail-requests/{id}/cancel": {
+            "post": {
+                "description": "Children soft-удаляются, флаги parent'а сбрасываются, request удаляется. Только creator.",
+                "parameters": [
+                    {
+                        "description": "Detail-request ID",
+                        "in": "path",
+                        "name": "id",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized"
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Forbidden"
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Not Found"
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Conflict"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Отменить открытый detail-request",
+                "tags": [
+                    "detail-requests"
+                ]
+            }
+        },
+        "/detail-requests/{id}/close": {
+            "post": {
+                "description": "Parent помечается `excluded_from_stats=true`, дети — `false` (становятся каноничными). Требуется ≥1 child. Только assignee.",
+                "parameters": [
+                    {
+                        "description": "Detail-request ID",
+                        "in": "path",
+                        "name": "id",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.DetailRequest"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Нет ни одного child"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized"
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Forbidden"
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Not Found"
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Conflict"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Закрыть detail-request (финализация)",
+                "tags": [
+                    "detail-requests"
+                ]
+            }
+        },
+        "/detail-requests/{id}/transactions": {
+            "post": {
+                "description": "Только assignee и только пока request `open`. Child создаётся с `excluded_from_stats=true` — попадёт в статистику после `Close`.",
+                "parameters": [
+                    {
+                        "description": "Detail-request ID",
+                        "in": "path",
+                        "name": "id",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "oneOf": [
+                                    {
+                                        "type": "object"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/models.CreateTransactionRequest",
+                                        "summary": "body",
+                                        "description": "Тело child-транзакции"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "description": "Тело child-транзакции",
+                    "required": true
+                },
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.Transaction"
+                                }
+                            }
+                        },
+                        "description": "Created"
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Bad Request"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized"
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Только assignee может добавлять"
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Not Found"
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Request не open"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Добавить child-транзакцию в открытый detail-request",
+                "tags": [
+                    "detail-requests"
+                ]
+            }
+        },
+        "/export/excel": {
+            "get": {
+                "description": "4 листа: Транзакции / Доходы по категориям / Расходы по категориям / Месячная сводка. Параметры периода — как у `/statistics/summary`.",
+                "parameters": [
+                    {
+                        "description": "YYYY-MM-DD",
+                        "in": "query",
+                        "name": "from",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "YYYY-MM-DD",
+                        "in": "query",
+                        "name": "to",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "YYYY-MM",
+                        "in": "query",
+                        "name": "month",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "YYYY",
+                        "in": "query",
+                        "name": "year",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "description": "income|expense|initial_balance",
+                        "in": "query",
+                        "name": "type",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "blue|green|red|orange|purple|teal|pink",
+                        "in": "query",
+                        "name": "theme",
+                        "schema": {
+                            "default": "blue",
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                                "schema": {
+                                    "type": "file"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    },
+                    "401": {
+                        "content": {
+                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Выгрузить транзакции в .xlsx",
+                "tags": [
+                    "export"
+                ]
+            }
+        },
+        "/export/pdf": {
+            "get": {
+                "description": "Заголовок + сводка + табличный список транзакций. Параметры — те же, что у /export/excel.",
+                "parameters": [
+                    {
+                        "description": "YYYY-MM-DD",
+                        "in": "query",
+                        "name": "from",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "YYYY-MM-DD",
+                        "in": "query",
+                        "name": "to",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "YYYY-MM",
+                        "in": "query",
+                        "name": "month",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "YYYY",
+                        "in": "query",
+                        "name": "year",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "description": "income|expense|initial_balance",
+                        "in": "query",
+                        "name": "type",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "blue|green|red|orange|purple|teal|pink",
+                        "in": "query",
+                        "name": "theme",
+                        "schema": {
+                            "default": "blue",
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/pdf": {
+                                "schema": {
+                                    "type": "file"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    },
+                    "401": {
+                        "content": {
+                            "application/pdf": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Выгрузить отчёт в PDF",
+                "tags": [
+                    "export"
+                ]
+            }
+        },
+        "/health": {
+            "get": {
+                "description": "Публичный probe — клиенты (Android `ServerDiscovery`, in-app updates) проверяют, что сервер «свой» по полю `app=msdnna-budget`.",
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {},
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    }
+                },
+                "summary": "Health-check",
+                "tags": [
+                    "meta"
+                ]
+            }
+        },
+        "/statistics/by-category": {
+            "get": {
+                "description": "Сумма, доля и количество транзакций в разрезе категории. По умолчанию `type=expense`.",
+                "parameters": [
+                    {
+                        "description": "income|expense|initial_balance",
+                        "in": "query",
+                        "name": "type",
+                        "schema": {
+                            "default": "expense",
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "YYYY-MM-DD",
+                        "in": "query",
+                        "name": "from",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "YYYY-MM-DD",
+                        "in": "query",
+                        "name": "to",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "YYYY-MM",
+                        "in": "query",
+                        "name": "month",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "YYYY",
+                        "in": "query",
+                        "name": "year",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "items": {
+                                        "$ref": "#/components/schemas/models.CategoryData"
+                                    },
+                                    "type": "array"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Агрегация по категориям",
+                "tags": [
+                    "statistics"
+                ]
+            }
+        },
+        "/statistics/forecast": {
+            "get": {
+                "description": "Историческое среднее (3 мес, без транзакций, связанных с wishlist) + вклад регулярных wishlist-итемов по next-due модели. Возвращает per-item breakdown с `paid_this_period` для UI-бейджей.",
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.ForecastResponse"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Прогноз расходов на месяц",
+                "tags": [
+                    "statistics"
+                ]
+            }
+        },
+        "/statistics/monthly": {
+            "get": {
+                "description": "Возвращает массив `{year, month, income, expense, balance}` по месяцам. Если задан только `month`, диапазон расширяется до полного года ради контекста на графике.",
+                "parameters": [
+                    {
+                        "description": "YYYY-MM-DD",
+                        "in": "query",
+                        "name": "from",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "YYYY-MM-DD",
+                        "in": "query",
+                        "name": "to",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "YYYY-MM",
+                        "in": "query",
+                        "name": "month",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "YYYY",
+                        "in": "query",
+                        "name": "year",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "items": {
+                                        "$ref": "#/components/schemas/models.MonthlyData"
+                                    },
+                                    "type": "array"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Помесячная динамика",
+                "tags": [
+                    "statistics"
+                ]
+            }
+        },
+        "/statistics/overview": {
+            "get": {
+                "description": "Объединённый ответ для экрана статистики Android, чтобы не делать 4 последовательных запроса. Подзапросы выполняются параллельно.",
+                "parameters": [
+                    {
+                        "description": "YYYY-MM-DD",
+                        "in": "query",
+                        "name": "from",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "YYYY-MM-DD",
+                        "in": "query",
+                        "name": "to",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "YYYY-MM",
+                        "in": "query",
+                        "name": "month",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "YYYY",
+                        "in": "query",
+                        "name": "year",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.StatisticsOverviewResponse"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Сводка + by-category(expense/income) + monthly за один запрос",
+                "tags": [
+                    "statistics"
+                ]
+            }
+        },
+        "/statistics/summary": {
+            "get": {
+                "description": "Итоговые суммы доходов / расходов / баланса. Период задаётся `from`+`to`, либо `month=YYYY-MM`, либо `year=YYYY` (последний выигрывает).",
+                "parameters": [
+                    {
+                        "description": "YYYY-MM-DD",
+                        "in": "query",
+                        "name": "from",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "YYYY-MM-DD",
+                        "in": "query",
+                        "name": "to",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "YYYY-MM",
+                        "in": "query",
+                        "name": "month",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "YYYY",
+                        "in": "query",
+                        "name": "year",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.SummaryData"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Сводка за период",
+                "tags": [
+                    "statistics"
+                ]
+            }
+        },
+        "/sync/pull": {
+            "get": {
+                "description": "Возвращает все записи трёх syncable-коллекций (transactions, wishlist, categories), включая soft-deleted. Первый вызов без `since` отдаёт полный набор без удалённых.",
+                "parameters": [
+                    {
+                        "description": "RFC3339(Nano) timestamp",
+                        "in": "query",
+                        "name": "since",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.SyncPullResponse"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Bad Request"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Pull-фаза синка: всё, что менялось после `since`",
+                "tags": [
+                    "sync"
+                ]
+            }
+        },
+        "/sync/push": {
+            "post": {
+                "description": "Каждая операция независима; результат на операцию позволяет клиенту пометить, что синканулось, а что — конфликт. `force=true` обходит version-check.",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "oneOf": [
+                                    {
+                                        "type": "object"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/models.SyncPushRequest",
+                                        "summary": "body",
+                                        "description": "Батч операций"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "description": "Батч операций",
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.SyncPushResponse"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Bad Request"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Push-фаза синка: батч клиентских мутаций",
+                "tags": [
+                    "sync"
+                ]
+            }
+        },
+        "/transactions": {
+            "get": {
+                "description": "Фильтры комбинируются по И. `categories` — список через запятую (приоритетнее `category`). `include_detailed=true` показывает родителей закрытых detail-requests.",
+                "parameters": [
+                    {
+                        "description": "income|expense|initial_balance",
+                        "in": "query",
+                        "name": "type",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Имя категории",
+                        "in": "query",
+                        "name": "category",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "CSV категорий",
+                        "in": "query",
+                        "name": "categories",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "YYYY-MM-DD",
+                        "in": "query",
+                        "name": "from",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "YYYY-MM-DD",
+                        "in": "query",
+                        "name": "to",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Страница (1-based)",
+                        "in": "query",
+                        "name": "page",
+                        "schema": {
+                            "default": 1,
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "description": "Размер страницы (1-100)",
+                        "in": "query",
+                        "name": "limit",
+                        "schema": {
+                            "default": 20,
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "description": "Показывать родителей закрытых detail-requests",
+                        "in": "query",
+                        "name": "include_detailed",
+                        "schema": {
+                            "type": "boolean"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {},
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Список транзакций с пагинацией",
+                "tags": [
+                    "transactions"
+                ]
+            },
+            "post": {
+                "description": "Создаёт доход / расход / начальный баланс. `date` принимается в формате YYYY-MM-DD.",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "oneOf": [
+                                    {
+                                        "type": "object"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/models.CreateTransactionRequest",
+                                        "summary": "body",
+                                        "description": "Тело"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "description": "Тело",
+                    "required": true
+                },
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.Transaction"
+                                }
+                            }
+                        },
+                        "description": "Created"
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Bad Request"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Создать транзакцию",
+                "tags": [
+                    "transactions"
+                ]
+            }
+        },
+        "/transactions/{id}": {
+            "delete": {
+                "description": "Запись помечается `deleted_at`; синк-клиенты увидят её при следующем pull.",
+                "parameters": [
+                    {
+                        "description": "Transaction ID",
+                        "in": "path",
+                        "name": "id",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized"
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Not Found"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Удалить транзакцию (soft-delete)",
+                "tags": [
+                    "transactions"
+                ]
+            },
+            "put": {
+                "description": "Patch-семантика — пустые поля игнорируются, кроме `wishlist_id` (пустая строка отвязывает от wishlist-итема).",
+                "parameters": [
+                    {
+                        "description": "Transaction ID (UUID)",
+                        "in": "path",
+                        "name": "id",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "oneOf": [
+                                    {
+                                        "type": "object"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/models.UpdateTransactionRequest",
+                                        "summary": "body",
+                                        "description": "Поля для обновления"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "description": "Поля для обновления",
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.Transaction"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Bad Request"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized"
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Not Found"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Обновить транзакцию",
+                "tags": [
+                    "transactions"
+                ]
+            }
+        },
+        "/users": {
+            "get": {
+                "description": "Усечённая публичная информация — без password_hash и email.",
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "items": {
+                                        "$ref": "#/components/schemas/models.UserInfo"
+                                    },
+                                    "type": "array"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Список пользователей семьи",
+                "tags": [
+                    "auth"
+                ]
+            }
+        },
+        "/version": {
+            "get": {
+                "description": "Публичный эндпоинт. `android_latest` / `android_min_required` берутся из env-переменных бэкенда — клиент-обновление и gate-проверка.",
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    }
+                },
+                "summary": "Версии: API + последняя/минимальная Android",
+                "tags": [
+                    "meta"
+                ]
+            }
+        },
+        "/wishlist": {
+            "get": {
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "items": {
+                                        "$ref": "#/components/schemas/models.WishlistItem"
+                                    },
+                                    "type": "array"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Все wishlist-итемы (без soft-deleted)",
+                "tags": [
+                    "wishlist"
+                ]
+            },
+            "post": {
+                "description": "`frequency=once` — обычная покупка из списка желаний. `monthly|quarterly|yearly` — регулярный платёж (коммуналка, связь и т.п.).",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "oneOf": [
+                                    {
+                                        "type": "object"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/models.CreateWishlistRequest",
+                                        "summary": "body",
+                                        "description": "Тело"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "description": "Тело",
+                    "required": true
+                },
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.WishlistItem"
+                                }
+                            }
+                        },
+                        "description": "Created"
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Bad Request"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Создать wishlist-итем (одноразовый или регулярный)",
+                "tags": [
+                    "wishlist"
+                ]
+            }
+        },
+        "/wishlist/{id}": {
+            "delete": {
+                "parameters": [
+                    {
+                        "description": "Wishlist ID",
+                        "in": "path",
+                        "name": "id",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized"
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Not Found"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Удалить wishlist-итем (soft-delete)",
+                "tags": [
+                    "wishlist"
+                ]
+            },
+            "put": {
+                "description": "Patch-семантика. `purchased=true` помечает «куплено» (используется UI-кнопкой); транзакция списания создаётся отдельным `POST /transactions`.",
+                "parameters": [
+                    {
+                        "description": "Wishlist ID",
+                        "in": "path",
+                        "name": "id",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "oneOf": [
+                                    {
+                                        "type": "object"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/models.UpdateWishlistRequest",
+                                        "summary": "body",
+                                        "description": "Поля"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "description": "Поля",
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.WishlistItem"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Bad Request"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized"
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Not Found"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Обновить wishlist-итем",
+                "tags": [
+                    "wishlist"
+                ]
+            }
+        },
+        "/wishlist/{id}/unlink-period": {
+            "post": {
+                "description": "Очищает `wishlist_id` у транзакций в текущем месяце/квартале/году (по `frequency`). Для `once` — отвязывает единственную привязанную транзакцию без date-filter. Бэкенд для кнопок «Не куплено» и «Отменить».",
+                "parameters": [
+                    {
+                        "description": "Wishlist ID",
+                        "in": "path",
+                        "name": "id",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "integer"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Bad Request"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized"
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Not Found"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Отвязать транзакции wishlist-итема за текущий период",
+                "tags": [
+                    "wishlist"
+                ]
+            }
+        }
+    },
+    "openapi": "3.1.0",
+    "servers": [
+        {
+            "url": "/api"
+        }
+    ]
+}

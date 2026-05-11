@@ -10,14 +10,25 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -a -ldflags='-w -s' -o main .
 
-# gcr.io/distroless/static — no shell, no package manager, minimal attack surface.
-# Timezone data and DejaVu fonts are copied from the builder stage.
-FROM gcr.io/distroless/static-debian12
+# gcr.io/distroless/static-debian12:nonroot — no shell, no package manager, runs
+# as uid 65532. Minimal attack surface; tz data and DejaVu fonts copied from
+# the builder stage.
+FROM gcr.io/distroless/static-debian12:nonroot
+
+# OCI image labels — picked up by GHCR / GitHub releases UI when published via Actions.
+ARG API_VERSION=dev
+ARG VCS_REF=unknown
+LABEL org.opencontainers.image.title="msdnna-budget-backend" \
+      org.opencontainers.image.description="Go REST API for msdnna-budget (MongoDB)." \
+      org.opencontainers.image.source="https://github.com/msdnna/budget" \
+      org.opencontainers.image.licenses="Apache-2.0" \
+      org.opencontainers.image.version="${API_VERSION}" \
+      org.opencontainers.image.revision="${VCS_REF}"
 
 COPY --from=builder /app/main               /app/main
 COPY --from=builder /usr/share/fonts/dejavu /usr/share/fonts/dejavu
 COPY --from=builder /usr/share/zoneinfo     /usr/share/zoneinfo
 
+USER nonroot:nonroot
 EXPOSE 8080
-
 ENTRYPOINT ["/app/main"]
