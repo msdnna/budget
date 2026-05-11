@@ -16,6 +16,13 @@
 
 ## API (backend)
 
+### [1.15.0] — 2026-05-12
+
+#### Added
+- **Unit + integration test suite (с нуля до ~51% line coverage).** `config/` (89%, env defaults + overrides), `middleware/auth` (70%, JWT happy/expired/wrong-secret/non-HMAC), handler-уровень: auth (login + me + ListUsers), transactions/wishlist/categories CRUD, sync push/pull, statistics summary/by-category/monthly/overview/forecast, detail-requests full flow + cancel; repository-уровень: TransactionRepository (Create/Update/Delete с conflict, Upsert, Find с фильтрами, AggregateByCategory/MonthlyRange, FindLinkedToWishlist*, UnlinkFromWishlist, GetAverageMonthlyCategoryExpensesUnlinked, children-методы), WishlistRepository, CategoryRepository (включая EnsureDefaults идемпотентность + protection дефолтных), UserRepository, DetailRequestRepository. Helper-функции export.go (truncate / txTypeLabel / cellName).
+- **testcontainers-go для интеграционных тестов с Mongo.** Один общий контейнер на test-binary (`sync.Once`), каждый тест получает свою БД через `dbCounter`. Авто-skip если Docker недоступен или передан `go test -short`. Помощник в `backend/internal/mongotest`.
+- **Make-таргеты:** `make test-backend` (unit), `make test-backend-cover` (`-coverpkg=./... -coverprofile`, генерирует `cover.html`), `make test-backend-integration` (build-tag `integration`). `backend/coverage.out` и `cover.html` добавлены в `.gitignore`.
+
 ### [1.14.2] — 2026-05-12
 
 #### Changed

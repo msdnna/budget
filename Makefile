@@ -114,6 +114,24 @@ lint-backend: ## Run gofmt + go vet + golangci-lint on the Go backend
 .PHONY: lint
 lint: lint-backend ## Run all linters (currently backend only — web/android coming)
 
+.PHONY: test-backend
+test-backend: ## Run Go unit tests (skips integration tests requiring Docker)
+	cd $(BACKEND_DIR) && $(GO) test -race -short ./...
+
+.PHONY: test-backend-cover
+test-backend-cover: ## Run Go tests with coverage profile (backend/coverage.out + cover.html)
+	cd $(BACKEND_DIR) && $(GO) test -race -covermode=atomic -coverpkg=./... -coverprofile=coverage.out ./...
+	cd $(BACKEND_DIR) && $(GO) tool cover -func=coverage.out | tail -1
+	cd $(BACKEND_DIR) && $(GO) tool cover -html=coverage.out -o cover.html
+	@echo "Coverage report: $(BACKEND_DIR)/cover.html"
+
+.PHONY: test-backend-integration
+test-backend-integration: ## Run Go integration tests (requires Docker for testcontainers)
+	cd $(BACKEND_DIR) && $(GO) test -race -tags=integration -run Integration ./...
+
+.PHONY: test
+test: test-backend ## Run all unit test suites
+
 # ─── Install / Update ────────────────────────────────────────────────────────
 
 .PHONY: install

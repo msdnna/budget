@@ -9,6 +9,9 @@ backend/*.exe
 backend/migrate
 backend/seed_loadtest
 backend/create_user
+# Coverage profiles from `make test-backend-cover`
+backend/coverage.out
+backend/cover.html
 
 # ─── Frontend ────────────────────────────────────────────────────────────────
 frontend/node_modules/
