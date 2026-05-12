@@ -1,12 +1,16 @@
-FROM node:22-alpine AS builder
+FROM node:24-alpine AS builder
 
 WORKDIR /app
 
-COPY package*.json ./
-RUN npm ci
+# Enable corepack so the project-local yarn version (pinned in package.json -> packageManager) is used.
+RUN corepack enable
+
+# Copy manifests first so yarn can leverage Docker layer caching for the install step.
+COPY package.json yarn.lock .yarnrc.yml ./
+RUN yarn install --immutable
 
 COPY . .
-RUN npm run build
+RUN yarn build
 
 FROM nginx:alpine
 

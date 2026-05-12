@@ -18,6 +18,14 @@ frontend/node_modules/
 frontend/dist/
 # Coverage from `make test-web-cover`
 frontend/coverage/
+# Yarn 4 (berry) artifacts — yarn.lock and .yarnrc.yml are tracked; local cache/installs are not
+frontend/.yarn/*
+!frontend/.yarn/patches
+!frontend/.yarn/plugins
+!frontend/.yarn/releases
+!frontend/.yarn/sdks
+!frontend/.yarn/versions
+frontend/.pnp.*
 
 # ─── Android ─────────────────────────────────────────────────────────────────
 android/build/

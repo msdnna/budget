@@ -138,7 +138,7 @@ def lint_web() -> dict:
     eslint_path.unlink(missing_ok=True)
     # ESLint без --max-warnings=0 — нам нужны все сообщения, не early-exit.
     rc_eslint = run(
-        ["npx", "--no", "eslint", "-f", "json", "-o", str(eslint_path), "."],
+        ["corepack", "yarn", "eslint", "-f", "json", "-o", str(eslint_path), "."],
         cwd=ROOT / "frontend",
     )
     issues = []
@@ -158,7 +158,7 @@ def lint_web() -> dict:
             pass
     # Prettier — текст в stdout, на drift exit 1.
     pret_path = RAW / "web-prettier.txt"
-    rc_pret = run(["npx", "--no", "prettier", "--check", "."], cwd=ROOT / "frontend", stdout_to=pret_path)
+    rc_pret = run(["corepack", "yarn", "prettier", "--check", "."], cwd=ROOT / "frontend", stdout_to=pret_path)
     pret_files: list[str] = []
     if pret_path.exists():
         for line in pret_path.read_text(errors="replace").splitlines():
@@ -303,7 +303,7 @@ def test_web() -> dict:
     junit_path.unlink(missing_ok=True)
     rc = run(
         [
-            "npx", "--no", "vitest", "run",
+            "corepack", "yarn", "vitest", "run",
             "--reporter=default",
             "--reporter=junit",
             f"--outputFile.junit={junit_path}",

@@ -2,6 +2,10 @@ BACKEND_DIR  := backend
 FRONTEND_DIR := frontend
 ANDROID_DIR  := android
 
+# Yarn pinned via `packageManager` in frontend/package.json — corepack routes to the right version
+# regardless of what's globally installed (so users don't need to `corepack enable` first).
+YARN := corepack yarn
+
 # Go 1.25 binary — falls back to system go if not found
 GO := $(shell command -v go1.25.9 2>/dev/null || command -v go)
 
@@ -82,7 +86,7 @@ dev-backend: ## Run Go backend locally (requires MongoDB on :27017)
 
 .PHONY: dev-frontend
 dev-frontend: ## Run Vue dev server on 0.0.0.0:5173 (all interfaces)
-	cd $(FRONTEND_DIR) && npm run dev
+	cd $(FRONTEND_DIR) && $(YARN) dev
 
 .PHONY: mongo-up
 mongo-up: ## Start only MongoDB in Docker for local dev
@@ -113,8 +117,8 @@ lint-backend: ## Run gofmt + go vet + golangci-lint on the Go backend
 
 .PHONY: lint-web
 lint-web: ## Run ESLint + Prettier check on the Vue frontend
-	cd $(FRONTEND_DIR) && npm run lint
-	cd $(FRONTEND_DIR) && npm run format:check
+	cd $(FRONTEND_DIR) && $(YARN) lint
+	cd $(FRONTEND_DIR) && $(YARN) format:check
 
 # Android Gradle нуждается в JAVA_HOME/ANDROID_HOME + SOCKS5 для подкачки
 # артефактов. Источник — android/local.env (gitignored).
@@ -164,11 +168,11 @@ test-backend-integration: ## Run Go integration tests (requires Docker for testc
 
 .PHONY: test-web
 test-web: ## Run Vitest unit tests on the Vue frontend
-	cd $(FRONTEND_DIR) && npm run test
+	cd $(FRONTEND_DIR) && $(YARN) test
 
 .PHONY: test-web-cover
 test-web-cover: ## Run Vitest with coverage (frontend/coverage/index.html)
-	cd $(FRONTEND_DIR) && npm run test:coverage
+	cd $(FRONTEND_DIR) && $(YARN) test:coverage
 	@echo "Coverage report: $(FRONTEND_DIR)/coverage/index.html"
 
 # ─── Install / Update ────────────────────────────────────────────────────────
@@ -176,7 +180,7 @@ test-web-cover: ## Run Vitest with coverage (frontend/coverage/index.html)
 .PHONY: install
 install: ## Install all dependencies (Go + Node)
 	cd $(BACKEND_DIR)  && GOPROXY=https://proxy.golang.org,direct $(GO) mod download
-	cd $(FRONTEND_DIR) && npm ci
+	cd $(FRONTEND_DIR) && $(YARN) install --immutable
 
 .PHONY: tidy
 tidy: ## Tidy Go modules and regenerate go.sum
@@ -191,7 +195,7 @@ build-backend: ## Build Go binary to backend/bin/
 
 .PHONY: build-frontend
 build-frontend: ## Build Vue app to frontend/dist/
-	cd $(FRONTEND_DIR) && npm run build
+	cd $(FRONTEND_DIR) && $(YARN) build
 
 .PHONY: build
 build: build-backend build-frontend ## Build backend + frontend

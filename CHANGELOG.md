@@ -146,6 +146,16 @@
 
 ## Web (frontend)
 
+### [1.18.0] — 2026-05-12
+
+#### Changed
+- **Node 22 → Node 24 LTS** в `frontend/Dockerfile`. Добавлены `frontend/.nvmrc` (`24`) и `engines.node: ">=24"` в `package.json`.
+- **Менеджер зависимостей: npm → Yarn 4 (berry, classic node-modules linker).** В `package.json` запинен `packageManager: yarn@4.14.1`, добавлен `frontend/.yarnrc.yml` с `nodeLinker: node-modules`. `package-lock.json` удалён, появился `yarn.lock` (v8). Dockerfile теперь `corepack enable` + `yarn install --immutable` + `yarn build`. `Makefile` и `tools/aggregate-reports.py` вызывают `corepack yarn …`, чтобы маршрутизация шла через закреплённую версию вне зависимости от глобально установленного yarn'а. `.gitignore` дополнен `frontend/.yarn/*` (с исключениями releases/plugins/sdks/patches/versions) и `frontend/.pnp.*`.
+- **Обновлены зависимости фронта до актуальных:**
+  - `eslint` 9.39 → 10.3, `@eslint/js` 9.39 → 10.0, `globals` 16.5 → 17.6 (мажорные).
+  - `axios` 1.15 → 1.16, `vue` 3.5.33 → 3.5.34, `vite` 8.0.10 → 8.0.12 (минорные/патчевые).
+  - `eslint-plugin-vue` / `eslint-config-prettier` / `vue-eslint-parser` уже на peer-диапазоне `eslint ^10` — без правок конфига.
+
 ### [1.17.0] — 2026-05-12
 
 #### Added
