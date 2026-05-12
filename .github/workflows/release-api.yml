@@ -30,9 +30,18 @@ jobs:
           fi
           echo "API_VERSION=$TAG" >> "$GITHUB_ENV"
 
+      # See ci.yml: setup-go's go-version-file ignores the `toolchain`
+      # directive, so we resolve it manually.
+      - name: Resolve Go version from go.mod toolchain directive
+        id: gover
+        run: |
+          ver=$(awk '/^toolchain go/ {sub(/^go/,"",$2); print $2; exit}' backend/go.mod)
+          [ -z "$ver" ] && ver=$(awk '/^go / {print $2; exit}' backend/go.mod)
+          echo "version=$ver" >> "$GITHUB_OUTPUT"
+
       - uses: actions/setup-go@v5
         with:
-          go-version-file: backend/go.mod
+          go-version: ${{ steps.gover.outputs.version }}
           cache-dependency-path: backend/go.sum
 
       - name: Install golangci-lint v2

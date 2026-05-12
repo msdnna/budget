@@ -54,9 +54,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # setup-go's `go-version-file` reads only the `go` directive and ignores
+      # `toolchain`, so we end up with go1.25.0 while go.mod pins toolchain
+      # go1.25.9 → `compile: version mismatch` at test time. Parse the
+      # toolchain directive explicitly and pin to it.
+      - name: Resolve Go version from go.mod toolchain directive
+        id: gover
+        run: |
+          ver=$(awk '/^toolchain go/ {sub(/^go/,"",$2); print $2; exit}' backend/go.mod)
+          [ -z "$ver" ] && ver=$(awk '/^go / {print $2; exit}' backend/go.mod)
+          echo "version=$ver" >> "$GITHUB_OUTPUT"
+          echo "Using Go $ver"
+
       - uses: actions/setup-go@v5
         with:
-          go-version-file: backend/go.mod
+          go-version: ${{ steps.gover.outputs.version }}
           cache-dependency-path: backend/go.sum
 
       - name: Install golangci-lint v2
