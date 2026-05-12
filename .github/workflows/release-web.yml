@@ -33,8 +33,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-          cache: 'yarn'
-          cache-dependency-path: frontend/yarn.lock
+          # No `cache: 'yarn'` — see ci.yml for rationale (global yarn 1.x
+          # vs. packageManager:yarn@4 conflict in setup-node's cache probe).
 
       - run: corepack enable
 

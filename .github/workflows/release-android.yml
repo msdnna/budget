@@ -35,8 +35,9 @@ jobs:
           java-version: '21'
 
       - uses: android-actions/setup-android@v3
-        with:
-          packages: 'platforms;android-37 build-tools;36.0.0'
+
+      - name: Install Android SDK 37 (preview channel — API 37 not yet in stable)
+        run: sdkmanager --channel=3 --install 'platforms;android-37'
 
       - uses: gradle/actions/setup-gradle@v4
 
