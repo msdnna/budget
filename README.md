@@ -47,10 +47,10 @@
 
 | Компонент | Технологии |
 |-----------|------------|
-| Бэкенд | Go 1.25, Gin, MongoDB 8, JWT (HS256), errgroup, embed |
-| Фронтенд | Vue 3, Pinia, Naive UI, ECharts, Vite, Nginx |
-| Android | Kotlin, Jetpack Compose, Material 3, Retrofit2, Room, WorkManager, DataStore, Biometric |
-| Инфра | Docker Compose (dev + prod), distroless backend, multi-stage builds |
+| Бэкенд | Go 1.25, Gin, MongoDB 8, JWT (HS256), errgroup, embed; golangci-lint v2, testcontainers-go |
+| Фронтенд | Vue 3, Pinia, Naive UI, ECharts, Vite, Nginx; Node 24 LTS + Yarn 4 (через corepack); ESLint 10, Prettier 3, Vitest 4 + happy-dom |
+| Android | Kotlin, Jetpack Compose, Material 3, Retrofit2, Room, WorkManager, DataStore, Biometric; ktlint 1.6, detekt 1.23, JUnit 4 + Robolectric + MockWebServer + Turbine |
+| Инфра | Docker Compose (dev + prod), distroless backend, multi-stage builds; агрегированный HTML-отчёт по линту/тестам трёх компонентов |
 
 ## Структура репозитория
 
@@ -87,7 +87,7 @@ budget-go/
 
 **Для локальной разработки:**
 - Go 1.25+
-- Node.js 22+, npm
+- Node.js 24+ (LTS); пакетный менеджер — Yarn 4, запинен в `frontend/package.json` через `packageManager` и подключается через **corepack** (поставляется с Node — ничего ставить вручную не нужно)
 - MongoDB 8 (или поднять через Docker, см. `make mongo-up`)
 
 **Для сборки Android:**
@@ -182,6 +182,23 @@ make version                       # Показать текущие верси�
 make bump-api BUMP=patch|minor|major
 make bump-web BUMP=patch|minor|major
 make bump-android BUMP=patch|minor|major
+
+# Линтинг (clean = 0 ошибок)
+make lint            # Агрегированный HTML по всем компонентам → reports/lint.html
+make lint-backend    # gofmt + go vet + golangci-lint v2
+make lint-web        # ESLint 10 (--max-warnings=0) + Prettier 3 (--check)
+make lint-android    # ktlint 1.6 + detekt 1.23 (через ./gradlew)
+make format-android  # Авто-форматирование Kotlin через ktlint
+
+# Тесты
+make test                # Агрегированный HTML по всем компонентам → reports/test.html
+make test-backend        # Go unit (-race, без integration)
+make test-backend-cover  # + coverage → backend/cover.html
+make test-backend-integration  # build-tag integration (нужен Docker для testcontainers)
+make test-web            # Vitest 4 + happy-dom
+make test-web-cover      # + coverage → frontend/coverage/index.html
+make test-android        # JUnit 4 + Robolectric + MockWebServer + Turbine
+make test-android-cover  # + JaCoCo → android/app/build/reports/jacoco/.../index.html
 
 # Android
 make android         # Debug APK

@@ -148,13 +148,72 @@ git push origin api/v1.7.0
 - [ ] `VERSION` соответствующего компонента бампнут (если изменение содержательное).
 - [ ] Запись в `CHANGELOG.md` под `[Unreleased]`.
 - [ ] Сообщение коммита в Conventional Commits.
-- [ ] Не закоммитили локальные конфиги (`.env`, `android/local.env`, `local.properties`), бинарники из `cmd/*` (`backend/migrate`, `backend/seed_loadtest`), кеши (`build/`, `.gradle/`, `node_modules/`), APK (`apks/*.apk`, `android/*.apk`).
-- [ ] Linter / vet / build проходят локально:
+- [ ] Не закоммитили локальные конфиги (`.env`, `android/local.env`, `local.properties`), бинарники из `cmd/*` (`backend/migrate`, `backend/seed_loadtest`), кеши (`build/`, `.gradle/`, `node_modules/`, `frontend/.yarn/cache/`), APK (`apks/*.apk`, `android/*.apk`).
+- [ ] **Quality gate затронутого компонента** зелёный: `make lint-{component}` + `make test-{component}` (см. ниже). Если изменение задело несколько компонентов — для каждого. Чисто инфраструктурные правки (docs / `.gitignore` / CI yaml без кода) гейт пропускают.
+- [ ] Сборка проходит:
   ```bash
-  cd backend  && go vet ./... && go build ./...
-  cd frontend && npm run build
-  cd android  && ./gradlew :app:assembleDebug
+  make build-backend       # go build → backend/bin/budget-go
+  make build-frontend      # vite build → frontend/dist/
+  cd android && ./gradlew :app:assembleDebug
+  # либо: make android       # debug APK через build.sh
   ```
+
+## Линтинг
+
+Все три компонента покрыты статическим анализом и форматированием. **Lint должен быть чистым (0 предупреждений)** — `--max-warnings=0` для web, `golangci-lint run` без exceptions для backend, ktlint + detekt без issues для Android. Lint-проблемы фиксим, а не глушим конфигом (исключения — только для известного false-positive с обоснованием в комментарии).
+
+```bash
+make lint            # Агрегированный HTML-отчёт по всем компонентам → reports/lint.html
+make lint-backend    # gofmt -l + go vet ./... + golangci-lint v2 (govet/errcheck/staticcheck/
+                     # ineffassign/unused/bodyclose/gocritic/revive/misspell/unconvert/prealloc)
+make lint-web        # ESLint 10 flat config (--max-warnings=0) + Prettier 3 --check
+                     # cd frontend && corepack yarn lint:fix     # авто-фикс ESLint
+                     # cd frontend && corepack yarn format       # авто-фикс Prettier
+make lint-android    # ktlint 1.6 (через JavaExec) + detekt 1.23 — оба через ./gradlew
+make format-android  # ktlintFormat — авто-форматирование Kotlin
+```
+
+Конфиги:
+- `backend/.golangci.yml` — golangci-lint v2 (с overrides для test-файлов).
+- `frontend/eslint.config.js` — flat config (`@eslint/js` + `eslint-plugin-vue` flat/recommended + `eslint-config-prettier`).
+- `frontend/.prettierrc.json` — singleQuote, no-semi, printWidth 100, trailing-comma all, arrow-parens always.
+- `android/config/detekt/detekt.yml`, `android/.editorconfig` (ktlint).
+
+## Тестирование
+
+Тесты — обязательны для нового кода (минимум — happy-path юнит-тест). Без зелёного `make test-{component}` коммит не уходит.
+
+```bash
+make test                       # Агрегированный HTML-отчёт → reports/test.html (status + durations + coverage%)
+make test-backend               # Go unit, -race (testcontainers integration не запускает)
+make test-backend-cover         # + coverage → backend/cover.html
+make test-backend-integration   # build-tag integration (нужен Docker для testcontainers)
+make test-web                   # Vitest 4 + happy-dom 20 + @vue/test-utils + axios-mock-adapter
+make test-web-cover             # + coverage → frontend/coverage/index.html
+make test-android               # JUnit 4 + Robolectric + MockWebServer + Turbine
+make test-android-cover         # + JaCoCo → android/app/build/reports/jacoco/jacocoTestReport/html/index.html
+```
+
+Где что лежит:
+- **Backend**: `*_test.go` рядом с прод-кодом; общая инфраструктура для интеграционных тестов — `backend/internal/mongotest` (`sync.Once`-контейнер + per-test БД через `dbCounter`). Интеграция автоматически скипается, если Docker недоступен или передан `-short`.
+- **Web**: `frontend/tests/` и `frontend/src/**/__tests__/`. Стабы Naive UI — по Vue-внутреннему `name:` (`Popover`, **не** `NPopover`), это легко словить как «component not stubbed».
+- **Android**: `android/app/src/test/` (Robolectric для Android-зависимых классов, чистый JUnit для логики). HTTP — через MockWebServer, корутины — Turbine. JaCoCo подключён через `:app:jacocoTestReport`.
+
+### Покрытие
+
+Цели — *расти со временем*, без жёсткого минимума на PR. Текущий baseline:
+
+| Компонент | Coverage (line) | Заметки |
+|-----------|-----------------|---------|
+| Backend | ~51% | handlers + repository + middleware + helpers |
+| Web | ~62% | 88% на Pinia stores, 85% на utility-компонентах, 76% на `api/index.js` |
+| Android | ~19% | security 60%, discovery 36%, db 25%, sync 15% — UI/Compose не покрыт |
+
+Регрессия coverage на PR — допустима, если объяснена в описании (например, добавили большой UI-блок без юнит-тестов). Полностью пропускать тесты для нового нетривиального кода — нет.
+
+### Агрегированный отчёт
+
+`make lint` и `make test` собирают единый HTML-отчёт в `reports/` через `tools/aggregate-reports.py` (статус / длительность / coverage% с прогресс-барами по каждому компоненту). Удобно гонять локально перед PR или цеплять артефактом в CI.
 
 ## Локальная среда
 
@@ -162,7 +221,7 @@ git push origin api/v1.7.0
 
 ### Сборка через прокси
 
-Если ваша сеть требует HTTP-прокси для скачивания зависимостей (Go modules, npm, Gradle, Docker):
+Если ваша сеть требует HTTP-прокси для скачивания зависимостей (Go modules, Yarn/npm-registry, Gradle, Docker, corepack):
 
 - Backend / frontend (Docker): задайте `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY` в `.env` — они пробрасываются как build-args в Dockerfile.
 - Android Gradle: задайте `SOCKS_PROXY_HOST` / `SOCKS_PROXY_PORT` в `android/local.env` — `build.sh` пробросит их в JVM.
