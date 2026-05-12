@@ -26,9 +26,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.min
 import website.msdnna.budget_app.ui.theme.LocalExpenseColor
 import website.msdnna.budget_app.ui.theme.LocalIncomeColor
-import kotlin.math.min
 
 data class PieSlice(val label: String, val value: Float, val color: Color)
 
@@ -163,7 +163,7 @@ data class BarEntry(val label: String, val income: Float, val expense: Float)
 
 @Composable
 fun BarChart(entries: List<BarEntry>, modifier: Modifier = Modifier) {
-    val incomeColor  = LocalIncomeColor.current
+    val incomeColor = LocalIncomeColor.current
     val expenseColor = LocalExpenseColor.current
 
     // Progressive grow — bars rise from baseline. Re-animates on data change.

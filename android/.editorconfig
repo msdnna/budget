@@ -1,0 +1,50 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_size = 4
+indent_style = space
+insert_final_newline = true
+trim_trailing_whitespace = true
+max_line_length = 140
+
+[*.{kt,kts}]
+ktlint_code_style = android_studio
+# Compose-функции по конвенции в PascalCase — отключаем правило, требующее camelCase.
+ktlint_standard_function-naming = disabled
+# В Compose-коде огромные сигнатуры с дюжиной параметров — стандарт ktlint
+# режет такие списки до неудобства; отключаем чтобы не размазывать каждый
+# Composable на 30 строк.
+ktlint_standard_parameter-list-wrapping = disabled
+ktlint_standard_argument-list-wrapping = disabled
+# Многие composable-функции возвращают Unit; trailing comma не везде применима.
+ktlint_standard_trailing-comma-on-call-site = disabled
+ktlint_standard_trailing-comma-on-declaration-site = disabled
+# Property-name под Compose-идиомы (LocalFoo, MaterialTheme и т.п.).
+ktlint_standard_property-naming = disabled
+# Длина строки ловится отдельным правилом — даём 140.
+ktlint_standard_max-line-length = disabled
+# Multiline expression wrapping слишком агрессивен для лямбд Compose.
+ktlint_standard_multiline-expression-wrapping = disabled
+# Wildcard-импорты редко, но встречаются в androidx (например, material icons).
+ktlint_standard_no-wildcard-imports = disabled
+# Имя пакета — `budget_app` (намеренно, applicationId/namespace); переименовать
+# нельзя без миграции всех пользовательских установок.
+ktlint_standard_package-name = disabled
+# Function-signature правило режет Compose-функции с дюжиной параметров и
+# дробит сигнатуры до неудобства; стиль допускает inline-сигнатуру.
+ktlint_standard_function-signature = disabled
+# multi-line if/else без фигурных скобок (`if (x) foo() else bar()`) читабелен.
+ktlint_standard_multiline-if-else = disabled
+# Expression-body на ту же строку — таска авто-форматтера; местами выглядит
+# хуже, чем body на новой строке.
+ktlint_standard_function-expression-body = disabled
+# Backing property `_foo` для MutableStateFlow/MutableList — Android-конвенция.
+ktlint_standard_backing-property-naming = disabled
+
+[*.{json,yml,yaml,xml,html}]
+indent_size = 2
+
+[Makefile]
+indent_style = tab

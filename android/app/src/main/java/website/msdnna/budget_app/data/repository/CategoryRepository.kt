@@ -1,12 +1,14 @@
 package website.msdnna.budget_app.data.repository
 
+import java.time.Instant
+import java.util.UUID
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.GlobalScope
 import website.msdnna.budget_app.data.AppContainer
 import website.msdnna.budget_app.data.api.RetrofitClient
 import website.msdnna.budget_app.data.db.SyncStatus
@@ -14,8 +16,6 @@ import website.msdnna.budget_app.data.db.toEntity
 import website.msdnna.budget_app.data.db.toModel
 import website.msdnna.budget_app.data.model.Category
 import website.msdnna.budget_app.data.sync.SyncWorker
-import java.time.Instant
-import java.util.UUID
 
 /**
  * Categories backed by Room. The three section flows ([expense], [income],
@@ -100,10 +100,12 @@ object CategoryRepository {
             dao.deleteHard(id)
             return
         }
-        dao.update(existing.copy(
-            syncStatus = SyncStatus.PENDING_DELETE,
-            updatedAt = Instant.now().toString(),
-        ))
+        dao.update(
+            existing.copy(
+                syncStatus = SyncStatus.PENDING_DELETE,
+                updatedAt = Instant.now().toString(),
+            )
+        )
         SyncWorker.enqueue(AppContainer.appContext)
     }
 }

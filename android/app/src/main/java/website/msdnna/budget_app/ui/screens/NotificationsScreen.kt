@@ -61,17 +61,17 @@ fun NotificationsScreen(
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
             NotifRow(
-                label        = "Напоминание о расходах",
-                enabled      = np.expensesEnabled,
-                frequency    = np.expensesFrequency,
-                hour         = np.expensesHour,
-                minute       = np.expensesMinute,
-                dayOfWeek    = np.expensesDayOfWeek,
-                dayOfMonth   = np.expensesDayOfMonth,
+                label = "Напоминание о расходах",
+                enabled = np.expensesEnabled,
+                frequency = np.expensesFrequency,
+                hour = np.expensesHour,
+                minute = np.expensesMinute,
+                dayOfWeek = np.expensesDayOfWeek,
+                dayOfMonth = np.expensesDayOfMonth,
                 primaryColor = primaryColor,
-                onToggle     = { save(np.copy(expensesEnabled = it)) },
-                onFrequency  = { save(np.copy(expensesFrequency = it)) },
-                onDayOfWeek  = { d -> save(np.copy(expensesDayOfWeek = d)) },
+                onToggle = { save(np.copy(expensesEnabled = it)) },
+                onFrequency = { save(np.copy(expensesFrequency = it)) },
+                onDayOfWeek = { d -> save(np.copy(expensesDayOfWeek = d)) },
                 onDayOfMonth = { d -> save(np.copy(expensesDayOfMonth = d)) },
                 onShowTimePicker = {
                     timePickerTarget = TimePickerTarget(np.expensesHour, np.expensesMinute) { h, m ->
@@ -83,17 +83,17 @@ fun NotificationsScreen(
             HorizontalDivider()
 
             NotifRow(
-                label        = "Напоминание о доходах",
-                enabled      = np.incomeEnabled,
-                frequency    = np.incomeFrequency,
-                hour         = np.incomeHour,
-                minute       = np.incomeMinute,
-                dayOfWeek    = np.incomeDayOfWeek,
-                dayOfMonth   = np.incomeDayOfMonth,
+                label = "Напоминание о доходах",
+                enabled = np.incomeEnabled,
+                frequency = np.incomeFrequency,
+                hour = np.incomeHour,
+                minute = np.incomeMinute,
+                dayOfWeek = np.incomeDayOfWeek,
+                dayOfMonth = np.incomeDayOfMonth,
                 primaryColor = primaryColor,
-                onToggle     = { save(np.copy(incomeEnabled = it)) },
-                onFrequency  = { save(np.copy(incomeFrequency = it)) },
-                onDayOfWeek  = { d -> save(np.copy(incomeDayOfWeek = d)) },
+                onToggle = { save(np.copy(incomeEnabled = it)) },
+                onFrequency = { save(np.copy(incomeFrequency = it)) },
+                onDayOfWeek = { d -> save(np.copy(incomeDayOfWeek = d)) },
                 onDayOfMonth = { d -> save(np.copy(incomeDayOfMonth = d)) },
                 onShowTimePicker = {
                     timePickerTarget = TimePickerTarget(np.incomeHour, np.incomeMinute) { h, m ->
@@ -125,13 +125,14 @@ private data class TimePickerTarget(
 )
 
 private fun frequencyLabel(f: NotificationFrequency) = when (f) {
-    NotificationFrequency.DAILY     -> "Ежедневно"
-    NotificationFrequency.WEEKLY    -> "Еженедельно"
-    NotificationFrequency.MONTHLY   -> "Ежемесячно"
+    NotificationFrequency.DAILY -> "Ежедневно"
+    NotificationFrequency.WEEKLY -> "Еженедельно"
+    NotificationFrequency.MONTHLY -> "Ежемесячно"
     NotificationFrequency.QUARTERLY -> "Ежеквартально"
 }
 
 private val DAYS_OF_WEEK_RU = listOf("Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс")
+
 // Calendar.MONDAY=2, TUESDAY=3, …, SUNDAY=1. Map index 0..6 → Calendar value.
 private val DAY_OF_WEEK_VALUES = listOf(2, 3, 4, 5, 6, 7, 1)
 
@@ -268,8 +269,10 @@ private fun Chip(text: String, primaryColor: Color, onClick: () -> Unit) {
             .padding(horizontal = 10.dp, vertical = 4.dp),
         contentAlignment = Alignment.Center
     ) {
-        Text(text, style = MaterialTheme.typography.bodySmall,
-            color = primaryColor, fontWeight = FontWeight.Medium)
+        Text(
+            text, style = MaterialTheme.typography.bodySmall,
+            color = primaryColor, fontWeight = FontWeight.Medium
+        )
     }
 }
 
@@ -416,7 +419,9 @@ private fun DayCell(text: String, selected: Boolean, primaryColor: Color, onClic
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        Text(text, color = fg, fontWeight = FontWeight.Medium,
-            style = MaterialTheme.typography.bodyMedium)
+        Text(
+            text, color = fg, fontWeight = FontWeight.Medium,
+            style = MaterialTheme.typography.bodyMedium
+        )
     }
 }

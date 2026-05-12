@@ -2,6 +2,7 @@ package website.msdnna.budget_app.data.sync
 
 import android.util.Log
 import com.google.gson.Gson
+import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 import website.msdnna.budget_app.data.api.RetrofitClient
@@ -16,7 +17,6 @@ import website.msdnna.budget_app.data.model.SyncPushRequest
 import website.msdnna.budget_app.data.model.Transaction
 import website.msdnna.budget_app.data.model.WishlistItem
 import website.msdnna.budget_app.data.preferences.AppPreferences
-import java.util.UUID
 
 private const val TAG = "SyncEngine"
 
@@ -257,10 +257,12 @@ class SyncEngine(
                 // Mark conflict; the next push attempt would discover this anyway,
                 // but flagging it now lets the UI surface a badge sooner.
                 if (remote.version != local.version) {
-                    db.transactions().update(local.copy(
-                        syncStatus = SyncStatus.CONFLICT,
-                        serverPayload = gson.toJson(remote),
-                    ))
+                    db.transactions().update(
+                        local.copy(
+                            syncStatus = SyncStatus.CONFLICT,
+                            serverPayload = gson.toJson(remote),
+                        )
+                    )
                 }
             }
             SyncStatus.CONFLICT -> {
@@ -288,10 +290,12 @@ class SyncEngine(
             SyncStatus.PENDING_UPDATE,
             SyncStatus.PENDING_DELETE -> {
                 if (remote.version != local.version) {
-                    db.wishlist().update(local.copy(
-                        syncStatus = SyncStatus.CONFLICT,
-                        serverPayload = gson.toJson(remote),
-                    ))
+                    db.wishlist().update(
+                        local.copy(
+                            syncStatus = SyncStatus.CONFLICT,
+                            serverPayload = gson.toJson(remote),
+                        )
+                    )
                 }
             }
             SyncStatus.CONFLICT -> {
@@ -319,10 +323,12 @@ class SyncEngine(
             SyncStatus.PENDING_UPDATE,
             SyncStatus.PENDING_DELETE -> {
                 if (remote.version != local.version) {
-                    db.categories().update(local.copy(
-                        syncStatus = SyncStatus.CONFLICT,
-                        serverPayload = gson.toJson(remote),
-                    ))
+                    db.categories().update(
+                        local.copy(
+                            syncStatus = SyncStatus.CONFLICT,
+                            serverPayload = gson.toJson(remote),
+                        )
+                    )
                 }
             }
             SyncStatus.CONFLICT -> {

@@ -12,9 +12,9 @@ package website.msdnna.budget_app.data.db
  *    authoritative server document we conflicted with.
  */
 object SyncStatus {
-    const val SYNCED         = "synced"
+    const val SYNCED = "synced"
     const val PENDING_CREATE = "pending_create"
     const val PENDING_UPDATE = "pending_update"
     const val PENDING_DELETE = "pending_delete"
-    const val CONFLICT       = "conflict"
+    const val CONFLICT = "conflict"
 }

@@ -1,15 +1,16 @@
 package website.msdnna.budget_app.data.api
 
+import java.io.IOException
+import java.util.concurrent.TimeUnit
 import okhttp3.Dispatcher
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import website.msdnna.budget_app.data.sync.ReachabilityGate
-import java.io.IOException
-import java.util.concurrent.TimeUnit
 
 object RetrofitClient {
     @Volatile private var service: ApiService? = null
+
     @Volatile private var currentBaseUrl: String = ""
 
     // Set this to inject the JWT token into every request.

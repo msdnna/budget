@@ -296,6 +296,12 @@
 
 ## Android
 
+### [1.30.0] — 2026-05-12
+
+#### Changed
+- **Линтеры Android подняты до чистого состояния.** Добавлены `ktlint 1.6.0` (CLI через отдельную Gradle-конфигурацию + `JavaExec`, потому что плагин `org.jlleitschuh.gradle.ktlint` 13.x не видит source-set'ы при AGP 9.2 со встроенным Kotlin) и `detekt 1.23.8` (`io.gitlab.arturbosch.detekt` плагин). Конфиги — `android/.editorconfig` (для ktlint, `ktlint_code_style=android_studio` + точечно отключённые правила: `function-signature`, `multiline-if-else`, `package-name`, `backing-property-naming`, `function-expression-body`) и `android/app/detekt.yml` (buildUponDefaultConfig + override: `LongMethod` ignoreAnnotated `Composable`, `CyclomaticComplexMethod` threshold=30, `MaxLineLength` 160, `MagicNumber/WildcardImport/UnusedParameter/UnusedPrivateProperty/PackageNaming/MatchingDeclarationName/ThrowsCount/DestructuringDeclarationWithTooManyEntries` off). `make lint-android` запускает `:app:ktlintCheck + :app:detekt`, `make format-android` — `:app:ktlintFormat`. `make lint` теперь включает android.
+- Все Kotlin-файлы (61 файл / ~14.5k LOC) приведены в соответствие через `ktlintFormat`: indent, no-multi-spaces, statement-wrapping, wrapping, import-ordering, unused-imports и т.п. Точечные правки в `MainActivity.kt` (вынос `combine(...)` в многострочный вид), `ForecastScreen.kt` (KeyboardOptions на новой строке), `IncomeScreen.kt` (длинные `if/else` в Icon развёрнуты в блоки). `MainActivity.onCreate` помечена `@Suppress("detekt:CyclomaticComplexMethod")` — это entry point с большим бизнес-роутингом, рефакторинг не оправдан.
+
 ### [1.29.3] — 2026-05-12
 
 #### Changed

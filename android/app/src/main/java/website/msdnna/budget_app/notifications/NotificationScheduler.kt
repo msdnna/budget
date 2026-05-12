@@ -8,14 +8,14 @@ import java.util.Calendar
 
 object NotificationScheduler {
     const val ACTION_EXPENSES = "website.msdnna.budget_app.NOTIFY_EXPENSES"
-    const val ACTION_INCOME   = "website.msdnna.budget_app.NOTIFY_INCOME"
+    const val ACTION_INCOME = "website.msdnna.budget_app.NOTIFY_INCOME"
     private const val REQ_EXPENSES = 1001
-    private const val REQ_INCOME   = 1002
+    private const val REQ_INCOME = 1002
 
-    const val EXTRA_FREQUENCY    = "frequency"
-    const val EXTRA_HOUR         = "hour"
-    const val EXTRA_MINUTE       = "minute"
-    const val EXTRA_DAY_OF_WEEK  = "dayOfWeek"
+    const val EXTRA_FREQUENCY = "frequency"
+    const val EXTRA_HOUR = "hour"
+    const val EXTRA_MINUTE = "minute"
+    const val EXTRA_DAY_OF_WEEK = "dayOfWeek"
     const val EXTRA_DAY_OF_MONTH = "dayOfMonth"
 
     fun applyPrefs(context: Context, prefs: NotificationPrefs) {
@@ -67,7 +67,7 @@ object NotificationScheduler {
     }
 
     fun cancelExpenses(context: Context) = cancel(context, REQ_EXPENSES, ACTION_EXPENSES)
-    fun cancelIncome(context: Context)   = cancel(context, REQ_INCOME, ACTION_INCOME)
+    fun cancelIncome(context: Context) = cancel(context, REQ_INCOME, ACTION_INCOME)
 
     private fun cancel(context: Context, reqCode: Int, action: String) {
         val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
@@ -103,9 +103,9 @@ object NotificationScheduler {
         frequency: NotificationFrequency,
         hour: Int, minute: Int, dayOfWeek: Int, dayOfMonth: Int,
     ): Long = when (frequency) {
-        NotificationFrequency.DAILY     -> nextDaily(hour, minute)
-        NotificationFrequency.WEEKLY    -> nextWeekly(hour, minute, dayOfWeek)
-        NotificationFrequency.MONTHLY   -> nextMonthly(hour, minute, dayOfMonth, monthsStep = 1)
+        NotificationFrequency.DAILY -> nextDaily(hour, minute)
+        NotificationFrequency.WEEKLY -> nextWeekly(hour, minute, dayOfWeek)
+        NotificationFrequency.MONTHLY -> nextMonthly(hour, minute, dayOfMonth, monthsStep = 1)
         NotificationFrequency.QUARTERLY -> nextMonthly(hour, minute, dayOfMonth, monthsStep = 3)
     }
 

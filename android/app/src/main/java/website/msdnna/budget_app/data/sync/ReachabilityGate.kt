@@ -2,6 +2,15 @@ package website.msdnna.budget_app.data.sync
 
 import android.os.SystemClock
 import android.util.Log
+import java.io.IOException
+import java.net.ConnectException
+import java.net.InetSocketAddress
+import java.net.NoRouteToHostException
+import java.net.PortUnreachableException
+import java.net.Socket
+import java.net.SocketTimeoutException
+import java.net.URI
+import java.net.UnknownHostException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -12,15 +21,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
-import java.io.IOException
-import java.net.ConnectException
-import java.net.InetSocketAddress
-import java.net.NoRouteToHostException
-import java.net.PortUnreachableException
-import java.net.Socket
-import java.net.SocketTimeoutException
-import java.net.URI
-import java.net.UnknownHostException
 
 private const val TAG = "ReachabilityGate"
 
@@ -53,7 +53,9 @@ object ReachabilityGate {
     val state: StateFlow<State> = _state
 
     @Volatile private var serverUrl: String = ""
+
     @Volatile private var lastProbeAt: Long = 0L
+
     @Volatile private var inFlight: Job? = null
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -91,7 +93,7 @@ object ReachabilityGate {
 
         val job = scope.launch {
             val result = runCatching { probeOnce(url) }
-                .getOrElse { State.Online }  // any unexpected error → optimistic
+                .getOrElse { State.Online } // any unexpected error → optimistic
             lastProbeAt = SystemClock.elapsedRealtime()
             _state.value = result
             inFlight = null
@@ -121,7 +123,7 @@ object ReachabilityGate {
     }
 
     private fun probeOnce(url: String): State {
-        val addr = parseHostPort(url) ?: return State.Online  // unparseable → optimistic
+        val addr = parseHostPort(url) ?: return State.Online // unparseable → optimistic
         return Socket().use { sock ->
             try {
                 sock.connect(addr, PROBE_TIMEOUT_MS)
@@ -154,5 +156,7 @@ object ReachabilityGate {
             else -> 80
         }
         InetSocketAddress(host, port)
-    } catch (_: Exception) { null }
+    } catch (_: Exception) {
+        null
+    }
 }

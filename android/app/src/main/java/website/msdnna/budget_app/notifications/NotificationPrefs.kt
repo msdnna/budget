@@ -3,7 +3,10 @@ package website.msdnna.budget_app.notifications
 import java.util.Calendar
 
 enum class NotificationFrequency {
-    DAILY, WEEKLY, MONTHLY, QUARTERLY;
+    DAILY,
+    WEEKLY,
+    MONTHLY,
+    QUARTERLY;
 
     companion object {
         fun fromName(name: String?, default: NotificationFrequency): NotificationFrequency =

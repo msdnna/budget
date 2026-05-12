@@ -1,5 +1,7 @@
 package website.msdnna.budget_app.data.repository
 
+import java.time.Instant
+import java.util.UUID
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import website.msdnna.budget_app.data.AppContainer
@@ -10,8 +12,6 @@ import website.msdnna.budget_app.data.db.toModel
 import website.msdnna.budget_app.data.model.UserInfo
 import website.msdnna.budget_app.data.model.WishlistItem
 import website.msdnna.budget_app.data.sync.SyncWorker
-import java.time.Instant
-import java.util.UUID
 
 object WishlistRepository {
     private val dao get() = AppContainer.db.wishlist()
@@ -105,10 +105,12 @@ object WishlistRepository {
             dao.deleteHard(id)
             return
         }
-        dao.update(existing.copy(
-            syncStatus = SyncStatus.PENDING_DELETE,
-            updatedAt = Instant.now().toString(),
-        ))
+        dao.update(
+            existing.copy(
+                syncStatus = SyncStatus.PENDING_DELETE,
+                updatedAt = Instant.now().toString(),
+            )
+        )
         SyncWorker.enqueue(AppContainer.appContext)
     }
 

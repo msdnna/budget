@@ -34,10 +34,10 @@ fun SecurityScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    val pinHash         by prefs.pinHash.collectAsStateWithLifecycle(initialValue = null)
-    val pinSalt         by prefs.pinSalt.collectAsStateWithLifecycle(initialValue = null)
+    val pinHash by prefs.pinHash.collectAsStateWithLifecycle(initialValue = null)
+    val pinSalt by prefs.pinSalt.collectAsStateWithLifecycle(initialValue = null)
     val biometricEnabled by prefs.biometricEnabled.collectAsStateWithLifecycle(initialValue = false)
-    val lockTimeoutSec   by prefs.lockTimeoutSec.collectAsStateWithLifecycle(initialValue = 60)
+    val lockTimeoutSec by prefs.lockTimeoutSec.collectAsStateWithLifecycle(initialValue = 60)
     val hasPin = !pinHash.isNullOrBlank() && !pinSalt.isNullOrBlank()
     val biometricAvailable = remember { BiometricHelper.isAvailable(context) }
 
@@ -176,10 +176,10 @@ fun SecurityScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     val timeoutOptions = listOf(
-                        0    to "сразу",
-                        30   to "30 сек",
-                        60   to "1 мин",
-                        300  to "5 мин",
+                        0 to "сразу",
+                        30 to "30 сек",
+                        60 to "1 мин",
+                        300 to "5 мин",
                         1800 to "30 мин",
                     )
                     Row(
@@ -189,11 +189,11 @@ fun SecurityScreen(
                         timeoutOptions.forEach { (secs, label) ->
                             FilterChip(
                                 selected = lockTimeoutSec == secs,
-                                onClick  = { scope.launch { prefs.setLockTimeoutSec(secs) } },
-                                label    = { Text(label) },
-                                colors   = FilterChipDefaults.filterChipColors(
+                                onClick = { scope.launch { prefs.setLockTimeoutSec(secs) } },
+                                label = { Text(label) },
+                                colors = FilterChipDefaults.filterChipColors(
                                     selectedContainerColor = primaryColor,
-                                    selectedLabelColor     = Color.White,
+                                    selectedLabelColor = Color.White,
                                 ),
                             )
                         }

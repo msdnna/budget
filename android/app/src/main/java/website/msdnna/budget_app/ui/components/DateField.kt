@@ -66,11 +66,11 @@ fun DateField(
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
             colors = OutlinedTextFieldDefaults.colors(
-                disabledBorderColor       = MaterialTheme.colorScheme.outline,
-                disabledLabelColor        = MaterialTheme.colorScheme.onSurfaceVariant,
-                disabledTextColor         = MaterialTheme.colorScheme.onSurface,
+                disabledBorderColor = MaterialTheme.colorScheme.outline,
+                disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                disabledTextColor = MaterialTheme.colorScheme.onSurface,
                 disabledTrailingIconColor = primaryColor,
-                disabledContainerColor    = Color.Transparent,
+                disabledContainerColor = Color.Transparent,
             ),
         )
         Box(
@@ -110,22 +110,22 @@ private fun ThemedDatePickerDialog(
     val onPrimary = Color.White
     val surface = MaterialTheme.colorScheme.surface
     val pickerColors = DatePickerDefaults.colors(
-        containerColor              = surface,
-        titleContentColor           = MaterialTheme.colorScheme.onSurfaceVariant,
-        headlineContentColor        = MaterialTheme.colorScheme.onSurface,
-        weekdayContentColor         = MaterialTheme.colorScheme.onSurfaceVariant,
-        subheadContentColor         = MaterialTheme.colorScheme.onSurface,
-        navigationContentColor      = MaterialTheme.colorScheme.onSurface,
-        yearContentColor            = MaterialTheme.colorScheme.onSurface,
-        currentYearContentColor     = primaryColor,
-        selectedYearContentColor    = onPrimary,
-        selectedYearContainerColor  = primaryColor,
-        dayContentColor             = MaterialTheme.colorScheme.onSurface,
-        selectedDayContentColor     = onPrimary,
-        selectedDayContainerColor   = primaryColor,
-        todayContentColor           = primaryColor,
-        todayDateBorderColor        = primaryColor,
-        dividerColor                = MaterialTheme.colorScheme.outlineVariant,
+        containerColor = surface,
+        titleContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        headlineContentColor = MaterialTheme.colorScheme.onSurface,
+        weekdayContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        subheadContentColor = MaterialTheme.colorScheme.onSurface,
+        navigationContentColor = MaterialTheme.colorScheme.onSurface,
+        yearContentColor = MaterialTheme.colorScheme.onSurface,
+        currentYearContentColor = primaryColor,
+        selectedYearContentColor = onPrimary,
+        selectedYearContainerColor = primaryColor,
+        dayContentColor = MaterialTheme.colorScheme.onSurface,
+        selectedDayContentColor = onPrimary,
+        selectedDayContainerColor = primaryColor,
+        todayContentColor = primaryColor,
+        todayDateBorderColor = primaryColor,
+        dividerColor = MaterialTheme.colorScheme.outlineVariant,
     )
 
     DatePickerDialog(
@@ -166,7 +166,9 @@ private fun isoToUtcMillis(iso: String): Long {
     return try {
         if (iso.length >= 10) fmt.parse(iso.take(10))?.time ?: todayUtcMillis()
         else todayUtcMillis()
-    } catch (_: Exception) { todayUtcMillis() }
+    } catch (_: Exception) {
+        todayUtcMillis()
+    }
 }
 
 private fun utcMillisToIso(ms: Long): String {

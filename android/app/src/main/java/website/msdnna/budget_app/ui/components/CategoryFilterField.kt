@@ -110,7 +110,10 @@ fun CategoryFilterField(
             HorizontalDivider()
             DropdownMenuItem(
                 text = { Text("Сбросить", color = MaterialTheme.colorScheme.onSurfaceVariant) },
-                onClick = { onClear(); expanded = false },
+                onClick = {
+                    onClear()
+                    expanded = false
+                },
                 enabled = selected.isNotEmpty(),
             )
         }

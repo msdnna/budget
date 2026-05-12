@@ -1,5 +1,6 @@
 package website.msdnna.budget_app.ui.screens
 
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -9,13 +10,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Assignment
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.TrendingDown
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
-import androidx.compose.animation.core.tween
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.automirrored.filled.Assignment
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.FilterAlt
 import androidx.compose.material.icons.outlined.FilterAltOff
@@ -32,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import java.util.Calendar
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import website.msdnna.budget_app.BuildConfig
@@ -40,22 +41,20 @@ import website.msdnna.budget_app.data.preferences.AppPreferences
 import website.msdnna.budget_app.data.repository.DetailRequestStore
 import website.msdnna.budget_app.data.repository.TransactionRepository
 import website.msdnna.budget_app.data.repository.WishlistRepository
-import website.msdnna.budget_app.data.AppContainer
 import website.msdnna.budget_app.data.sync.ReachabilityGate
-import website.msdnna.budget_app.notifications.NotificationPrefs
-import website.msdnna.budget_app.notifications.NotificationScheduler
 import website.msdnna.budget_app.data.update.ApkDownloader
 import website.msdnna.budget_app.data.update.ApkInstaller
 import website.msdnna.budget_app.data.update.DownloadProgress
 import website.msdnna.budget_app.data.update.UpdateState
 import website.msdnna.budget_app.data.update.resolveUpdate
+import website.msdnna.budget_app.notifications.NotificationPrefs
+import website.msdnna.budget_app.notifications.NotificationScheduler
 import website.msdnna.budget_app.ui.components.MandatoryUpdateDialog
 import website.msdnna.budget_app.ui.components.MbLogo
 import website.msdnna.budget_app.ui.components.OptionalUpdateProgressDialog
 import website.msdnna.budget_app.ui.components.UpdateBanner
 import website.msdnna.budget_app.ui.theme.AppTheme
 import website.msdnna.budget_app.ui.theme.AppThemes
-import java.util.Calendar
 
 private data class NavItem(val label: String, val icon: ImageVector, val route: String)
 
@@ -81,19 +80,19 @@ private suspend fun checkVersion(
 }
 
 private val NAV_ITEMS = listOf(
-    NavItem("Статистика", Icons.Default.BarChart,      "statistics"),
-    NavItem("Доходы",     Icons.AutoMirrored.Filled.TrendingUp,    "income"),
-    NavItem("Расходы",    Icons.AutoMirrored.Filled.TrendingDown,  "expenses"),
-    NavItem("Прогноз",    Icons.Default.Lightbulb,     "forecast"),
-    NavItem("Экспорт",    Icons.Default.FileDownload,  "export"),
+    NavItem("Статистика", Icons.Default.BarChart, "statistics"),
+    NavItem("Доходы", Icons.AutoMirrored.Filled.TrendingUp, "income"),
+    NavItem("Расходы", Icons.AutoMirrored.Filled.TrendingDown, "expenses"),
+    NavItem("Прогноз", Icons.Default.Lightbulb, "forecast"),
+    NavItem("Экспорт", Icons.Default.FileDownload, "export"),
 )
 
 private val PAGE_TITLES = mapOf(
     "statistics" to "Статистика",
-    "income"     to "Доходы",
-    "expenses"   to "Расходы",
-    "forecast"   to "Прогноз",
-    "export"     to "Экспорт",
+    "income" to "Доходы",
+    "expenses" to "Расходы",
+    "forecast" to "Прогноз",
+    "export" to "Экспорт",
 )
 
 @Composable
@@ -209,8 +208,10 @@ fun MainScreen(
 
     val now = Calendar.getInstance()
     val today = remember {
-        val months = listOf("января","февраля","марта","апреля","мая","июня",
-            "июля","августа","сентября","октября","ноября","декабря")
+        val months = listOf(
+            "января", "февраля", "марта", "апреля", "мая", "июня",
+            "июля", "августа", "сентября", "октября", "ноября", "декабря"
+        )
         "${now.get(Calendar.DAY_OF_MONTH)} ${months[now.get(Calendar.MONTH)]} ${now.get(Calendar.YEAR)}"
     }
 
@@ -325,7 +326,7 @@ fun MainScreen(
                                 if (filtersVisible) Icons.Outlined.FilterAltOff else Icons.Outlined.FilterAlt,
                                 if (filtersVisible) "Скрыть фильтры" else "Показать фильтры",
                                 tint = if (filtersVisible) primaryColor
-                                       else LocalContentColor.current,
+                                else LocalContentColor.current,
                             )
                         }
                     }
@@ -348,20 +349,20 @@ fun MainScreen(
         bottomBar = {
             NavigationBar(
                 containerColor = MaterialTheme.colorScheme.surface,
-                tonalElevation = 0.dp   // no tonal tinting → bar stays pure white
+                tonalElevation = 0.dp // no tonal tinting → bar stays pure white
             ) {
                 NAV_ITEMS.forEachIndexed { index, item ->
                     NavigationBarItem(
                         selected = pagerState.currentPage == index,
-                        onClick  = { scope.launch { pagerState.animateScrollToPage(index) } },
-                        icon     = { Icon(item.icon, item.label) },
-                        label    = { Text(item.label, fontSize = 10.sp) },
-                        colors   = NavigationBarItemDefaults.colors(
-                            selectedIconColor   = primaryColor,
-                            selectedTextColor   = primaryColor,
+                        onClick = { scope.launch { pagerState.animateScrollToPage(index) } },
+                        icon = { Icon(item.icon, item.label) },
+                        label = { Text(item.label, fontSize = 10.sp) },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = primaryColor,
+                            selectedTextColor = primaryColor,
                             // Color.Transparent renders black in this Compose version;
                             // Color(0x00FFFFFF) is truly transparent (alpha=0, white base)
-                            indicatorColor      = Color(0x00FFFFFF),
+                            indicatorColor = Color(0x00FFFFFF),
                             unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
                             unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -399,23 +400,23 @@ fun MainScreen(
                 key(NAV_ITEMS[page].route) {
                     when (NAV_ITEMS[page].route) {
                         "statistics" -> StatisticsScreen(serverUrl, primaryColor, valuesHidden, pieUnitRuble)
-                        "income"     -> IncomeScreen(
+                        "income" -> IncomeScreen(
                             serverUrl, primaryColor, valuesHidden,
                             filtersVisible = filtersVisible,
                             onSelectionCountChange = { selectionCounts["income"] = it }
                         )
-                        "expenses"   -> ExpensesScreen(
+                        "expenses" -> ExpensesScreen(
                             serverUrl, primaryColor, valuesHidden,
                             filtersVisible = filtersVisible,
                             currentUserId = currentUserId,
                             onSelectionCountChange = { selectionCounts["expenses"] = it },
                             onOpenDetailRequest = { id -> openDetailRequestId = id },
                         )
-                        "forecast"   -> ForecastScreen(
+                        "forecast" -> ForecastScreen(
                             serverUrl, primaryColor,
                             onSelectionCountChange = { selectionCounts["forecast"] = it }
                         )
-                        "export"     -> ExportScreen(serverUrl, primaryColor)
+                        "export" -> ExportScreen(serverUrl, primaryColor)
                     }
                 }
             }
@@ -455,7 +456,7 @@ fun MainScreen(
     androidx.compose.animation.AnimatedVisibility(
         visible = showConflicts,
         enter = androidx.compose.animation.slideInHorizontally(initialOffsetX = { it }) + androidx.compose.animation.fadeIn(),
-        exit  = androidx.compose.animation.slideOutHorizontally(targetOffsetX  = { it }) + androidx.compose.animation.fadeOut(),
+        exit = androidx.compose.animation.slideOutHorizontally(targetOffsetX = { it }) + androidx.compose.animation.fadeOut(),
     ) {
         ConflictsScreen(serverUrl = serverUrl, onClose = { showConflicts = false })
     }
@@ -463,7 +464,7 @@ fun MainScreen(
     androidx.compose.animation.AnimatedVisibility(
         visible = showNotifications,
         enter = androidx.compose.animation.slideInHorizontally(initialOffsetX = { it }) + androidx.compose.animation.fadeIn(),
-        exit  = androidx.compose.animation.slideOutHorizontally(targetOffsetX  = { it }) + androidx.compose.animation.fadeOut(),
+        exit = androidx.compose.animation.slideOutHorizontally(targetOffsetX = { it }) + androidx.compose.animation.fadeOut(),
     ) {
         NotificationsScreen(
             primaryColor = primaryColor,
@@ -488,14 +489,14 @@ fun MainScreen(
             UpdateState.None -> null
         }
         SettingsDialog(
-            primaryColor     = primaryColor,
-            isDark           = isDark,
-            activeTheme      = activeTheme,
-            displayName      = displayName,
-            apiVersion       = apiVersion,
-            availableUpdate  = availableUpdate,
-            pieUnitRuble     = pieUnitRuble,
-            onThemeChange    = { theme ->
+            primaryColor = primaryColor,
+            isDark = isDark,
+            activeTheme = activeTheme,
+            displayName = displayName,
+            apiVersion = apiVersion,
+            availableUpdate = availableUpdate,
+            pieUnitRuble = pieUnitRuble,
+            onThemeChange = { theme ->
                 onThemeChange(theme)
                 scope.launch { prefs.setThemeKey(theme.key) }
             },
@@ -516,30 +517,30 @@ fun MainScreen(
             onPieUnitChange = { ruble ->
                 scope.launch { prefs.setPieUnitRuble(ruble) }
             },
-            onLogout       = {
+            onLogout = {
                 showSettings = false
                 onLogout()
             },
-            onDismiss      = { showSettings = false }
+            onDismiss = { showSettings = false }
         )
     }
 
     androidx.compose.animation.AnimatedVisibility(
         visible = showSecurity,
         enter = androidx.compose.animation.slideInHorizontally(initialOffsetX = { it }) + androidx.compose.animation.fadeIn(),
-        exit  = androidx.compose.animation.slideOutHorizontally(targetOffsetX  = { it }) + androidx.compose.animation.fadeOut(),
+        exit = androidx.compose.animation.slideOutHorizontally(targetOffsetX = { it }) + androidx.compose.animation.fadeOut(),
     ) {
         SecurityScreen(
             primaryColor = primaryColor,
-            prefs        = prefs,
-            onClose      = { showSecurity = false },
+            prefs = prefs,
+            onClose = { showSecurity = false },
         )
     }
 
     androidx.compose.animation.AnimatedVisibility(
         visible = showDetailRequestsList,
         enter = androidx.compose.animation.slideInHorizontally(initialOffsetX = { it }) + androidx.compose.animation.fadeIn(),
-        exit  = androidx.compose.animation.slideOutHorizontally(targetOffsetX  = { it }) + androidx.compose.animation.fadeOut(),
+        exit = androidx.compose.animation.slideOutHorizontally(targetOffsetX = { it }) + androidx.compose.animation.fadeOut(),
     ) {
         DetailRequestsScreen(
             primaryColor = primaryColor,
@@ -556,7 +557,7 @@ fun MainScreen(
     androidx.compose.animation.AnimatedVisibility(
         visible = openDrId != null,
         enter = androidx.compose.animation.slideInHorizontally(initialOffsetX = { it }) + androidx.compose.animation.fadeIn(),
-        exit  = androidx.compose.animation.slideOutHorizontally(targetOffsetX  = { it }) + androidx.compose.animation.fadeOut(),
+        exit = androidx.compose.animation.slideOutHorizontally(targetOffsetX = { it }) + androidx.compose.animation.fadeOut(),
     ) {
         if (openDrId != null) {
             DetailRequestScreen(
@@ -619,8 +620,10 @@ fun SettingsDialog(
                         }
                         Column(modifier = Modifier.weight(1f)) {
                             Text(displayName, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                            Text("Вы авторизованы", style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(
+                                "Вы авторизованы", style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                         IconButton(onClick = onOpenDetailRequests) {
                             Icon(
@@ -641,8 +644,10 @@ fun SettingsDialog(
                 }
 
                 // Theme picker
-                Text("Цвет темы", style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    "Цвет темы", style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.fillMaxWidth()
@@ -653,8 +658,10 @@ fun SettingsDialog(
                                 .background(theme.primary).clickable { onThemeChange(theme) }
                         ) {
                             if (theme.key == activeTheme.key) {
-                                Icon(Icons.Default.Check, null, tint = Color.White,
-                                    modifier = Modifier.size(18.dp).align(Alignment.Center))
+                                Icon(
+                                    Icons.Default.Check, null, tint = Color.White,
+                                    modifier = Modifier.size(18.dp).align(Alignment.Center)
+                                )
                             }
                         }
                     }
@@ -682,8 +689,8 @@ fun SettingsDialog(
                         checked = isDark,
                         onCheckedChange = onDarkModeChange,
                         colors = SwitchDefaults.colors(
-                            checkedThumbColor  = primaryColor,
-                            checkedTrackColor  = primaryColor.copy(alpha = 0.4f)
+                            checkedThumbColor = primaryColor,
+                            checkedTrackColor = primaryColor.copy(alpha = 0.4f)
                         )
                     )
                 }
@@ -691,8 +698,10 @@ fun SettingsDialog(
                 HorizontalDivider()
 
                 // Pie chart unit
-                Text("Диаграммы", style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    "Диаграммы", style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -702,20 +711,20 @@ fun SettingsDialog(
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         FilterChip(
                             selected = !pieUnitRuble,
-                            onClick  = { onPieUnitChange(false) },
-                            label    = { Text("%") },
-                            colors   = FilterChipDefaults.filterChipColors(
+                            onClick = { onPieUnitChange(false) },
+                            label = { Text("%") },
+                            colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = primaryColor,
-                                selectedLabelColor     = Color.White
+                                selectedLabelColor = Color.White
                             )
                         )
                         FilterChip(
                             selected = pieUnitRuble,
-                            onClick  = { onPieUnitChange(true) },
-                            label    = { Text("₽") },
-                            colors   = FilterChipDefaults.filterChipColors(
+                            onClick = { onPieUnitChange(true) },
+                            label = { Text("₽") },
+                            colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = primaryColor,
-                                selectedLabelColor     = Color.White
+                                selectedLabelColor = Color.White
                             )
                         )
                     }
@@ -793,8 +802,10 @@ fun SettingsDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Приложение", style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        "Приложение", style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                     val current = "v${BuildConfig.VERSION_NAME}"
                     val text = if (!availableUpdate.isNullOrBlank())
                         "$current (доступна v$availableUpdate)"
@@ -803,15 +814,17 @@ fun SettingsDialog(
                         text,
                         style = MaterialTheme.typography.bodySmall,
                         color = if (!availableUpdate.isNullOrBlank()) primaryColor
-                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Сервер (API)", style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        "Сервер (API)", style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                     Text(
                         apiVersion?.let { "v$it" } ?: "…",
                         style = MaterialTheme.typography.bodySmall,
@@ -825,4 +838,3 @@ fun SettingsDialog(
         }
     )
 }
-

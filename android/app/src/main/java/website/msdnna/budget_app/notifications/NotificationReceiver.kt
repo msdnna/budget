@@ -13,9 +13,9 @@ import website.msdnna.budget_app.R
 class NotificationReceiver : BroadcastReceiver() {
 
     companion object {
-        const val CHANNEL_ID        = "budget_reminders"
+        const val CHANNEL_ID = "budget_reminders"
         private const val ID_EXPENSES = 2001
-        private const val ID_INCOME   = 2002
+        private const val ID_INCOME = 2002
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -24,9 +24,9 @@ class NotificationReceiver : BroadcastReceiver() {
             intent.getStringExtra(NotificationScheduler.EXTRA_FREQUENCY),
             NotificationFrequency.DAILY,
         )
-        val hour       = intent.getIntExtra(NotificationScheduler.EXTRA_HOUR, 0)
-        val minute     = intent.getIntExtra(NotificationScheduler.EXTRA_MINUTE, 0)
-        val dayOfWeek  = intent.getIntExtra(NotificationScheduler.EXTRA_DAY_OF_WEEK, Calendar.MONDAY)
+        val hour = intent.getIntExtra(NotificationScheduler.EXTRA_HOUR, 0)
+        val minute = intent.getIntExtra(NotificationScheduler.EXTRA_MINUTE, 0)
+        val dayOfWeek = intent.getIntExtra(NotificationScheduler.EXTRA_DAY_OF_WEEK, Calendar.MONDAY)
         val dayOfMonth = intent.getIntExtra(NotificationScheduler.EXTRA_DAY_OF_MONTH, 1)
 
         when (action) {

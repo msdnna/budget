@@ -140,8 +140,8 @@ interface ApiService {
     @GET("detail-requests")
     suspend fun listDetailRequests(
         @Query("assignee_id") assigneeId: String? = null,
-        @Query("creator_id")  creatorId: String? = null,
-        @Query("status")      status: String? = null,
+        @Query("creator_id") creatorId: String? = null,
+        @Query("status") status: String? = null,
     ): List<website.msdnna.budget_app.data.model.DetailRequest>
 
     @POST("detail-requests")

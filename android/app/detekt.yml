@@ -1,0 +1,137 @@
+# Detekt config for budget-app Android.
+# Базируется на дефолтном конфиге (buildUponDefaultConfig = true) — здесь
+# только override-ы для правил, шумных на Compose-кодовой базе.
+
+build:
+  maxIssues: 0
+  excludeCorrectable: false
+
+complexity:
+  LongMethod:
+    active: true
+    threshold: 250
+    ignoreAnnotated:
+      - 'Composable'
+  LongParameterList:
+    active: true
+    functionThreshold: 12
+    constructorThreshold: 12
+    ignoreDefaultParameters: true
+    ignoreAnnotated:
+      - 'Composable'
+  TooManyFunctions:
+    active: false
+  CyclomaticComplexMethod:
+    active: true
+    threshold: 30
+    ignoreSingleWhenExpression: true
+    ignoreAnnotated:
+      - 'Composable'
+  LargeClass:
+    active: true
+    threshold: 1200
+  ComplexCondition:
+    active: true
+    threshold: 6
+  NestedBlockDepth:
+    active: true
+    threshold: 5
+
+style:
+  # Magic-numbers в UI (dp/sp, цвета) бессмысленно выносить в константы.
+  MagicNumber:
+    active: false
+  # ReturnCount: ранние return в обработчиках вполне читабельны.
+  ReturnCount:
+    active: true
+    max: 6
+  # Wildcard imports — встречаются в androidx (material icons) и Compose-DSL.
+  WildcardImport:
+    active: false
+  MaxLineLength:
+    active: true
+    maxLineLength: 160
+    excludePackageStatements: true
+    excludeImportStatements: true
+    excludeCommentStatements: true
+  # UnusedPrivateMember выдаёт ложные срабатывания на Compose-параметрах.
+  UnusedPrivateMember:
+    active: false
+  # UnusedPrivateProperty: side-effect-pipelines (`launchIn(viewModelScope)`)
+  # хранятся в private val — имя не используется, но `val` нужен для удержания.
+  UnusedPrivateProperty:
+    active: false
+  # UnusedParameter: Compose-обработчики часто принимают параметры ради
+  # стабильности API; отдельные кейсы можно подавить локально через @Suppress.
+  UnusedParameter:
+    active: false
+  # ForbiddenComment: TODO/FIXME — это нормальные пометки в WIP-коде.
+  ForbiddenComment:
+    active: false
+  # NewLineAtEndOfFile ловится ktlint-ом.
+  NewLineAtEndOfFile:
+    active: false
+  # UnnecessaryAbstractClass: Room DAO абстрактные.
+  UnnecessaryAbstractClass:
+    active: false
+  # DataClassContainsFunctions: Mongo/Room mapper-методы на data class — норма.
+  DataClassContainsFunctions:
+    active: false
+  # ExplicitItLambdaParameter: `it` в коротких лямбдах привычнее, чем
+  # `param ->`; короткие однострочники не выигрывают от явного имени.
+  ExplicitItLambdaParameter:
+    active: false
+  # DestructuringDeclarationWithTooManyEntries: единичный кейс с 4 элементами,
+  # выигрыш от рефакторинга нулевой.
+  DestructuringDeclarationWithTooManyEntries:
+    active: false
+  # ThrowsCount: RetryUtils.withRetry имеет легитимные 3 throw-точки
+  # (retry exhausted, non-retryable, cancellation).
+  ThrowsCount:
+    active: false
+
+naming:
+  FunctionNaming:
+    active: true
+    ignoreAnnotated:
+      - 'Composable'
+  TopLevelPropertyNaming:
+    active: true
+    constantPattern: '[A-Z][A-Za-z0-9_]*'
+    # PascalCase разрешён: CompositionLocal'ы (LocalIncomeColor) и
+    # ColorScheme'ы (LightColorScheme) — Compose-конвенция.
+    propertyPattern: '[A-Za-z][A-Za-z0-9_]*'
+  VariableNaming:
+    active: true
+    variablePattern: '[a-z][A-Za-z0-9_]*'
+  PackageNaming:
+    # namespace `budget_app` зафиксирован в applicationId и не может быть
+    # переименован без миграции всех инсталляций.
+    active: false
+  MatchingDeclarationName:
+    # Theme.kt/TilePeriodPicker.kt содержат связанные top-level декларации —
+    # переименование = миграция импортов по всему проекту.
+    active: false
+
+performance:
+  SpreadOperator:
+    active: false
+
+empty-blocks:
+  EmptyFunctionBlock:
+    active: true
+    ignoreOverridden: true
+
+exceptions:
+  TooGenericExceptionCaught:
+    active: false
+  SwallowedException:
+    active: false
+  PrintStackTrace:
+    active: true
+
+potential-bugs:
+  UnsafeCallOnNullableType:
+    active: true
+  IgnoredReturnValue:
+    active: false

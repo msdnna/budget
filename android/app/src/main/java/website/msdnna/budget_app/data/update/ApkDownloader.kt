@@ -1,15 +1,15 @@
 package website.msdnna.budget_app.data.update
 
 import android.content.Context
+import java.io.File
+import java.io.IOException
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import java.io.File
-import java.io.IOException
-import java.util.concurrent.TimeUnit
 
 sealed interface DownloadProgress {
     data class Running(val bytesRead: Long, val total: Long) : DownloadProgress {
@@ -113,8 +113,10 @@ object ApkDownloader {
             val sig = ByteArray(4)
             if (stream.read(sig) != 4) return false
             // ZIP local file header — APKs always start with this.
-            sig[0] == 0x50.toByte() && sig[1] == 0x4B.toByte() &&
-                sig[2] == 0x03.toByte() && sig[3] == 0x04.toByte()
+            sig[0] == 0x50.toByte() &&
+                sig[1] == 0x4B.toByte() &&
+                sig[2] == 0x03.toByte() &&
+                sig[3] == 0x04.toByte()
         }
     }
 }

@@ -1,23 +1,18 @@
 package website.msdnna.budget_app.ui.screens
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
-import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.ui.zIndex
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -26,6 +21,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -35,23 +31,22 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
+import androidx.lifecycle.viewmodel.compose.viewModel
+import java.text.SimpleDateFormat
+import java.util.*
 import kotlinx.coroutines.launch
 import website.msdnna.budget_app.data.model.Category
 import website.msdnna.budget_app.data.model.CreateTransactionRequest
 import website.msdnna.budget_app.data.model.Transaction
-import website.msdnna.budget_app.data.model.UpdateTransactionRequest
 import website.msdnna.budget_app.data.model.UpdateWishlistRequest
 import website.msdnna.budget_app.data.model.UserInfo
 import website.msdnna.budget_app.data.model.WishlistItem
 import website.msdnna.budget_app.data.repository.CategoryRepository
 import website.msdnna.budget_app.data.repository.WishlistRepository
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import website.msdnna.budget_app.ui.components.*
 import website.msdnna.budget_app.ui.theme.LocalExpenseColor
 import website.msdnna.budget_app.ui.viewmodels.ExpensesViewModel
-import androidx.lifecycle.viewmodel.compose.viewModel
-import java.text.SimpleDateFormat
-import java.util.*
 
 @Composable
 fun ExpensesScreen(
@@ -64,10 +59,10 @@ fun ExpensesScreen(
     onOpenDetailRequest: (String) -> Unit = {},
 ) {
     val vm = viewModel<ExpensesViewModel>(key = "expenses:$serverUrl", factory = ExpensesViewModel.factory(serverUrl))
-    val uiState    by vm.uiState.collectAsState()
+    val uiState by vm.uiState.collectAsState()
     val filterCats by vm.filterCats.collectAsState()
     val filterFrom by vm.filterFrom.collectAsState()
-    val filterTo   by vm.filterTo.collectAsState()
+    val filterTo by vm.filterTo.collectAsState()
     val includeDetailed by vm.includeDetailed.collectAsState()
     val categories by vm.categories.collectAsState()
     val selectedIds by vm.selectedIds.collectAsState()
@@ -75,9 +70,9 @@ fun ExpensesScreen(
 
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
-    var showAdd      by remember { mutableStateOf(false) }
-    var template     by remember { mutableStateOf<Transaction?>(null) }
-    var detailTx     by remember { mutableStateOf<Transaction?>(null) }
+    var showAdd by remember { mutableStateOf(false) }
+    var template by remember { mutableStateOf<Transaction?>(null) }
+    var detailTx by remember { mutableStateOf<Transaction?>(null) }
     var createDrForTx by remember { mutableStateOf<Transaction?>(null) }
     var createDrError by remember { mutableStateOf<String?>(null) }
     // When the user taps the wishlist back-link in the transaction detail
@@ -138,7 +133,10 @@ fun ExpensesScreen(
     // Hoisted out of `items {}` and remembered so identity is stable across
     // recompositions — method references on `vm` cover the id-typed callbacks.
     val onCreateTemplate: (Transaction) -> Unit = remember {
-        { tx -> template = tx; showAdd = true }
+        { tx ->
+            template = tx
+            showAdd = true
+        }
     }
     val onShowDetails: (Transaction) -> Unit = remember {
         { tx -> detailTx = tx }
@@ -153,7 +151,7 @@ fun ExpensesScreen(
                     FloatingActionButton(
                         onClick = { vm.bulkSetHiddenSelected(targetHidden = !allHidden) },
                         containerColor = MaterialTheme.colorScheme.surface,
-                        contentColor   = MaterialTheme.colorScheme.onSurface,
+                        contentColor = MaterialTheme.colorScheme.onSurface,
                     ) {
                         Crossfade(
                             targetState = allHidden,
@@ -169,12 +167,15 @@ fun ExpensesScreen(
                     FloatingActionButton(
                         onClick = { vm.bulkDeleteSelected() },
                         containerColor = Color(0xFFE53935),
-                        contentColor   = Color.White,
+                        contentColor = Color.White,
                     ) { Icon(Icons.Default.Delete, "Удалить выбранные") }
                 }
             } else {
                 FloatingActionButton(
-                    onClick = { template = null; showAdd = true },
+                    onClick = {
+                        template = null
+                        showAdd = true
+                    },
                     containerColor = primaryColor, contentColor = Color.White
                 ) { Icon(Icons.Default.Add, "Добавить расход") }
             }
@@ -194,123 +195,123 @@ fun ExpensesScreen(
             },
             modifier = Modifier.fillMaxSize().padding(padding)
         ) {
-        // top=6 makes the first card sit 12dp below the AppBar (matches the
-        // visual weight of inter-card gaps in the LazyColumn below).
-        Column(Modifier.fillMaxSize().padding(top = 6.dp)) {
-            // Filters card — collapsed by default; toggled by the header
-            // FilterAlt button. See IncomeScreen for the same pattern.
-            androidx.compose.animation.AnimatedVisibility(
-                modifier = Modifier
-                    // Keep the filter card above the LazyColumn during item
-                    // transitions — without zIndex, an item being removed by
-                    // a filter toggle (e.g. closed-request parent disappearing)
-                    // briefly bleeds through the card area.
-                    .zIndex(1f)
-                    .background(MaterialTheme.colorScheme.background),
-                visible = filtersVisible,
-                enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
-                exit  = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut(),
-            ) {
-                Card(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            // top=6 makes the first card sit 12dp below the AppBar (matches the
+            // visual weight of inter-card gaps in the LazyColumn below).
+            Column(Modifier.fillMaxSize().padding(top = 6.dp)) {
+                // Filters card — collapsed by default; toggled by the header
+                // FilterAlt button. See IncomeScreen for the same pattern.
+                androidx.compose.animation.AnimatedVisibility(
+                    modifier = Modifier
+                        // Keep the filter card above the LazyColumn during item
+                        // transitions — without zIndex, an item being removed by
+                        // a filter toggle (e.g. closed-request parent disappearing)
+                        // briefly bleeds through the card area.
+                        .zIndex(1f)
+                        .background(MaterialTheme.colorScheme.background),
+                    visible = filtersVisible,
+                    enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
+                    exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut(),
                 ) {
-                    Column(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    Card(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     ) {
-                        DateRangePickerField(
-                            fromIso = filterFrom,
-                            toIso = filterTo,
-                            primaryColor = primaryColor,
-                            onChange = { f, t -> vm.setDateRange(f, t) },
-                        )
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
+                        Column(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            CategoryFilterField(
-                                selected = filterCats,
-                                categories = categories,
+                            DateRangePickerField(
+                                fromIso = filterFrom,
+                                toIso = filterTo,
                                 primaryColor = primaryColor,
-                                onToggle = { vm.toggleFilterCategory(it) },
-                                onClear = { vm.clearFilterCategories() },
-                                onDelete = { id -> scope.launch { vm.deleteCategory(id) } },
-                                modifier = Modifier.weight(1f),
+                                onChange = { f, t -> vm.setDateRange(f, t) },
                             )
-                            Text(
-                                "Всего: ${uiState.total}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            // Whole row is the toggle — flat, no ripple (the
-                            // small grey press tint behind the label looked
-                            // like a bug, not a feature).
-                            modifier = Modifier.clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                            ) { vm.setIncludeDetailed(!includeDetailed) },
-                        ) {
-                            Checkbox(
-                                checked = includeDetailed,
-                                onCheckedChange = null,
-                                colors = CheckboxDefaults.colors(checkedColor = primaryColor),
-                            )
-                            Text(
-                                "Показать закрытые запросы",
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        }
-                    }
-                }
-            }
-
-            when {
-                uiState.loading -> SkeletonTransactionList()
-                uiState.error != null -> ErrorView(uiState.error!!, { vm.reload() })
-                uiState.transactions.isEmpty() -> EmptyView("Нет расходов")
-                else -> LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    state = listState,
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    items(orderedTransactions, key = { it.id }) { t ->
-                        SwipeableTransactionCard(
-                            modifier = Modifier.animateItem(),
-                            transaction = t,
-                            amountColor = expenseColor,
-                            amountPrefix = "−",
-                            primaryColor = primaryColor,
-                            valuesHidden = valuesHidden,
-                            selectionMode = selectionMode,
-                            selected = t.id in selectedIds,
-                            // Yellow tint when this expense has an open
-                            // detail-request assigned to the current user.
-                            highlightWarning = t.id in myOpenParentIds,
-                            onLongPress    = vm::startSelection,
-                            onSelectToggle = vm::toggleSelection,
-                            onDelete             = vm::deleteTransaction,
-                            onToggleHidden       = vm::toggleHidden,
-                            onCreateFromTemplate = onCreateTemplate,
-                            onDetails            = onShowDetails,
-                        )
-                    }
-                    if (uiState.transactions.size < uiState.total) {
-                        item {
-                            Box(Modifier.fillMaxWidth().padding(12.dp), contentAlignment = Alignment.Center) {
-                                TextButton(onClick = { vm.loadMore() }) { Text("Загрузить ещё") }
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                CategoryFilterField(
+                                    selected = filterCats,
+                                    categories = categories,
+                                    primaryColor = primaryColor,
+                                    onToggle = { vm.toggleFilterCategory(it) },
+                                    onClear = { vm.clearFilterCategories() },
+                                    onDelete = { id -> scope.launch { vm.deleteCategory(id) } },
+                                    modifier = Modifier.weight(1f),
+                                )
+                                Text(
+                                    "Всего: ${uiState.total}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                // Whole row is the toggle — flat, no ripple (the
+                                // small grey press tint behind the label looked
+                                // like a bug, not a feature).
+                                modifier = Modifier.clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null,
+                                ) { vm.setIncludeDetailed(!includeDetailed) },
+                            ) {
+                                Checkbox(
+                                    checked = includeDetailed,
+                                    onCheckedChange = null,
+                                    colors = CheckboxDefaults.colors(checkedColor = primaryColor),
+                                )
+                                Text(
+                                    "Показать закрытые запросы",
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
                             }
                         }
                     }
-                    item { Spacer(Modifier.height(80.dp)) }
+                }
+
+                when {
+                    uiState.loading -> SkeletonTransactionList()
+                    uiState.error != null -> ErrorView(uiState.error!!, { vm.reload() })
+                    uiState.transactions.isEmpty() -> EmptyView("Нет расходов")
+                    else -> LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        state = listState,
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        items(orderedTransactions, key = { it.id }) { t ->
+                            SwipeableTransactionCard(
+                                modifier = Modifier.animateItem(),
+                                transaction = t,
+                                amountColor = expenseColor,
+                                amountPrefix = "−",
+                                primaryColor = primaryColor,
+                                valuesHidden = valuesHidden,
+                                selectionMode = selectionMode,
+                                selected = t.id in selectedIds,
+                                // Yellow tint when this expense has an open
+                                // detail-request assigned to the current user.
+                                highlightWarning = t.id in myOpenParentIds,
+                                onLongPress = vm::startSelection,
+                                onSelectToggle = vm::toggleSelection,
+                                onDelete = vm::deleteTransaction,
+                                onToggleHidden = vm::toggleHidden,
+                                onCreateFromTemplate = onCreateTemplate,
+                                onDetails = onShowDetails,
+                            )
+                        }
+                        if (uiState.transactions.size < uiState.total) {
+                            item {
+                                Box(Modifier.fillMaxWidth().padding(12.dp), contentAlignment = Alignment.Center) {
+                                    TextButton(onClick = { vm.loadMore() }) { Text("Загрузить ещё") }
+                                }
+                            }
+                        }
+                        item { Spacer(Modifier.height(80.dp)) }
+                    }
                 }
             }
-        }
         } // PullToRefreshBox
     }
 
@@ -319,10 +320,17 @@ fun ExpensesScreen(
             primaryColor = primaryColor,
             template = template,
             categories = categories,
-            onAddCategory    = { name -> vm.addCategory(name) },
+            onAddCategory = { name -> vm.addCategory(name) },
             onDeleteCategory = { id -> vm.deleteCategory(id) },
-            onDismiss = { showAdd = false; template = null },
-            onSave = { req -> vm.createTransaction(req); showAdd = false; template = null }
+            onDismiss = {
+                showAdd = false
+                template = null
+            },
+            onSave = { req ->
+                vm.createTransaction(req)
+                showAdd = false
+                template = null
+            }
         )
     }
 
@@ -346,12 +354,15 @@ fun ExpensesScreen(
             amountPrefix = "−",
             primaryColor = primaryColor,
             categories = categories,
-            onAddCategory    = { name -> vm.addCategory(name) },
+            onAddCategory = { name -> vm.addCategory(name) },
             onDeleteCategory = { id -> vm.deleteCategory(id) },
-            onSave           = { req -> vm.updateTransaction(tx.id, req) },
-            onGetUsers       = { vm.getUsers() },
+            onSave = { req -> vm.updateTransaction(tx.id, req) },
+            onGetUsers = { vm.getUsers() },
             onDismiss = { detailTx = null },
-            onSaved   = { detailTx = null; vm.reload() },
+            onSaved = {
+                detailTx = null
+                vm.reload()
+            },
             onOpenDetailRequest = { id ->
                 detailTx = null
                 onOpenDetailRequest(id)
@@ -361,11 +372,14 @@ fun ExpensesScreen(
                 detailTx = null
             },
             linkedDetailRequestId = linkedDrId,
-            linkedWishlistName    = linkedWl?.name,
-            linkedWishlistLabel   = if (linkedWl?.frequency == "once" || linkedWl?.frequency.isNullOrBlank())
+            linkedWishlistName = linkedWl?.name,
+            linkedWishlistLabel = if (linkedWl?.frequency == "once" || linkedWl?.frequency.isNullOrBlank())
                 "Желаемая покупка" else "Регулярный расход",
-            onOpenLinkedWishlist  = if (linkedWl != null) {
-                { wishlistInfo = linkedWl; detailTx = null }
+            onOpenLinkedWishlist = if (linkedWl != null) {
+                {
+                    wishlistInfo = linkedWl
+                    detailTx = null
+                }
             } else null,
         )
     }
@@ -375,7 +389,7 @@ fun ExpensesScreen(
             item = wl,
             primaryColor = primaryColor,
             categories = wishlistCategories,
-            onAddCategory    = { name -> CategoryRepository.addCategory(serverUrl, "wishlist", name) },
+            onAddCategory = { name -> CategoryRepository.addCategory(serverUrl, "wishlist", name) },
             onDeleteCategory = { id -> CategoryRepository.deleteCategory(serverUrl, "wishlist", id) },
             onSave = { req: UpdateWishlistRequest ->
                 WishlistRepository.update(
@@ -391,8 +405,8 @@ fun ExpensesScreen(
                 Unit
             },
             onGetUsers = { vm.getUsers() },
-            onDismiss  = { wishlistInfo = null },
-            onSaved    = { wishlistInfo = null },
+            onDismiss = { wishlistInfo = null },
+            onSaved = { wishlistInfo = null },
         )
     }
 
@@ -400,7 +414,10 @@ fun ExpensesScreen(
         AssigneePickerDialog(
             primaryColor = primaryColor,
             onGetUsers = { vm.getUsers() },
-            onDismiss = { createDrForTx = null; createDrError = null },
+            onDismiss = {
+                createDrForTx = null
+                createDrError = null
+            },
             onPick = { user ->
                 scope.launch {
                     try {
@@ -489,15 +506,15 @@ fun AddExpenseSheet(
      *  scenario they're in: «Фиксация оплаты» vs «Фиксация покупки». */
     title: String? = null,
 ) {
-    val scope    = rememberCoroutineScope()
-    val today    = remember { SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date()) }
-    var amount   by remember { mutableStateOf(template?.amount?.let { if (it == 0.0) "" else it.toInt().toString() } ?: "") }
-    var date     by remember { mutableStateOf(today) }
+    val scope = rememberCoroutineScope()
+    val today = remember { SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date()) }
+    var amount by remember { mutableStateOf(template?.amount?.let { if (it == 0.0) "" else it.toInt().toString() } ?: "") }
+    var date by remember { mutableStateOf(today) }
     var category by remember { mutableStateOf(template?.category ?: "") }
-    var purpose  by remember { mutableStateOf(template?.purpose ?: "") }
-    var desc     by remember { mutableStateOf(template?.description ?: "") }
+    var purpose by remember { mutableStateOf(template?.purpose ?: "") }
+    var desc by remember { mutableStateOf(template?.description ?: "") }
     var catExpanded by remember { mutableStateOf(false) }
-    var catInput    by remember { mutableStateOf(template?.category ?: "") }
+    var catInput by remember { mutableStateOf(template?.category ?: "") }
 
     val filtered = remember(catInput, categories) {
         if (catInput.isBlank()) categories
@@ -544,7 +561,10 @@ fun AddExpenseSheet(
             ) {
                 OutlinedTextField(
                     value = catInput,
-                    onValueChange = { catInput = it; catExpanded = true },
+                    onValueChange = {
+                        catInput = it
+                        catExpanded = true
+                    },
                     label = { Text("Категория") },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(catExpanded) },
                     modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable).fillMaxWidth(),
@@ -556,15 +576,28 @@ fun AddExpenseSheet(
                     filtered.forEach { cat ->
                         DropdownMenuItem(
                             text = { Text(cat.name) },
-                            onClick = { catInput = cat.name; category = cat.name; catExpanded = false },
-                            trailingIcon = if (!cat.isDefault) {{
-                                IconButton(
-                                    onClick = { scope.launch { onDeleteCategory(cat.id) }; if (category == cat.name) { category = ""; catInput = "" }; catExpanded = false },
-                                    modifier = Modifier.size(20.dp)
-                                ) {
-                                    Icon(Icons.Default.Delete, contentDescription = "Удалить", modifier = Modifier.size(14.dp))
+                            onClick = {
+                                catInput = cat.name
+                                category = cat.name
+                                catExpanded = false
+                            },
+                            trailingIcon = if (!cat.isDefault) {
+                                {
+                                    IconButton(
+                                        onClick = {
+                                            scope.launch { onDeleteCategory(cat.id) }
+                                            if (category == cat.name) {
+                                                category = ""
+                                                catInput = ""
+                                            }
+                                            catExpanded = false
+                                        },
+                                        modifier = Modifier.size(20.dp)
+                                    ) {
+                                        Icon(Icons.Default.Delete, contentDescription = "Удалить", modifier = Modifier.size(14.dp))
+                                    }
                                 }
-                            }} else null
+                            } else null
                         )
                     }
                     if (showCreate) {
@@ -575,8 +608,13 @@ fun AddExpenseSheet(
                                 catExpanded = false
                                 scope.launch {
                                     val cat = onAddCategory(name)
-                                    if (cat != null) { catInput = cat.name; category = cat.name }
-                                    else { category = name; catInput = name }
+                                    if (cat != null) {
+                                        catInput = cat.name
+                                        category = cat.name
+                                    } else {
+                                        category = name
+                                        catInput = name
+                                    }
                                 }
                             }
                         )
@@ -604,12 +642,14 @@ fun AddExpenseSheet(
                 onClick = {
                     val amtD = amount.replace(',', '.').toDoubleOrNull() ?: return@Button
                     val cat = catInput.trim().ifBlank { category }
-                    onSave(CreateTransactionRequest(
-                        type = "expense", amount = amtD, date = date,
-                        category = cat,
-                        purpose = purpose.ifBlank { null },
-                        description = desc.ifBlank { null }
-                    ))
+                    onSave(
+                        CreateTransactionRequest(
+                            type = "expense", amount = amtD, date = date,
+                            category = cat,
+                            purpose = purpose.ifBlank { null },
+                            description = desc.ifBlank { null }
+                        )
+                    )
                 },
                 modifier = Modifier.fillMaxWidth().height(48.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = primaryColor),

@@ -23,13 +23,13 @@ import website.msdnna.budget_app.ui.viewmodels.StatsPeriod
 fun StatisticsScreen(serverUrl: String, primaryColor: Color, valuesHidden: Boolean = false, pieUnitRuble: Boolean = true) {
     val vm = viewModel<StatisticsViewModel>(key = "stats:$serverUrl", factory = StatisticsViewModel.factory(serverUrl))
     val period by vm.period.collectAsState()
-    val year   by vm.year.collectAsState()
-    val month  by vm.month.collectAsState()
-    val from   by vm.from.collectAsState()
-    val to     by vm.to.collectAsState()
-    val state  by vm.state.collectAsState()
+    val year by vm.year.collectAsState()
+    val month by vm.month.collectAsState()
+    val from by vm.from.collectAsState()
+    val to by vm.to.collectAsState()
+    val state by vm.state.collectAsState()
 
-    val incomeColor  = LocalIncomeColor.current
+    val incomeColor = LocalIncomeColor.current
     val expenseColor = LocalExpenseColor.current
 
     PullToRefreshBox(
@@ -64,11 +64,11 @@ fun StatisticsScreen(serverUrl: String, primaryColor: Color, valuesHidden: Boole
                         val label = when {
                             p != period -> when (p) {
                                 StatsPeriod.MONTH -> "Месяц"
-                                StatsPeriod.YEAR  -> "Год"
+                                StatsPeriod.YEAR -> "Год"
                                 StatsPeriod.RANGE -> "Период"
                             }
                             p == StatsPeriod.MONTH -> "${monthName(month)} $year"
-                            p == StatsPeriod.YEAR  -> year.toString()
+                            p == StatsPeriod.YEAR -> year.toString()
                             else -> if (from != null && to != null)
                                 "${shortIsoDate(from!!)} — ${shortIsoDate(to!!)}"
                             else "Период"
@@ -83,7 +83,7 @@ fun StatisticsScreen(serverUrl: String, primaryColor: Color, valuesHidden: Boole
                                 label = { Text(label) },
                                 colors = FilterChipDefaults.filterChipColors(
                                     selectedContainerColor = primaryColor,
-                                    selectedLabelColor     = Color.White,
+                                    selectedLabelColor = Color.White,
                                 ),
                             )
                             // Anchor the popups to the chip itself so they
@@ -94,7 +94,10 @@ fun StatisticsScreen(serverUrl: String, primaryColor: Color, valuesHidden: Boole
                                 year = year,
                                 month = month,
                                 primaryColor = primaryColor,
-                                onSelect = { y, m -> vm.selectMonth(y, m); pickerOpen = null },
+                                onSelect = { y, m ->
+                                    vm.selectMonth(y, m)
+                                    pickerOpen = null
+                                },
                                 onDismiss = { pickerOpen = null },
                                 // Default anchor offset (trigger height + 8dp gap)
                                 // is computed inside TilePeriodPickerPopup; don't override.
@@ -105,7 +108,10 @@ fun StatisticsScreen(serverUrl: String, primaryColor: Color, valuesHidden: Boole
                                 year = year,
                                 month = month,
                                 primaryColor = primaryColor,
-                                onSelect = { y, _ -> vm.selectYear(y); pickerOpen = null },
+                                onSelect = { y, _ ->
+                                    vm.selectYear(y)
+                                    pickerOpen = null
+                                },
                                 onDismiss = { pickerOpen = null },
                                 // Default anchor offset (trigger height + 8dp gap)
                                 // is computed inside TilePeriodPickerPopup; don't override.
@@ -119,7 +125,10 @@ fun StatisticsScreen(serverUrl: String, primaryColor: Color, valuesHidden: Boole
                 initialFromIso = from,
                 initialToIso = to,
                 primaryColor = primaryColor,
-                onConfirm = { f, t -> vm.selectRange(f, t); pickerOpen = null },
+                onConfirm = { f, t ->
+                    vm.selectRange(f, t)
+                    pickerOpen = null
+                },
                 onDismiss = { pickerOpen = null },
             )
 
@@ -133,10 +142,14 @@ fun StatisticsScreen(serverUrl: String, primaryColor: Color, valuesHidden: Boole
                 else -> {
                     val s = state.summary
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        SummaryCard("Доходы", s.totalIncome, "↑", incomeColor,
-                            Modifier.weight(1f), hidden = valuesHidden)
-                        SummaryCard("Расходы", s.totalExpense, "↓", expenseColor,
-                            Modifier.weight(1f), hidden = valuesHidden)
+                        SummaryCard(
+                            "Доходы", s.totalIncome, "↑", incomeColor,
+                            Modifier.weight(1f), hidden = valuesHidden
+                        )
+                        SummaryCard(
+                            "Расходы", s.totalExpense, "↓", expenseColor,
+                            Modifier.weight(1f), hidden = valuesHidden
+                        )
                     }
                     SummaryCard(
                         "Баланс",
@@ -181,7 +194,7 @@ fun StatisticsScreen(serverUrl: String, primaryColor: Color, valuesHidden: Boole
                     }
 
                     if (state.monthly.isNotEmpty()) {
-                        val sorted  = state.monthly.sortedBy { it.month }
+                        val sorted = state.monthly.sortedBy { it.month }
                         val entries = sorted.map { m ->
                             BarEntry(monthName(m.month), m.income.toFloat(), m.expense.toFloat())
                         }

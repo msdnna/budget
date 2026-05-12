@@ -3,6 +3,8 @@ package website.msdnna.budget_app.data.discovery
 import android.content.Context
 import android.net.ConnectivityManager
 import com.google.gson.Gson
+import java.net.Inet4Address
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
@@ -16,13 +18,11 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import website.msdnna.budget_app.data.model.HealthResponse
 import website.msdnna.budget_app.data.model.VersionResponse
-import java.net.Inet4Address
-import java.util.concurrent.TimeUnit
 
 data class DiscoveredServer(
-    val host: String,        // "192.168.1.42:8082"
+    val host: String, // "192.168.1.42:8082"
     val ssl: Boolean,
-    val apiVersion: String,  // empty if /api/version was unreachable but /api/health passed
+    val apiVersion: String, // empty if /api/version was unreachable but /api/health passed
 ) {
     val url: String get() = "${if (ssl) "https" else "http"}://$host"
 }
@@ -33,8 +33,8 @@ object ServerDiscovery {
     private val PROBES: List<Pair<Int, Boolean>> = listOf(
         8082 to false,
         8080 to false,
-        80   to false,
-        443  to true,
+        80 to false,
+        443 to true,
         8443 to true,
     )
 
@@ -43,7 +43,7 @@ object ServerDiscovery {
 
     private val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(500, TimeUnit.MILLISECONDS)
-        .readTimeout(800,  TimeUnit.MILLISECONDS)
+        .readTimeout(800, TimeUnit.MILLISECONDS)
         .writeTimeout(500, TimeUnit.MILLISECONDS)
         .callTimeout(2000, TimeUnit.MILLISECONDS)
         .retryOnConnectionFailure(false)
@@ -68,9 +68,9 @@ object ServerDiscovery {
 
         val ipBytes = link.address.address
         val ipInt = ((ipBytes[0].toInt() and 0xff) shl 24) or
-                    ((ipBytes[1].toInt() and 0xff) shl 16) or
-                    ((ipBytes[2].toInt() and 0xff) shl 8)  or
-                    (ipBytes[3].toInt() and 0xff)
+            ((ipBytes[1].toInt() and 0xff) shl 16) or
+            ((ipBytes[2].toInt() and 0xff) shl 8) or
+            (ipBytes[3].toInt() and 0xff)
 
         val prefix = link.prefixLength.coerceIn(16, 32)
         val effectivePrefix = if (prefix < 24) 24 else prefix
@@ -133,7 +133,9 @@ object ServerDiscovery {
                 else gson.fromJson(resp.body.string(), VersionResponse::class.java)
                     ?.api.orEmpty()
             }
-        } catch (_: Exception) { "" }
+        } catch (_: Exception) {
+            ""
+        }
 
         return DiscoveredServer(host = "$host:$port", ssl = ssl, apiVersion = apiVersion)
     }

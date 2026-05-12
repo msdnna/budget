@@ -22,11 +22,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Backspace
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material3.*
-import androidx.compose.ui.draw.scale
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -37,7 +37,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.fragment.app.FragmentActivity
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -250,9 +249,9 @@ internal fun AnimatedPinDotsRow(
         repeat(length) { i ->
             val isFilled = i < filled
             val targetColor = when {
-                error    -> errorColor
+                error -> errorColor
                 isFilled -> primaryColor
-                else     -> baseColor
+                else -> baseColor
             }
             val animatedColor by animateColorAsState(
                 targetValue = targetColor,
@@ -386,9 +385,16 @@ private fun ForgotPinDialog(
     val passwordFocus = remember { FocusRequester() }
 
     fun recover() {
-        if (login.isBlank()) { error = "Введите логин"; return }
-        if (password.isBlank()) { error = "Введите пароль"; return }
-        error = null; loading = true
+        if (login.isBlank()) {
+            error = "Введите логин"
+            return
+        }
+        if (password.isBlank()) {
+            error = "Введите пароль"
+            return
+        }
+        error = null
+        loading = true
         scope.launch {
             try {
                 RetrofitClient.getService(serverUrl).login(LoginRequest(login.trim(), password))
@@ -417,7 +423,10 @@ private fun ForgotPinDialog(
                 )
                 OutlinedTextField(
                     value = login,
-                    onValueChange = { login = it; error = null },
+                    onValueChange = {
+                        login = it
+                        error = null
+                    },
                     label = { Text("Логин") },
                     isError = error != null,
                     singleLine = true,
@@ -435,7 +444,10 @@ private fun ForgotPinDialog(
                 )
                 OutlinedTextField(
                     value = password,
-                    onValueChange = { password = it; error = null },
+                    onValueChange = {
+                        password = it
+                        error = null
+                    },
                     label = { Text("Пароль") },
                     isError = error != null,
                     singleLine = true,

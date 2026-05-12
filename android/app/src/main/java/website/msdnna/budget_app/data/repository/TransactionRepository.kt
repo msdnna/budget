@@ -1,7 +1,8 @@
 package website.msdnna.budget_app.data.repository
 
+import java.time.Instant
+import java.util.UUID
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import website.msdnna.budget_app.data.AppContainer
 import website.msdnna.budget_app.data.db.SyncStatus
@@ -11,8 +12,6 @@ import website.msdnna.budget_app.data.db.toModel
 import website.msdnna.budget_app.data.model.Transaction
 import website.msdnna.budget_app.data.model.UserInfo
 import website.msdnna.budget_app.data.sync.SyncWorker
-import java.time.Instant
-import java.util.UUID
 
 /**
  * Offline-first store for transactions. Reads come from Room as a Flow so the
@@ -131,10 +130,12 @@ object TransactionRepository {
             dao.deleteHard(id)
             return
         }
-        dao.update(existing.copy(
-            syncStatus = SyncStatus.PENDING_DELETE,
-            updatedAt = Instant.now().toString(),
-        ))
+        dao.update(
+            existing.copy(
+                syncStatus = SyncStatus.PENDING_DELETE,
+                updatedAt = Instant.now().toString(),
+            )
+        )
         SyncWorker.enqueue(AppContainer.appContext)
     }
 
@@ -169,4 +170,3 @@ object TransactionRepository {
         dao.upsert(t.toEntity(SyncStatus.SYNCED))
     }
 }
-

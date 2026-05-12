@@ -3,6 +3,7 @@ package website.msdnna.budget_app.ui.viewmodels
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import java.util.Calendar
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -14,7 +15,6 @@ import website.msdnna.budget_app.data.preferences.sortedByRecentUse
 import website.msdnna.budget_app.data.repository.CategoryRepository
 import website.msdnna.budget_app.data.repository.TransactionRepository
 import website.msdnna.budget_app.data.sync.SyncWorker
-import java.util.Calendar
 
 data class IncomeUiState(
     val transactions: List<Transaction> = emptyList(),
@@ -26,24 +26,24 @@ data class IncomeUiState(
 class IncomeViewModel(private val serverUrl: String) : ViewModel() {
     private val now = Calendar.getInstance()
 
-    private val _filterCats  = MutableStateFlow<Set<String>>(emptySet())
-    private val _filterFrom  = MutableStateFlow<String?>(null)
-    private val _filterTo    = MutableStateFlow<String?>(null)
-    private val _ibYear      = MutableStateFlow(now.get(Calendar.YEAR))
-    private val _ibMonth     = MutableStateFlow(now.get(Calendar.MONTH) + 1)
+    private val _filterCats = MutableStateFlow<Set<String>>(emptySet())
+    private val _filterFrom = MutableStateFlow<String?>(null)
+    private val _filterTo = MutableStateFlow<String?>(null)
+    private val _ibYear = MutableStateFlow(now.get(Calendar.YEAR))
+    private val _ibMonth = MutableStateFlow(now.get(Calendar.MONTH) + 1)
     private val _selectedIds = MutableStateFlow<Set<String>>(emptySet())
 
-    val filterCats  = _filterCats.asStateFlow()
-    val filterFrom  = _filterFrom.asStateFlow()
-    val filterTo    = _filterTo.asStateFlow()
+    val filterCats = _filterCats.asStateFlow()
+    val filterFrom = _filterFrom.asStateFlow()
+    val filterTo = _filterTo.asStateFlow()
     val selectedIds = _selectedIds.asStateFlow()
     val categories: StateFlow<List<Category>> = combine(
         CategoryRepository.income,
         CategoryUsage.usage,
     ) { cats, usage -> cats.sortedByRecentUse(usage["income"].orEmpty()) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
-    val ibYear      = _ibYear.asStateFlow()
-    val ibMonth     = _ibMonth.asStateFlow()
+    val ibYear = _ibYear.asStateFlow()
+    val ibMonth = _ibMonth.asStateFlow()
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val uiState: StateFlow<IncomeUiState> = combine(_filterCats, _filterFrom, _filterTo) { c, f, t ->
@@ -78,14 +78,19 @@ class IncomeViewModel(private val serverUrl: String) : ViewModel() {
     private val _page = MutableStateFlow(1)
     val page = _page.asStateFlow()
 
-    fun reload() { SyncWorker.enqueue(AppContainer.appContext) }
+    fun reload() {
+        SyncWorker.enqueue(AppContainer.appContext)
+    }
 
     fun toggleFilterCategory(name: String) {
         val cur = _filterCats.value
         _filterCats.value = if (name in cur) cur - name else cur + name
         _page.value = 1
     }
-    fun clearFilterCategories() { _filterCats.value = emptySet(); _page.value = 1 }
+    fun clearFilterCategories() {
+        _filterCats.value = emptySet()
+        _page.value = 1
+    }
     fun setDateRange(from: String?, to: String?) {
         _filterFrom.value = from
         _filterTo.value = to
@@ -94,16 +99,23 @@ class IncomeViewModel(private val serverUrl: String) : ViewModel() {
     fun loadMore() { /* no-op: Room observes full list */ }
 
     fun ibNavigateBack() {
-        if (_ibMonth.value == 1) { _ibMonth.value = 12; _ibYear.value-- } else _ibMonth.value--
+        if (_ibMonth.value == 1) {
+            _ibMonth.value = 12
+            _ibYear.value--
+        } else _ibMonth.value--
     }
 
     fun ibNavigateForward() {
-        if (_ibMonth.value == 12) { _ibMonth.value = 1; _ibYear.value++ } else _ibMonth.value++
+        if (_ibMonth.value == 12) {
+            _ibMonth.value = 1
+            _ibYear.value++
+        } else _ibMonth.value++
     }
 
     fun saveInitialBalance(amount: Double) {
         viewModelScope.launch {
-            val year = _ibYear.value; val month = _ibMonth.value
+            val year = _ibYear.value
+            val month = _ibMonth.value
             val date = "%04d-%02d-01".format(year, month)
             val current = ibRecord.value
             if (current != null) {
@@ -136,7 +148,9 @@ class IncomeViewModel(private val serverUrl: String) : ViewModel() {
         _selectedIds.value = if (id in cur) cur - id else cur + id
     }
 
-    fun clearSelection() { _selectedIds.value = emptySet() }
+    fun clearSelection() {
+        _selectedIds.value = emptySet()
+    }
 
     fun bulkDeleteSelected() {
         val ids = _selectedIds.value

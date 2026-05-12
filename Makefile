@@ -116,8 +116,22 @@ lint-web: ## Run ESLint + Prettier check on the Vue frontend
 	cd $(FRONTEND_DIR) && npm run lint
 	cd $(FRONTEND_DIR) && npm run format:check
 
+# Android Gradle нуждается в JAVA_HOME/ANDROID_HOME + SOCKS5 для подкачки
+# артефактов. Источник — android/local.env (gitignored).
+ANDROID_GRADLE := cd $(ANDROID_DIR) && set -a && . ./local.env && set +a && \
+  GRADLE_OPTS="$${SOCKS_PROXY_HOST:+-DsocksProxyHost=$$SOCKS_PROXY_HOST -DsocksProxyPort=$$SOCKS_PROXY_PORT -DsocksProxyVersion=5} -Dorg.gradle.internal.http.socketTimeout=300000" \
+  ./gradlew --no-daemon
+
+.PHONY: lint-android
+lint-android: ## Run ktlint + detekt on the Android app
+	@$(ANDROID_GRADLE) :app:ktlintCheck :app:detekt
+
+.PHONY: format-android
+format-android: ## Auto-format Kotlin sources via ktlint
+	@$(ANDROID_GRADLE) :app:ktlintFormat
+
 .PHONY: lint
-lint: lint-backend lint-web ## Run all linters (backend + web; android coming)
+lint: lint-backend lint-web lint-android ## Run all linters (backend + web + android)
 
 .PHONY: test-backend
 test-backend: ## Run Go unit tests (skips integration tests requiring Docker)

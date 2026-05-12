@@ -55,7 +55,7 @@ enum class TilePickerType { MONTH, YEAR }
 fun TilePeriodPicker(
     type: TilePickerType,
     year: Int,
-    month: Int,           // 1..12; ignored when type == YEAR
+    month: Int, // 1..12; ignored when type == YEAR
     primaryColor: Color,
     onSelect: (year: Int, month: Int) -> Unit,
     modifier: Modifier = Modifier,
@@ -293,9 +293,9 @@ private fun TileItem(
     val bg = if (cell.active) primaryColor else Color.Transparent
     val fg = when {
         cell.active -> Color.White
-        cell.today  -> primaryColor
-        cell.muted  -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-        else        -> MaterialTheme.colorScheme.onSurface
+        cell.today -> primaryColor
+        cell.muted -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+        else -> MaterialTheme.colorScheme.onSurface
     }
     val borderMod = if (cell.today && !cell.active) {
         Modifier.border(1.dp, primaryColor, RoundedCornerShape(6.dp))
@@ -411,24 +411,24 @@ fun DateRangePickerDialog(
 
     val onPrimary = Color.White
     val pickerColors = DatePickerDefaults.colors(
-        containerColor              = MaterialTheme.colorScheme.surface,
-        titleContentColor           = MaterialTheme.colorScheme.onSurfaceVariant,
-        headlineContentColor        = MaterialTheme.colorScheme.onSurface,
-        weekdayContentColor         = MaterialTheme.colorScheme.onSurfaceVariant,
-        subheadContentColor         = MaterialTheme.colorScheme.onSurface,
-        navigationContentColor      = MaterialTheme.colorScheme.onSurface,
-        yearContentColor            = MaterialTheme.colorScheme.onSurface,
-        currentYearContentColor     = primaryColor,
-        selectedYearContentColor    = onPrimary,
-        selectedYearContainerColor  = primaryColor,
-        dayContentColor             = MaterialTheme.colorScheme.onSurface,
-        selectedDayContentColor     = onPrimary,
-        selectedDayContainerColor   = primaryColor,
-        todayContentColor           = primaryColor,
-        todayDateBorderColor        = primaryColor,
+        containerColor = MaterialTheme.colorScheme.surface,
+        titleContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        headlineContentColor = MaterialTheme.colorScheme.onSurface,
+        weekdayContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        subheadContentColor = MaterialTheme.colorScheme.onSurface,
+        navigationContentColor = MaterialTheme.colorScheme.onSurface,
+        yearContentColor = MaterialTheme.colorScheme.onSurface,
+        currentYearContentColor = primaryColor,
+        selectedYearContentColor = onPrimary,
+        selectedYearContainerColor = primaryColor,
+        dayContentColor = MaterialTheme.colorScheme.onSurface,
+        selectedDayContentColor = onPrimary,
+        selectedDayContainerColor = primaryColor,
+        todayContentColor = primaryColor,
+        todayDateBorderColor = primaryColor,
         dayInSelectionRangeContainerColor = primaryColor.copy(alpha = 0.20f),
-        dayInSelectionRangeContentColor   = MaterialTheme.colorScheme.onSurface,
-        dividerColor                = MaterialTheme.colorScheme.outlineVariant,
+        dayInSelectionRangeContentColor = MaterialTheme.colorScheme.onSurface,
+        dividerColor = MaterialTheme.colorScheme.outlineVariant,
     )
 
     DatePickerDialog(

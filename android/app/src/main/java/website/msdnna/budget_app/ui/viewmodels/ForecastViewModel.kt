@@ -31,10 +31,11 @@ class ForecastViewModel(private val serverUrl: String) : ViewModel() {
     private val service = RetrofitClient.getService(serverUrl)
 
     private val _refreshTick = MutableStateFlow(0)
-    private val _forecast    = MutableStateFlow<ForecastData?>(null)
+    private val _forecast = MutableStateFlow<ForecastData?>(null)
     private val _forecastLoading = MutableStateFlow(true)
-    private val _forecastError   = MutableStateFlow<String?>(null)
-    private val _selectedIds     = MutableStateFlow<Set<String>>(emptySet())
+    private val _forecastError = MutableStateFlow<String?>(null)
+    private val _selectedIds = MutableStateFlow<Set<String>>(emptySet())
+
     // Separate selection bucket for «Регулярные расходы» — bulk operations
     // there are different (cancel paid / delete) so we keep selections from
     // bleeding into the wishlist FAB and vice versa.
@@ -77,7 +78,9 @@ class ForecastViewModel(private val serverUrl: String) : ViewModel() {
         }
     }
 
-    fun reload() { _refreshTick.value += 1 }
+    fun reload() {
+        _refreshTick.value += 1
+    }
 
     // togglePurchased был удалён в android 1.27.0 — теперь «Куплено»
     // открывает префилл-форму (purchaseWishlist) с linked tx, а «Не
@@ -97,7 +100,9 @@ class ForecastViewModel(private val serverUrl: String) : ViewModel() {
         _selectedIds.value = if (id in cur) cur - id else cur + id
     }
 
-    fun clearSelection() { _selectedIds.value = emptySet() }
+    fun clearSelection() {
+        _selectedIds.value = emptySet()
+    }
 
     // ── Regular-items selection (parallel to wishlist selection above). ──
     fun startRegularSelection(id: String) {
@@ -110,7 +115,9 @@ class ForecastViewModel(private val serverUrl: String) : ViewModel() {
         _selectedRegularIds.value = if (id in cur) cur - id else cur + id
     }
 
-    fun clearRegularSelection() { _selectedRegularIds.value = emptySet() }
+    fun clearRegularSelection() {
+        _selectedRegularIds.value = emptySet()
+    }
 
     fun bulkDeleteSelectedRegular() {
         val ids = _selectedRegularIds.value

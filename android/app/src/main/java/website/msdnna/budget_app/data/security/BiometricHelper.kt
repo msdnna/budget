@@ -9,7 +9,7 @@ import androidx.fragment.app.FragmentActivity
 object BiometricHelper {
     private const val ALLOWED =
         BiometricManager.Authenticators.BIOMETRIC_STRONG or
-        BiometricManager.Authenticators.BIOMETRIC_WEAK
+            BiometricManager.Authenticators.BIOMETRIC_WEAK
 
     fun isAvailable(context: Context): Boolean {
         val mgr = BiometricManager.from(context)

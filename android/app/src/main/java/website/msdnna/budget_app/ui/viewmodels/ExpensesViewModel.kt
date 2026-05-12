@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import website.msdnna.budget_app.data.AppContainer
 import website.msdnna.budget_app.data.api.RetrofitClient
 import website.msdnna.budget_app.data.model.*
 import website.msdnna.budget_app.data.preferences.CategoryUsage
@@ -13,7 +14,6 @@ import website.msdnna.budget_app.data.preferences.sortedByRecentUse
 import website.msdnna.budget_app.data.repository.CategoryRepository
 import website.msdnna.budget_app.data.repository.TransactionRepository
 import website.msdnna.budget_app.data.sync.SyncWorker
-import website.msdnna.budget_app.data.AppContainer
 
 data class ExpensesUiState(
     val transactions: List<Transaction> = emptyList(),
@@ -30,15 +30,15 @@ data class ExpensesUiState(
  */
 class ExpensesViewModel(private val serverUrl: String) : ViewModel() {
 
-    private val _filterCats  = MutableStateFlow<Set<String>>(emptySet())
-    private val _filterFrom  = MutableStateFlow<String?>(null)
-    private val _filterTo    = MutableStateFlow<String?>(null)
+    private val _filterCats = MutableStateFlow<Set<String>>(emptySet())
+    private val _filterFrom = MutableStateFlow<String?>(null)
+    private val _filterTo = MutableStateFlow<String?>(null)
     private val _selectedIds = MutableStateFlow<Set<String>>(emptySet())
     private val _includeDetailed = MutableStateFlow(false)
 
-    val filterCats  = _filterCats.asStateFlow()
-    val filterFrom  = _filterFrom.asStateFlow()
-    val filterTo    = _filterTo.asStateFlow()
+    val filterCats = _filterCats.asStateFlow()
+    val filterFrom = _filterFrom.asStateFlow()
+    val filterTo = _filterTo.asStateFlow()
     val selectedIds = _selectedIds.asStateFlow()
     val includeDetailed = _includeDetailed.asStateFlow()
     val categories: StateFlow<List<Category>> = combine(
@@ -64,7 +64,9 @@ class ExpensesViewModel(private val serverUrl: String) : ViewModel() {
 
     private data class FilterTuple(val cats: Set<String>, val from: String?, val to: String?, val includeDetailed: Boolean)
 
-    fun setIncludeDetailed(v: Boolean) { _includeDetailed.value = v }
+    fun setIncludeDetailed(v: Boolean) {
+        _includeDetailed.value = v
+    }
 
     // Keep page state for compatibility with existing UI scaffolding; pagination is
     // a no-op now since Room observes the whole list.
@@ -81,7 +83,10 @@ class ExpensesViewModel(private val serverUrl: String) : ViewModel() {
         _filterCats.value = if (name in cur) cur - name else cur + name
         _page.value = 1
     }
-    fun clearFilterCategories() { _filterCats.value = emptySet(); _page.value = 1 }
+    fun clearFilterCategories() {
+        _filterCats.value = emptySet()
+        _page.value = 1
+    }
     fun setDateRange(from: String?, to: String?) {
         _filterFrom.value = from
         _filterTo.value = to
@@ -106,7 +111,9 @@ class ExpensesViewModel(private val serverUrl: String) : ViewModel() {
         _selectedIds.value = if (id in cur) cur - id else cur + id
     }
 
-    fun clearSelection() { _selectedIds.value = emptySet() }
+    fun clearSelection() {
+        _selectedIds.value = emptySet()
+    }
 
     fun bulkDeleteSelected() {
         val ids = _selectedIds.value

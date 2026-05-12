@@ -3,16 +3,16 @@ package website.msdnna.budget_app.data.model
 import com.google.gson.annotations.SerializedName
 
 data class UserInfo(
-    @SerializedName("user_id")      val userId: String = "",
+    @SerializedName("user_id") val userId: String = "",
     @SerializedName("display_name") val displayName: String = "",
-    @SerializedName("avatar_url")   val avatarUrl: String? = null
+    @SerializedName("avatar_url") val avatarUrl: String? = null
 )
 
 data class HealthResponse(val ok: Boolean, val app: String)
 
 data class VersionResponse(
     val api: String = "",
-    @SerializedName("android_latest")       val androidLatest: String = "",
+    @SerializedName("android_latest") val androidLatest: String = "",
     @SerializedName("android_min_required") val androidMinRequired: String = "",
 )
 
@@ -23,10 +23,10 @@ data class LoginRequest(
 
 data class LoginResponse(
     val token: String = "",
-    @SerializedName("user_id")      val userId: String = "",
+    @SerializedName("user_id") val userId: String = "",
     @SerializedName("display_name") val displayName: String = "",
-    @SerializedName("avatar_url")   val avatarUrl: String? = null,
-    @SerializedName("expires_at")   val expiresAt: String = ""
+    @SerializedName("avatar_url") val avatarUrl: String? = null,
+    @SerializedName("expires_at") val expiresAt: String = ""
 )
 
 data class Transaction(
@@ -60,7 +60,7 @@ data class DetailRequest(
     @SerializedName("target_amount") val targetAmount: Double = 0.0,
     val assignee: UserInfo? = null,
     val creator: UserInfo? = null,
-    val status: String = "",                 // "open" | "closed"
+    val status: String = "", // "open" | "closed"
     @SerializedName("created_at") val createdAt: String = "",
     @SerializedName("closed_at") val closedAt: String? = null,
     @SerializedName("updated_at") val updatedAt: String = "",
@@ -74,11 +74,11 @@ data class DetailRequestView(
 
 data class CreateDetailRequestPayload(
     @SerializedName("transaction_id") val transactionId: String,
-    @SerializedName("assignee_id")    val assigneeId: String,
+    @SerializedName("assignee_id") val assigneeId: String,
 )
 
 data class TransactionListResponse(
-    val data: List<Transaction>? = null,   // Go sends null for empty slice; use .orEmpty()
+    val data: List<Transaction>? = null, // Go sends null for empty slice; use .orEmpty()
     val total: Int = 0,
     val page: Int = 1,
     val limit: Int = 20
@@ -231,9 +231,9 @@ data class SyncPullResponse(
 )
 
 data class SyncOperation(
-    @SerializedName("op_id")        val opId: String,
-    val type: String,                          // "create" | "update" | "delete"
-    val entity: String,                        // "transaction" | "wishlist" | "category"
+    @SerializedName("op_id") val opId: String,
+    val type: String, // "create" | "update" | "delete"
+    val entity: String, // "transaction" | "wishlist" | "category"
     val id: String,
     @SerializedName("base_version") val baseVersion: Int = 0,
     val force: Boolean = false,
@@ -243,8 +243,8 @@ data class SyncOperation(
 data class SyncPushRequest(val operations: List<SyncOperation>)
 
 data class SyncOperationResult(
-    @SerializedName("op_id")  val opId: String = "",
-    val status: String = "",                   // "ok" | "conflict" | "error"
+    @SerializedName("op_id") val opId: String = "",
+    val status: String = "", // "ok" | "conflict" | "error"
     val record: Map<String, @JvmSuppressWildcards Any?>? = null,
     val error: String? = null,
 )

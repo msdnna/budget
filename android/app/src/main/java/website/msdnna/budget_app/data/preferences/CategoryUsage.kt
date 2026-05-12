@@ -78,6 +78,8 @@ object CategoryUsage {
  * default-first then alphabetical (the previous static order).
  */
 fun List<Category>.sortedByRecentUse(usageForSection: Map<String, Long>): List<Category> =
-    sortedWith(compareByDescending<Category> { usageForSection[it.name] ?: 0L }
-        .thenByDescending { it.isDefault }
-        .thenBy { it.name.lowercase() })
+    sortedWith(
+        compareByDescending<Category> { usageForSection[it.name] ?: 0L }
+            .thenByDescending { it.isDefault }
+            .thenBy { it.name.lowercase() }
+    )

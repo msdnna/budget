@@ -1,18 +1,18 @@
 package website.msdnna.budget_app.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
-import androidx.activity.compose.BackHandler
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -23,46 +23,46 @@ import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Assignment
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import java.text.SimpleDateFormat
+import java.util.*
+import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 import website.msdnna.budget_app.data.model.Category
 import website.msdnna.budget_app.data.model.CreateTransactionRequest
 import website.msdnna.budget_app.data.model.Transaction
 import website.msdnna.budget_app.data.model.UpdateTransactionRequest
 import website.msdnna.budget_app.data.model.UserInfo
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import website.msdnna.budget_app.ui.components.*
 import website.msdnna.budget_app.ui.theme.LocalIncomeColor
 import website.msdnna.budget_app.ui.viewmodels.IncomeViewModel
-import androidx.lifecycle.viewmodel.compose.viewModel
-import java.text.SimpleDateFormat
-import java.util.*
-import kotlin.math.roundToInt
 
 // Colours for swipe action backgrounds
-private val ColourHide     = Color(0xFF1976D2)
+private val ColourHide = Color(0xFF1976D2)
 private val ColourTemplate = Color(0xFFF59E0B)
-private val ColourDelete   = Color(0xFFE53935)
+private val ColourDelete = Color(0xFFE53935)
 
 @Composable
 fun IncomeScreen(
@@ -73,22 +73,22 @@ fun IncomeScreen(
     onSelectionCountChange: (Int) -> Unit = {},
 ) {
     val vm = viewModel<IncomeViewModel>(key = "income:$serverUrl", factory = IncomeViewModel.factory(serverUrl))
-    val uiState    by vm.uiState.collectAsState()
+    val uiState by vm.uiState.collectAsState()
     val filterCats by vm.filterCats.collectAsState()
     val filterFrom by vm.filterFrom.collectAsState()
-    val filterTo   by vm.filterTo.collectAsState()
+    val filterTo by vm.filterTo.collectAsState()
     val categories by vm.categories.collectAsState()
-    val ibYear     by vm.ibYear.collectAsState()
-    val ibMonth    by vm.ibMonth.collectAsState()
-    val ibRecord   by vm.ibRecord.collectAsState()
+    val ibYear by vm.ibYear.collectAsState()
+    val ibMonth by vm.ibMonth.collectAsState()
+    val ibRecord by vm.ibRecord.collectAsState()
     val selectedIds by vm.selectedIds.collectAsState()
     val selectionMode = selectedIds.isNotEmpty()
 
     val scope = rememberCoroutineScope()
-    var showAdd      by remember { mutableStateOf(false) }
-    var template     by remember { mutableStateOf<Transaction?>(null) }
-    var detailTx     by remember { mutableStateOf<Transaction?>(null) }
-    var showIbForm   by remember { mutableStateOf(false) }
+    var showAdd by remember { mutableStateOf(false) }
+    var template by remember { mutableStateOf<Transaction?>(null) }
+    var detailTx by remember { mutableStateOf<Transaction?>(null) }
+    var showIbForm by remember { mutableStateOf(false) }
 
     val incomeColor = LocalIncomeColor.current
 
@@ -105,7 +105,10 @@ fun IncomeScreen(
     // LazyColumn passes the same identity to every row across recompositions
     // (method-reference style for VM ops handles the id-typed callbacks).
     val onCreateTemplate: (Transaction) -> Unit = remember {
-        { tx -> template = tx; showAdd = true }
+        { tx ->
+            template = tx
+            showAdd = true
+        }
     }
     val onShowDetails: (Transaction) -> Unit = remember {
         { tx -> detailTx = tx }
@@ -124,7 +127,7 @@ fun IncomeScreen(
                     FloatingActionButton(
                         onClick = { vm.bulkSetHiddenSelected(targetHidden = !allHidden) },
                         containerColor = MaterialTheme.colorScheme.surface,
-                        contentColor   = MaterialTheme.colorScheme.onSurface,
+                        contentColor = MaterialTheme.colorScheme.onSurface,
                     ) {
                         Crossfade(
                             targetState = allHidden,
@@ -140,12 +143,15 @@ fun IncomeScreen(
                     FloatingActionButton(
                         onClick = { vm.bulkDeleteSelected() },
                         containerColor = Color(0xFFE53935),
-                        contentColor   = Color.White,
+                        contentColor = Color.White,
                     ) { Icon(Icons.Default.Delete, "Удалить выбранные") }
                 }
             } else {
                 FloatingActionButton(
-                    onClick = { template = null; showAdd = true },
+                    onClick = {
+                        template = null
+                        showAdd = true
+                    },
                     containerColor = primaryColor, contentColor = Color.White
                 ) { Icon(Icons.Default.Add, "Добавить доход") }
             }
@@ -157,180 +163,180 @@ fun IncomeScreen(
             onRefresh = { vm.reload() },
             modifier = Modifier.fillMaxSize().padding(padding)
         ) {
-        // top=6 makes the first card sit 12dp below the AppBar (matches the
-        // visual weight of inter-card gaps in the LazyColumn below).
-        Column(Modifier.fillMaxSize().padding(top = 6.dp)) {
-            // Initial balance card
-            Card(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp).fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+            // top=6 makes the first card sit 12dp below the AppBar (matches the
+            // visual weight of inter-card gaps in the LazyColumn below).
+            Column(Modifier.fillMaxSize().padding(top = 6.dp)) {
+                // Initial balance card
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                 ) {
-                    Column {
-                        Text(
-                            "Баланс на начало месяца",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp).fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column {
+                            Text(
+                                "Баланс на начало месяца",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                // Month navigator
+                                IconButton(onClick = { vm.ibNavigateBack() }, modifier = Modifier.size(24.dp)) { Text("‹") }
+                                Text(
+                                    "${monthName(ibMonth)} $ibYear",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                                IconButton(onClick = { vm.ibNavigateForward() }, modifier = Modifier.size(24.dp)) { Text("›") }
+                            }
+                        }
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            // Month navigator
-                            IconButton(onClick = { vm.ibNavigateBack() }, modifier = Modifier.size(24.dp)) { Text("‹") }
-                            Text(
-                                "${monthName(ibMonth)} $ibYear",
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                            IconButton(onClick = { vm.ibNavigateForward() }, modifier = Modifier.size(24.dp)) { Text("›") }
-                        }
-                    }
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        // Three-state crossfade: not-set / hidden / value.
-                        // Animating both the placeholder swap and the amount
-                        // itself so set/change feels continuous.
-                        AnimatedContent(
-                            targetState = Triple(ibRecord != null, valuesHidden, ibRecord?.amount),
-                            transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(180)) },
-                            label = "ibValue",
-                        ) { (hasValue, hidden, _) ->
-                            if (!hasValue) {
-                                Text(
-                                    "Не задан",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            } else if (hidden) {
-                                Box(
-                                    Modifier.height(18.dp).width(70.dp)
-                                        .clip(androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
-                                        .background(primaryColor.copy(alpha = 0.22f))
-                                )
-                            } else {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    AnimatedAmountText(
-                                        amount = ibRecord?.amount ?: 0.0,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = primaryColor,
-                                    )
+                            // Three-state crossfade: not-set / hidden / value.
+                            // Animating both the placeholder swap and the amount
+                            // itself so set/change feels continuous.
+                            AnimatedContent(
+                                targetState = Triple(ibRecord != null, valuesHidden, ibRecord?.amount),
+                                transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(180)) },
+                                label = "ibValue",
+                            ) { (hasValue, hidden, _) ->
+                                if (!hasValue) {
                                     Text(
-                                        " ₽",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = primaryColor,
+                                        "Не задан",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
+                                } else if (hidden) {
+                                    Box(
+                                        Modifier.height(18.dp).width(70.dp)
+                                            .clip(androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
+                                            .background(primaryColor.copy(alpha = 0.22f))
+                                    )
+                                } else {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        AnimatedAmountText(
+                                            amount = ibRecord?.amount ?: 0.0,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = primaryColor,
+                                        )
+                                        Text(
+                                            " ₽",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = primaryColor,
+                                        )
+                                    }
+                                }
+                            }
+                            Button(
+                                onClick = { showIbForm = true },
+                                colors = ButtonDefaults.buttonColors(containerColor = primaryColor),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                modifier = Modifier.height(32.dp)
+                            ) {
+                                Crossfade(
+                                    targetState = ibRecord != null,
+                                    animationSpec = tween(180),
+                                    label = "ibBtn",
+                                ) { hasIb ->
+                                    Text(if (hasIb) "Изменить" else "Задать", fontSize = 12.sp)
                                 }
                             }
                         }
-                        Button(
-                            onClick = { showIbForm = true },
-                            colors = ButtonDefaults.buttonColors(containerColor = primaryColor),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                            modifier = Modifier.height(32.dp)
-                        ) {
-                            Crossfade(
-                                targetState = ibRecord != null,
-                                animationSpec = tween(180),
-                                label = "ibBtn",
-                            ) { hasIb ->
-                                Text(if (hasIb) "Изменить" else "Задать", fontSize = 12.sp)
-                            }
-                        }
                     }
                 }
-            }
 
-            // Filters card — collapsed by default; toggled by the header
-            // FilterAlt button. Animates open/closed with shrink/expand so the
-            // list below slides up to fill the freed space.
-            androidx.compose.animation.AnimatedVisibility(
-                visible = filtersVisible,
-                enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
-                exit  = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut(),
-            ) {
-                Card(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                // Filters card — collapsed by default; toggled by the header
+                // FilterAlt button. Animates open/closed with shrink/expand so the
+                // list below slides up to fill the freed space.
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = filtersVisible,
+                    enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
+                    exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut(),
                 ) {
-                    Column(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    Card(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     ) {
-                        DateRangePickerField(
-                            fromIso = filterFrom,
-                            toIso = filterTo,
-                            primaryColor = primaryColor,
-                            onChange = { f, t -> vm.setDateRange(f, t) },
-                        )
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
+                        Column(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            CategoryFilterField(
-                                selected = filterCats,
-                                categories = categories,
+                            DateRangePickerField(
+                                fromIso = filterFrom,
+                                toIso = filterTo,
                                 primaryColor = primaryColor,
-                                onToggle = { vm.toggleFilterCategory(it) },
-                                onClear = { vm.clearFilterCategories() },
-                                onDelete = { id -> scope.launch { vm.deleteCategory(id) } },
-                                modifier = Modifier.weight(1f),
+                                onChange = { f, t -> vm.setDateRange(f, t) },
                             )
-                            Text(
-                                "Всего: ${uiState.total}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                }
-            }
-
-            when {
-                uiState.loading -> SkeletonTransactionList()
-                uiState.error != null -> ErrorView(uiState.error!!, { vm.reload() })
-                uiState.transactions.isEmpty() -> EmptyView("Нет доходов")
-                else -> LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    items(uiState.transactions, key = { it.id }) { t ->
-                        SwipeableTransactionCard(
-                            modifier = Modifier.animateItem(),
-                            transaction = t,
-                            amountColor = incomeColor,
-                            amountPrefix = "+",
-                            primaryColor = primaryColor,
-                            valuesHidden = valuesHidden,
-                            selectionMode = selectionMode,
-                            selected = t.id in selectedIds,
-                            onLongPress    = vm::startSelection,
-                            onSelectToggle = vm::toggleSelection,
-                            onDelete             = vm::deleteTransaction,
-                            onToggleHidden       = vm::toggleHidden,
-                            onCreateFromTemplate = onCreateTemplate,
-                            onDetails            = onShowDetails,
-                        )
-                    }
-                    if (uiState.transactions.size < uiState.total) {
-                        item {
-                            Box(Modifier.fillMaxWidth().padding(12.dp), contentAlignment = Alignment.Center) {
-                                TextButton(onClick = { vm.loadMore() }) { Text("Загрузить ещё") }
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                CategoryFilterField(
+                                    selected = filterCats,
+                                    categories = categories,
+                                    primaryColor = primaryColor,
+                                    onToggle = { vm.toggleFilterCategory(it) },
+                                    onClear = { vm.clearFilterCategories() },
+                                    onDelete = { id -> scope.launch { vm.deleteCategory(id) } },
+                                    modifier = Modifier.weight(1f),
+                                )
+                                Text(
+                                    "Всего: ${uiState.total}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
                             }
                         }
                     }
-                    item { Spacer(Modifier.height(80.dp)) }
+                }
+
+                when {
+                    uiState.loading -> SkeletonTransactionList()
+                    uiState.error != null -> ErrorView(uiState.error!!, { vm.reload() })
+                    uiState.transactions.isEmpty() -> EmptyView("Нет доходов")
+                    else -> LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        items(uiState.transactions, key = { it.id }) { t ->
+                            SwipeableTransactionCard(
+                                modifier = Modifier.animateItem(),
+                                transaction = t,
+                                amountColor = incomeColor,
+                                amountPrefix = "+",
+                                primaryColor = primaryColor,
+                                valuesHidden = valuesHidden,
+                                selectionMode = selectionMode,
+                                selected = t.id in selectedIds,
+                                onLongPress = vm::startSelection,
+                                onSelectToggle = vm::toggleSelection,
+                                onDelete = vm::deleteTransaction,
+                                onToggleHidden = vm::toggleHidden,
+                                onCreateFromTemplate = onCreateTemplate,
+                                onDetails = onShowDetails,
+                            )
+                        }
+                        if (uiState.transactions.size < uiState.total) {
+                            item {
+                                Box(Modifier.fillMaxWidth().padding(12.dp), contentAlignment = Alignment.Center) {
+                                    TextButton(onClick = { vm.loadMore() }) { Text("Загрузить ещё") }
+                                }
+                            }
+                        }
+                        item { Spacer(Modifier.height(80.dp)) }
+                    }
                 }
             }
-        }
         } // PullToRefreshBox
     }
 
@@ -339,10 +345,17 @@ fun IncomeScreen(
             primaryColor = primaryColor,
             template = template,
             categories = categories,
-            onAddCategory    = { name -> vm.addCategory(name) },
+            onAddCategory = { name -> vm.addCategory(name) },
             onDeleteCategory = { id -> vm.deleteCategory(id) },
-            onDismiss = { showAdd = false; template = null },
-            onSave = { req -> vm.createTransaction(req); showAdd = false; template = null }
+            onDismiss = {
+                showAdd = false
+                template = null
+            },
+            onSave = { req ->
+                vm.createTransaction(req)
+                showAdd = false
+                template = null
+            }
         )
     }
 
@@ -353,12 +366,15 @@ fun IncomeScreen(
             amountPrefix = "+",
             primaryColor = primaryColor,
             categories = categories,
-            onAddCategory    = { name -> vm.addCategory(name) },
+            onAddCategory = { name -> vm.addCategory(name) },
             onDeleteCategory = { id -> vm.deleteCategory(id) },
-            onSave     = { req -> vm.updateTransaction(tx.id, req) },
+            onSave = { req -> vm.updateTransaction(tx.id, req) },
             onGetUsers = { vm.getUsers() },
-            onDismiss  = { detailTx = null },
-            onSaved    = { detailTx = null; vm.reload() }
+            onDismiss = { detailTx = null },
+            onSaved = {
+                detailTx = null
+                vm.reload()
+            }
         )
     }
 
@@ -367,7 +383,10 @@ fun IncomeScreen(
             primaryColor = primaryColor,
             currentAmount = ibRecord?.amount,
             onDismiss = { showIbForm = false },
-            onSave = { amount -> vm.saveInitialBalance(amount); showIbForm = false }
+            onSave = { amount ->
+                vm.saveInitialBalance(amount)
+                showIbForm = false
+            }
         )
     }
 }
@@ -401,34 +420,40 @@ fun SwipeableTransactionCard(
     onCreateFromTemplate: (Transaction) -> Unit,
     onDetails: (Transaction) -> Unit = {}
 ) {
-    val scope   = rememberCoroutineScope()
+    val scope = rememberCoroutineScope()
     val density = LocalDensity.current
 
     // Reveal widths
-    val leftRevealDp  = 144.dp   // right-swipe → Hide + Template
-    val rightRevealDp = 76.dp    // left-swipe  → Delete
+    val leftRevealDp = 144.dp // right-swipe → Hide + Template
+    val rightRevealDp = 76.dp // left-swipe  → Delete
 
-    val leftRevealPx  = with(density) { leftRevealDp.toPx() }
+    val leftRevealPx = with(density) { leftRevealDp.toPx() }
     val rightRevealPx = with(density) { rightRevealDp.toPx() }
 
     val offsetX = remember(transaction.id) { Animatable(0f) }
     var pendingDelete by remember { mutableStateOf(false) }
 
     fun snapTo(target: Float) = scope.launch {
-        offsetX.animateTo(target, spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness    = Spring.StiffnessMedium
-        ))
+        offsetX.animateTo(
+            target,
+            spring(
+                dampingRatio = Spring.DampingRatioMediumBouncy,
+                stiffness = Spring.StiffnessMedium
+            )
+        )
         if (target == 0f) pendingDelete = false
     }
 
     // When entering selection mode, retract any open swipe rails.
     LaunchedEffect(selectionMode) {
         if (selectionMode && offsetX.value != 0f) {
-            offsetX.animateTo(0f, spring(
-                dampingRatio = Spring.DampingRatioMediumBouncy,
-                stiffness    = Spring.StiffnessMedium
-            ))
+            offsetX.animateTo(
+                0f,
+                spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessMedium
+                )
+            )
             pendingDelete = false
         }
     }
@@ -454,7 +479,10 @@ fun SwipeableTransactionCard(
                         .weight(1f)
                         .fillMaxHeight()
                         .background(ColourHide)
-                        .clickable { snapTo(0f); onToggleHidden(transaction.id, transaction.hidden) },
+                        .clickable {
+                            snapTo(0f)
+                            onToggleHidden(transaction.id, transaction.hidden)
+                        },
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -474,7 +502,10 @@ fun SwipeableTransactionCard(
                         .weight(1f)
                         .fillMaxHeight()
                         .background(ColourTemplate)
-                        .clickable { snapTo(0f); onCreateFromTemplate(transaction) },
+                        .clickable {
+                            snapTo(0f)
+                            onCreateFromTemplate(transaction)
+                        },
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -535,7 +566,7 @@ fun SwipeableTransactionCard(
                     },
                     onDragStopped = {
                         when {
-                            offsetX.value > leftRevealPx  * 0.35f -> snapTo(leftRevealPx)
+                            offsetX.value > leftRevealPx * 0.35f -> snapTo(leftRevealPx)
                             offsetX.value < -rightRevealPx * 0.35f -> snapTo(-rightRevealPx)
                             else -> snapTo(0f)
                         }
@@ -543,7 +574,7 @@ fun SwipeableTransactionCard(
                 ) else base
             }
             .combinedClickable(
-                onClick     = { if (selectionMode) onSelectToggle(transaction.id) else onDetails(transaction) },
+                onClick = { if (selectionMode) onSelectToggle(transaction.id) else onDetails(transaction) },
                 onLongClick = { if (!selectionMode) onLongPress(transaction.id) }
             )
 
@@ -556,10 +587,10 @@ fun SwipeableTransactionCard(
         val hiddenBg = MaterialTheme.colorScheme.surfaceVariant
         val warningBg = Color(0xFFF0A020).copy(alpha = 0.18f).compositeOver(baseSurface)
         val targetBg = when {
-            selected           -> primaryColor.copy(alpha = 0.16f).compositeOver(baseSurface)
-            highlightWarning   -> warningBg
+            selected -> primaryColor.copy(alpha = 0.16f).compositeOver(baseSurface)
+            highlightWarning -> warningBg
             transaction.hidden -> hiddenBg
-            else               -> baseSurface
+            else -> baseSurface
         }
         val animatedBg by animateColorAsState(
             targetValue = targetBg,
@@ -596,9 +627,11 @@ fun SwipeableTransactionCard(
                             fontWeight = FontWeight.Medium
                         )
                         if (transaction.hidden) {
-                            Text("скрыто",
+                            Text(
+                                "скрыто",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                            )
                         }
                     }
                     val subtitle = transaction.source ?: transaction.purpose
@@ -689,16 +722,16 @@ fun TransactionDetailSheet(
 ) {
     val scope = rememberCoroutineScope()
     var isEditing by remember { mutableStateOf(false) }
-    var saving    by remember { mutableStateOf(false) }
+    var saving by remember { mutableStateOf(false) }
 
-    var editAmount   by remember { mutableStateOf(transaction.amount.let { if (it == 0.0) "" else it.toInt().toString() }) }
-    var editDate     by remember { mutableStateOf(transaction.date.take(10)) }
+    var editAmount by remember { mutableStateOf(transaction.amount.let { if (it == 0.0) "" else it.toInt().toString() }) }
+    var editDate by remember { mutableStateOf(transaction.date.take(10)) }
     var editCategory by remember { mutableStateOf(transaction.category) }
     var editCatInput by remember { mutableStateOf(transaction.category) }
-    var editSource   by remember { mutableStateOf(transaction.source ?: "") }
-    var editPurpose  by remember { mutableStateOf(transaction.purpose ?: "") }
-    var editDesc     by remember { mutableStateOf(transaction.description ?: "") }
-    var catExpanded  by remember { mutableStateOf(false) }
+    var editSource by remember { mutableStateOf(transaction.source ?: "") }
+    var editPurpose by remember { mutableStateOf(transaction.purpose ?: "") }
+    var editDesc by remember { mutableStateOf(transaction.description ?: "") }
+    var catExpanded by remember { mutableStateOf(false) }
 
     val catFiltered = remember(editCatInput, categories) {
         if (editCatInput.isBlank()) categories
@@ -707,8 +740,8 @@ fun TransactionDetailSheet(
     val catShowCreate = editCatInput.isNotBlank() && categories.none { it.name.equals(editCatInput.trim(), ignoreCase = true) }
 
     var showUserPicker by remember { mutableStateOf(false) }
-    var users          by remember { mutableStateOf<List<website.msdnna.budget_app.data.model.UserInfo>>(emptyList()) }
-    var loadingUsers   by remember { mutableStateOf(false) }
+    var users by remember { mutableStateOf<List<website.msdnna.budget_app.data.model.UserInfo>>(emptyList()) }
+    var loadingUsers by remember { mutableStateOf(false) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -738,292 +771,323 @@ fun TransactionDetailSheet(
             ) { editing ->
                 if (!editing) {
                     Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
-                // ── View mode ──────────────────────────────────────────────
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Top
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            text = "$amountPrefix${formatMoney(transaction.amount)} ₽",
-                            style = MaterialTheme.typography.headlineMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = amountColor
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            text = transaction.category,
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        // Detail-request action: open existing or create new.
-                        // Only shown when callbacks are wired (i.e., from
-                        // ExpensesScreen) and the transaction itself isn't a
-                        // child of another request.
-                        if (transaction.parentId.isBlank()) {
-                            if (transaction.detailRequestId.isNotBlank() && onOpenDetailRequest != null) {
-                                IconButton(onClick = { onOpenDetailRequest(transaction.detailRequestId) }) {
-                                    Icon(
-                                        Icons.AutoMirrored.Filled.Assignment,
-                                        contentDescription = if (transaction.detailRequestStatus == "open") "Открыть запрос на детализацию" else "Закрытый запрос на детализацию",
-                                        tint = if (transaction.detailRequestStatus == "open") Color(0xFFF0A020) else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                            } else if (onCreateDetailRequest != null) {
-                                IconButton(onClick = { onCreateDetailRequest() }) {
-                                    Icon(
-                                        Icons.AutoMirrored.Filled.Assignment,
-                                        contentDescription = "Создать запрос на детализацию",
-                                        tint = primaryColor,
-                                    )
-                                }
-                            }
-                        }
-                        IconButton(onClick = { isEditing = true }) {
-                            // Pencil tinted with primary, not amountColor —
-                            // matches the wishlist (Forecast) edit affordance
-                            // and stays neutral relative to expense/income hue.
-                            Icon(Icons.Default.Edit, "Редактировать", tint = primaryColor)
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(20.dp))
-                HorizontalDivider()
-                Spacer(Modifier.height(16.dp))
-
-                DetailRow("Дата", formatDate(transaction.date))
-
-                val subtitle = transaction.source ?: transaction.purpose
-                if (!subtitle.isNullOrBlank()) {
-                    val label = if (transaction.type == "income") "Источник" else "Назначение"
-                    DetailRow(label, subtitle)
-                }
-                if (!transaction.description.isNullOrBlank()) {
-                    DetailRow("Описание", transaction.description)
-                }
-                if (transaction.hidden) {
-                    DetailRow("Статус", "Скрыто")
-                }
-                // Back-link from a child to its detail-request. Uses the same
-                // two-column layout as DetailRow so typography and column
-                // alignment match the surrounding "Дата" / "Назначение" rows;
-                // the link itself is a plain primary-tinted Text (not a
-                // TextButton — the button's internal padding broke the column
-                // baseline and it looked like a foreign chip).
-                if (transaction.parentId.isNotBlank() && linkedDetailRequestId != null && onOpenDetailRequest != null) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 6.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.Top,
-                    ) {
-                        Text(
-                            "Запрос на детализацию",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.weight(0.4f),
-                        )
-                        Text(
-                            text = "Открыть запрос",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium,
-                            color = primaryColor,
-                            modifier = Modifier
-                                .weight(0.6f)
-                                .clickable { onOpenDetailRequest(linkedDetailRequestId) },
-                        )
-                    }
-                }
-                // Back-link to the recurring wishlist item this transaction
-                // fulfilled (set when user taps «Оплачено» on a regular
-                // expense). Mirror the detail-request row layout so column
-                // baselines align.
-                if (transaction.wishlistId.isNotBlank() && linkedWishlistName != null && onOpenLinkedWishlist != null) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 6.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.Top,
-                    ) {
-                        Text(
-                            linkedWishlistLabel,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.weight(0.4f),
-                        )
-                        Text(
-                            text = linkedWishlistName,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium,
-                            color = primaryColor,
-                            modifier = Modifier
-                                .weight(0.6f)
-                                .clickable { onOpenLinkedWishlist() },
-                        )
-                    }
-                }
-
-                Spacer(Modifier.height(4.dp))
-                HorizontalDivider()
-                Spacer(Modifier.height(12.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    if (transaction.createdBy != null) {
+                        // ── View mode ──────────────────────────────────────────────
                         Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.Top
                         ) {
-                            UserAvatar(displayName = transaction.createdBy.displayName, avatarUrl = transaction.createdBy.avatarUrl, size = 36.dp)
-                            Column {
-                                Text("Добавил", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text(transaction.createdBy.displayName, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    text = "$amountPrefix${formatMoney(transaction.amount)} ₽",
+                                    style = MaterialTheme.typography.headlineMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = amountColor
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    text = transaction.category,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                // Detail-request action: open existing or create new.
+                                // Only shown when callbacks are wired (i.e., from
+                                // ExpensesScreen) and the transaction itself isn't a
+                                // child of another request.
+                                if (transaction.parentId.isBlank()) {
+                                    if (transaction.detailRequestId.isNotBlank() && onOpenDetailRequest != null) {
+                                        IconButton(onClick = { onOpenDetailRequest(transaction.detailRequestId) }) {
+                                            Icon(
+                                                Icons.AutoMirrored.Filled.Assignment,
+                                                contentDescription = if (transaction.detailRequestStatus == "open") {
+                                                    "Открыть запрос на детализацию"
+                                                } else {
+                                                    "Закрытый запрос на детализацию"
+                                                },
+                                                tint = if (transaction.detailRequestStatus == "open") {
+                                                    Color(0xFFF0A020)
+                                                } else {
+                                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                                },
+                                            )
+                                        }
+                                    } else if (onCreateDetailRequest != null) {
+                                        IconButton(onClick = { onCreateDetailRequest() }) {
+                                            Icon(
+                                                Icons.AutoMirrored.Filled.Assignment,
+                                                contentDescription = "Создать запрос на детализацию",
+                                                tint = primaryColor,
+                                            )
+                                        }
+                                    }
+                                }
+                                IconButton(onClick = { isEditing = true }) {
+                                    // Pencil tinted with primary, not amountColor —
+                                    // matches the wishlist (Forecast) edit affordance
+                                    // and stays neutral relative to expense/income hue.
+                                    Icon(Icons.Default.Edit, "Редактировать", tint = primaryColor)
+                                }
                             }
                         }
-                    } else {
-                        Text(
-                            "Автор не назначен",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    TextButton(onClick = {
-                        showUserPicker = true
-                        if (users.isEmpty()) {
-                            loadingUsers = true
-                            scope.launch {
-                                users = onGetUsers()
-                                loadingUsers = false
+
+                        Spacer(Modifier.height(20.dp))
+                        HorizontalDivider()
+                        Spacer(Modifier.height(16.dp))
+
+                        DetailRow("Дата", formatDate(transaction.date))
+
+                        val subtitle = transaction.source ?: transaction.purpose
+                        if (!subtitle.isNullOrBlank()) {
+                            val label = if (transaction.type == "income") "Источник" else "Назначение"
+                            DetailRow(label, subtitle)
+                        }
+                        if (!transaction.description.isNullOrBlank()) {
+                            DetailRow("Описание", transaction.description)
+                        }
+                        if (transaction.hidden) {
+                            DetailRow("Статус", "Скрыто")
+                        }
+                        // Back-link from a child to its detail-request. Uses the same
+                        // two-column layout as DetailRow so typography and column
+                        // alignment match the surrounding "Дата" / "Назначение" rows;
+                        // the link itself is a plain primary-tinted Text (not a
+                        // TextButton — the button's internal padding broke the column
+                        // baseline and it looked like a foreign chip).
+                        if (transaction.parentId.isNotBlank() && linkedDetailRequestId != null && onOpenDetailRequest != null) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 6.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.Top,
+                            ) {
+                                Text(
+                                    "Запрос на детализацию",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.weight(0.4f),
+                                )
+                                Text(
+                                    text = "Открыть запрос",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Medium,
+                                    color = primaryColor,
+                                    modifier = Modifier
+                                        .weight(0.6f)
+                                        .clickable { onOpenDetailRequest(linkedDetailRequestId) },
+                                )
                             }
                         }
-                    }) { Text(if (transaction.createdBy != null) "Сменить" else "Назначить") }
-                }
+                        // Back-link to the recurring wishlist item this transaction
+                        // fulfilled (set when user taps «Оплачено» on a regular
+                        // expense). Mirror the detail-request row layout so column
+                        // baselines align.
+                        if (transaction.wishlistId.isNotBlank() && linkedWishlistName != null && onOpenLinkedWishlist != null) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 6.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.Top,
+                            ) {
+                                Text(
+                                    linkedWishlistLabel,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.weight(0.4f),
+                                )
+                                Text(
+                                    text = linkedWishlistName,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Medium,
+                                    color = primaryColor,
+                                    modifier = Modifier
+                                        .weight(0.6f)
+                                        .clickable { onOpenLinkedWishlist() },
+                                )
+                            }
+                        }
+
+                        Spacer(Modifier.height(4.dp))
+                        HorizontalDivider()
+                        Spacer(Modifier.height(12.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            if (transaction.createdBy != null) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    UserAvatar(displayName = transaction.createdBy.displayName, avatarUrl = transaction.createdBy.avatarUrl, size = 36.dp)
+                                    Column {
+                                        Text("Добавил", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text(transaction.createdBy.displayName, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                                    }
+                                }
+                            } else {
+                                Text(
+                                    "Автор не назначен",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            TextButton(onClick = {
+                                showUserPicker = true
+                                if (users.isEmpty()) {
+                                    loadingUsers = true
+                                    scope.launch {
+                                        users = onGetUsers()
+                                        loadingUsers = false
+                                    }
+                                }
+                            }) { Text(if (transaction.createdBy != null) "Сменить" else "Назначить") }
+                        }
                     } // close inner Column for view mode
                 } else {
                     Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
-                // ── Edit mode ──────────────────────────────────────────────
-                Text("Редактировать", style = MaterialTheme.typography.titleLarge)
-                Spacer(Modifier.height(16.dp))
+                        // ── Edit mode ──────────────────────────────────────────────
+                        Text("Редактировать", style = MaterialTheme.typography.titleLarge)
+                        Spacer(Modifier.height(16.dp))
 
-                OutlinedTextField(
-                    value = editAmount, onValueChange = { editAmount = it },
-                    label = { Text("Сумма, ₽") },
-                    modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(), singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = primaryColor)
-                )
+                        OutlinedTextField(
+                            value = editAmount, onValueChange = { editAmount = it },
+                            label = { Text("Сумма, ₽") },
+                            modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(), singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = primaryColor)
+                        )
 
-                DateField(
-                    value = editDate,
-                    onChange = { editDate = it },
-                    label = "Дата",
-                    primaryColor = primaryColor,
-                )
+                        DateField(
+                            value = editDate,
+                            onChange = { editDate = it },
+                            label = "Дата",
+                            primaryColor = primaryColor,
+                        )
 
-                ExposedDropdownMenuBox(expanded = catExpanded, onExpandedChange = { catExpanded = it }) {
-                    OutlinedTextField(
-                        value = editCatInput,
-                        onValueChange = { editCatInput = it; catExpanded = true },
-                        label = { Text("Категория") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(catExpanded) },
-                        modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable).fillMaxWidth(),
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-                        colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(focusedBorderColor = primaryColor)
-                    )
-                    ExposedDropdownMenu(expanded = catExpanded, onDismissRequest = { catExpanded = false }) {
-                        catFiltered.forEach { cat ->
-                            DropdownMenuItem(
-                                text = { Text(cat.name) },
-                                onClick = { editCatInput = cat.name; editCategory = cat.name; catExpanded = false },
-                                trailingIcon = if (!cat.isDefault) {{
-                                    IconButton(
-                                        onClick = { scope.launch { onDeleteCategory(cat.id) }; if (editCategory == cat.name) { editCategory = ""; editCatInput = "" }; catExpanded = false },
-                                        modifier = Modifier.size(20.dp)
-                                    ) {
-                                        Icon(Icons.Default.Delete, contentDescription = "Удалить", modifier = Modifier.size(14.dp))
-                                    }
-                                }} else null
+                        ExposedDropdownMenuBox(expanded = catExpanded, onExpandedChange = { catExpanded = it }) {
+                            OutlinedTextField(
+                                value = editCatInput,
+                                onValueChange = {
+                                    editCatInput = it
+                                    catExpanded = true
+                                },
+                                label = { Text("Категория") },
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(catExpanded) },
+                                modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable).fillMaxWidth(),
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+                                colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(focusedBorderColor = primaryColor)
                             )
-                        }
-                        if (catShowCreate) {
-                            DropdownMenuItem(
-                                text = { Text("Добавить: «${editCatInput.trim()}»", color = primaryColor) },
-                                onClick = {
-                                    val name = editCatInput.trim()
-                                    catExpanded = false
-                                    scope.launch {
-                                        val cat = onAddCategory(name)
-                                        if (cat != null) { editCatInput = cat.name; editCategory = cat.name }
-                                        else { editCategory = name; editCatInput = name }
-                                    }
+                            ExposedDropdownMenu(expanded = catExpanded, onDismissRequest = { catExpanded = false }) {
+                                catFiltered.forEach { cat ->
+                                    DropdownMenuItem(
+                                        text = { Text(cat.name) },
+                                        onClick = {
+                                            editCatInput = cat.name
+                                            editCategory = cat.name
+                                            catExpanded = false
+                                        },
+                                        trailingIcon = if (!cat.isDefault) {
+                                            {
+                                                IconButton(
+                                                    onClick = {
+                                                        scope.launch { onDeleteCategory(cat.id) }
+                                                        if (editCategory == cat.name) {
+                                                            editCategory = ""
+                                                            editCatInput = ""
+                                                        }
+                                                        catExpanded = false
+                                                    },
+                                                    modifier = Modifier.size(20.dp)
+                                                ) {
+                                                    Icon(Icons.Default.Delete, contentDescription = "Удалить", modifier = Modifier.size(14.dp))
+                                                }
+                                            }
+                                        } else null
+                                    )
                                 }
+                                if (catShowCreate) {
+                                    DropdownMenuItem(
+                                        text = { Text("Добавить: «${editCatInput.trim()}»", color = primaryColor) },
+                                        onClick = {
+                                            val name = editCatInput.trim()
+                                            catExpanded = false
+                                            scope.launch {
+                                                val cat = onAddCategory(name)
+                                                if (cat != null) {
+                                                    editCatInput = cat.name
+                                                    editCategory = cat.name
+                                                } else {
+                                                    editCategory = name
+                                                    editCatInput = name
+                                                }
+                                            }
+                                        }
+                                    )
+                                }
+                            }
+                        }
+
+                        if (transaction.type == "income") {
+                            OutlinedTextField(
+                                value = editSource, onValueChange = { editSource = it },
+                                label = { Text("Источник") },
+                                modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(), singleLine = true,
+                                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+                                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = primaryColor)
+                            )
+                        } else {
+                            OutlinedTextField(
+                                value = editPurpose, onValueChange = { editPurpose = it },
+                                label = { Text("Назначение") },
+                                modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(), singleLine = true,
+                                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+                                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = primaryColor)
                             )
                         }
-                    }
-                }
 
-                if (transaction.type == "income") {
-                    OutlinedTextField(
-                        value = editSource, onValueChange = { editSource = it },
-                        label = { Text("Источник") },
-                        modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(), singleLine = true,
-                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = primaryColor)
-                    )
-                } else {
-                    OutlinedTextField(
-                        value = editPurpose, onValueChange = { editPurpose = it },
-                        label = { Text("Назначение") },
-                        modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(), singleLine = true,
-                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = primaryColor)
-                    )
-                }
+                        OutlinedTextField(
+                            value = editDesc, onValueChange = { editDesc = it },
+                            label = { Text("Описание (необязательно)") },
+                            modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
+                            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = primaryColor)
+                        )
 
-                OutlinedTextField(
-                    value = editDesc, onValueChange = { editDesc = it },
-                    label = { Text("Описание (необязательно)") },
-                    modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
-                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = primaryColor)
-                )
-
-                Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    OutlinedButton(onClick = { isEditing = false }, modifier = Modifier.weight(1f)) {
-                        Text("Отмена")
-                    }
-                    Button(
-                        onClick = {
-                            val amt = editAmount.replace(',', '.').toDoubleOrNull() ?: return@Button
-                            saving = true
-                            scope.launch {
-                                onSave(UpdateTransactionRequest(
-                                    amount = amt,
-                                    date = editDate,
-                                    category = editCatInput.trim().ifBlank { editCategory },
-                                    source = editSource.ifBlank { null },
-                                    purpose = editPurpose.ifBlank { null },
-                                    description = editDesc.ifBlank { null }
-                                ))
-                                saving = false
-                                onSaved()
+                        Spacer(Modifier.height(8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            OutlinedButton(onClick = { isEditing = false }, modifier = Modifier.weight(1f)) {
+                                Text("Отмена")
                             }
-                        },
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(containerColor = primaryColor),
-                        enabled = !saving && editAmount.isNotBlank()
-                    ) { Text(if (saving) "…" else "Сохранить", fontWeight = FontWeight.SemiBold) }
-                }
+                            Button(
+                                onClick = {
+                                    val amt = editAmount.replace(',', '.').toDoubleOrNull() ?: return@Button
+                                    saving = true
+                                    scope.launch {
+                                        onSave(
+                                            UpdateTransactionRequest(
+                                                amount = amt,
+                                                date = editDate,
+                                                category = editCatInput.trim().ifBlank { editCategory },
+                                                source = editSource.ifBlank { null },
+                                                purpose = editPurpose.ifBlank { null },
+                                                description = editDesc.ifBlank { null }
+                                            )
+                                        )
+                                        saving = false
+                                        onSaved()
+                                    }
+                                },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(containerColor = primaryColor),
+                                enabled = !saving && editAmount.isNotBlank()
+                            ) { Text(if (saving) "…" else "Сохранить", fontWeight = FontWeight.SemiBold) }
+                        }
                     } // close inner Column for edit mode
                 } // AnimatedContent branch
             } // AnimatedContent
@@ -1101,15 +1165,15 @@ fun AddIncomeSheet(
     onDismiss: () -> Unit,
     onSave: (CreateTransactionRequest) -> Unit
 ) {
-    val scope   = rememberCoroutineScope()
-    val today   = remember { SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date()) }
-    var amount  by remember { mutableStateOf(template?.amount?.let { if (it == 0.0) "" else it.toInt().toString() } ?: "") }
-    var date    by remember { mutableStateOf(today) }
+    val scope = rememberCoroutineScope()
+    val today = remember { SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date()) }
+    var amount by remember { mutableStateOf(template?.amount?.let { if (it == 0.0) "" else it.toInt().toString() } ?: "") }
+    var date by remember { mutableStateOf(today) }
     var category by remember { mutableStateOf(template?.category ?: "") }
-    var source  by remember { mutableStateOf(template?.source ?: "") }
-    var desc    by remember { mutableStateOf(template?.description ?: "") }
+    var source by remember { mutableStateOf(template?.source ?: "") }
+    var desc by remember { mutableStateOf(template?.description ?: "") }
     var catExpanded by remember { mutableStateOf(false) }
-    var catInput    by remember { mutableStateOf(template?.category ?: "") }
+    var catInput by remember { mutableStateOf(template?.category ?: "") }
 
     val filtered = remember(catInput, categories) {
         if (catInput.isBlank()) categories
@@ -1155,7 +1219,10 @@ fun AddIncomeSheet(
             ) {
                 OutlinedTextField(
                     value = catInput,
-                    onValueChange = { catInput = it; catExpanded = true },
+                    onValueChange = {
+                        catInput = it
+                        catExpanded = true
+                    },
                     label = { Text("Категория") },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(catExpanded) },
                     modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable).fillMaxWidth(),
@@ -1167,15 +1234,28 @@ fun AddIncomeSheet(
                     filtered.forEach { cat ->
                         DropdownMenuItem(
                             text = { Text(cat.name) },
-                            onClick = { catInput = cat.name; category = cat.name; catExpanded = false },
-                            trailingIcon = if (!cat.isDefault) {{
-                                IconButton(
-                                    onClick = { scope.launch { onDeleteCategory(cat.id) }; if (category == cat.name) { category = ""; catInput = "" }; catExpanded = false },
-                                    modifier = Modifier.size(20.dp)
-                                ) {
-                                    Icon(Icons.Default.Delete, contentDescription = "Удалить", modifier = Modifier.size(14.dp))
+                            onClick = {
+                                catInput = cat.name
+                                category = cat.name
+                                catExpanded = false
+                            },
+                            trailingIcon = if (!cat.isDefault) {
+                                {
+                                    IconButton(
+                                        onClick = {
+                                            scope.launch { onDeleteCategory(cat.id) }
+                                            if (category == cat.name) {
+                                                category = ""
+                                                catInput = ""
+                                            }
+                                            catExpanded = false
+                                        },
+                                        modifier = Modifier.size(20.dp)
+                                    ) {
+                                        Icon(Icons.Default.Delete, contentDescription = "Удалить", modifier = Modifier.size(14.dp))
+                                    }
                                 }
-                            }} else null
+                            } else null
                         )
                     }
                     if (showCreate) {
@@ -1186,8 +1266,13 @@ fun AddIncomeSheet(
                                 catExpanded = false
                                 scope.launch {
                                     val cat = onAddCategory(name)
-                                    if (cat != null) { catInput = cat.name; category = cat.name }
-                                    else { category = name; catInput = name }
+                                    if (cat != null) {
+                                        catInput = cat.name
+                                        category = cat.name
+                                    } else {
+                                        category = name
+                                        catInput = name
+                                    }
                                 }
                             }
                         )
@@ -1215,12 +1300,14 @@ fun AddIncomeSheet(
                 onClick = {
                     val amtD = amount.replace(',', '.').toDoubleOrNull() ?: return@Button
                     val cat = catInput.trim().ifBlank { category }
-                    onSave(CreateTransactionRequest(
-                        type = "income", amount = amtD, date = date,
-                        category = cat,
-                        source = source.ifBlank { null },
-                        description = desc.ifBlank { null }
-                    ))
+                    onSave(
+                        CreateTransactionRequest(
+                            type = "income", amount = amtD, date = date,
+                            category = cat,
+                            source = source.ifBlank { null },
+                            description = desc.ifBlank { null }
+                        )
+                    )
                 },
                 modifier = Modifier.fillMaxWidth().height(48.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = primaryColor),

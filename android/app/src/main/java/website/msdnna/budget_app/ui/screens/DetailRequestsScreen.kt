@@ -38,7 +38,7 @@ import website.msdnna.budget_app.ui.components.formatMoney
 fun DetailRequestsScreen(
     primaryColor: Color,
     currentUserId: String,
-    showAll: Boolean = false,                   // when false: only open requests assigned to me
+    showAll: Boolean = false, // when false: only open requests assigned to me
     onOpen: (String) -> Unit,
     onClose: () -> Unit,
 ) {

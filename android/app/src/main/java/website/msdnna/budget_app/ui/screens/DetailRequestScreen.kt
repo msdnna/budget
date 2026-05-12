@@ -2,7 +2,6 @@ package website.msdnna.budget_app.ui.screens
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -12,7 +11,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -23,8 +21,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import website.msdnna.budget_app.data.api.RetrofitClient
-import website.msdnna.budget_app.data.model.Category
-import website.msdnna.budget_app.data.model.CreateTransactionRequest
 import website.msdnna.budget_app.data.model.DetailRequestView
 import website.msdnna.budget_app.data.model.Transaction
 import website.msdnna.budget_app.data.repository.CategoryRepository
@@ -398,8 +394,10 @@ private fun MetaCard(view: DetailRequestView, currentUserId: String) {
                     fontWeight = FontWeight.Medium,
                 )
                 p.purpose?.takeIf { it.isNotBlank() }?.let {
-                    Text(it, style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        it, style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
                 Text(
                     "Дата: ${formatDate(p.date)}",
@@ -448,10 +446,14 @@ private fun ChildRow(
         ) {
             Column(Modifier.weight(1f)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(formatDate(tx.date), style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(tx.category, style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.Medium)
+                    Text(
+                        formatDate(tx.date), style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        tx.category, style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Medium
+                    )
                 }
                 val sub = tx.purpose ?: tx.description
                 if (!sub.isNullOrBlank()) {

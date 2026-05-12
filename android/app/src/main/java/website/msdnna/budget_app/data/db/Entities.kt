@@ -16,11 +16,11 @@ data class TransactionEntity(
     val description: String?,
     val hidden: Boolean,
 
-    @ColumnInfo(name = "created_by_id")           val createdById: String?,
-    @ColumnInfo(name = "created_by_name")         val createdByName: String?,
-    @ColumnInfo(name = "created_by_avatar")       val createdByAvatar: String?,
-    @ColumnInfo(name = "last_modified_by_id")     val lastModifiedById: String?,
-    @ColumnInfo(name = "last_modified_by_name")   val lastModifiedByName: String?,
+    @ColumnInfo(name = "created_by_id") val createdById: String?,
+    @ColumnInfo(name = "created_by_name") val createdByName: String?,
+    @ColumnInfo(name = "created_by_avatar") val createdByAvatar: String?,
+    @ColumnInfo(name = "last_modified_by_id") val lastModifiedById: String?,
+    @ColumnInfo(name = "last_modified_by_name") val lastModifiedByName: String?,
     @ColumnInfo(name = "last_modified_by_avatar") val lastModifiedByAvatar: String?,
 
     @ColumnInfo(name = "created_at") val createdAt: String,
@@ -66,11 +66,11 @@ data class WishlistEntity(
     val purchased: Boolean,
     val notes: String?,
 
-    @ColumnInfo(name = "created_by_id")           val createdById: String?,
-    @ColumnInfo(name = "created_by_name")         val createdByName: String?,
-    @ColumnInfo(name = "created_by_avatar")       val createdByAvatar: String?,
-    @ColumnInfo(name = "last_modified_by_id")     val lastModifiedById: String?,
-    @ColumnInfo(name = "last_modified_by_name")   val lastModifiedByName: String?,
+    @ColumnInfo(name = "created_by_id") val createdById: String?,
+    @ColumnInfo(name = "created_by_name") val createdByName: String?,
+    @ColumnInfo(name = "created_by_avatar") val createdByAvatar: String?,
+    @ColumnInfo(name = "last_modified_by_id") val lastModifiedById: String?,
+    @ColumnInfo(name = "last_modified_by_name") val lastModifiedByName: String?,
     @ColumnInfo(name = "last_modified_by_avatar") val lastModifiedByAvatar: String?,
 
     @ColumnInfo(name = "created_at") val createdAt: String,

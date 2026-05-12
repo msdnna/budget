@@ -3,6 +3,7 @@ plugins {
     id 'org.jetbrains.kotlin.plugin.compose'
     id 'org.jetbrains.kotlin.plugin.serialization'
     id 'com.google.devtools.ksp'
+    id 'io.gitlab.arturbosch.detekt'
 }
 
 def appVersionName = rootProject.file("VERSION").text.trim()
@@ -107,4 +108,71 @@ dependencies {
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2'
 
     implementation "io.coil-kt:coil-compose:2.7.0"
+}
+
+// ktlint-gradle 13.x не цепляется к AGP 9.2 со встроенным Kotlin
+// (нет KotlinAndroidExtension → нет source-set-задач). Поэтому подключаем
+// ktlint CLI напрямую через отдельную конфигурацию + JavaExec.
+configurations {
+    ktlint
+}
+
+dependencies {
+    ktlint("com.pinterest.ktlint:ktlint-cli:1.6.0") {
+        attributes {
+            attribute(Bundling.BUNDLING_ATTRIBUTE, objects.named(Bundling, Bundling.EXTERNAL))
+        }
+    }
+}
+
+def ktlintSources = files("src/main/java", "src/test/java")
+
+tasks.register("ktlintCheck", JavaExec) {
+    group = "verification"
+    description = "Run ktlint on all Kotlin sources"
+    classpath = configurations.ktlint
+    mainClass.set("com.pinterest.ktlint.Main")
+    jvmArgs("--add-opens=java.base/java.lang=ALL-UNNAMED")
+    args(
+        "**/src/main/java/**/*.kt",
+        "**/src/test/java/**/*.kt",
+        "--reporter=plain",
+        "--reporter=checkstyle,output=${layout.buildDirectory.get().asFile}/reports/ktlint/ktlint.xml"
+    )
+    inputs.files(ktlintSources)
+    inputs.file("${rootProject.projectDir}/.editorconfig")
+    outputs.file("${layout.buildDirectory.get().asFile}/reports/ktlint/ktlint.xml")
+}
+
+tasks.register("ktlintFormat", JavaExec) {
+    group = "verification"
+    description = "Run ktlint formatter (rewrites files in place)"
+    classpath = configurations.ktlint
+    mainClass.set("com.pinterest.ktlint.Main")
+    jvmArgs("--add-opens=java.base/java.lang=ALL-UNNAMED")
+    args(
+        "-F",
+        "**/src/main/java/**/*.kt",
+        "**/src/test/java/**/*.kt"
+    )
+}
+
+detekt {
+    toolVersion = "1.23.8"
+    config.setFrom(files("$projectDir/detekt.yml"))
+    buildUponDefaultConfig = true
+    autoCorrect = false
+    parallel = true
+    source.setFrom(files("src/main/java", "src/test/java"))
+}
+
+tasks.withType(io.gitlab.arturbosch.detekt.Detekt).configureEach {
+    jvmTarget = "17"
+    reports {
+        html.required.set(true)
+        xml.required.set(true)
+        txt.required.set(false)
+        sarif.required.set(false)
+        md.required.set(false)
+    }
 }

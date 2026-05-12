@@ -13,15 +13,18 @@ interface TransactionDao {
     // Hide pending children of an open detail-request (parent_id != '' AND
     // excluded_from_stats=1). Closed-request parents have excluded_from_stats=1
     // too but stay visible — they're the historical record.
-    @Query("""
+    @Query(
+        """
         SELECT * FROM transactions
         WHERE deleted_at IS NULL AND sync_status != :pendingDelete
           AND (parent_id = '' OR excluded_from_stats = 0)
         ORDER BY date DESC
-    """)
+    """
+    )
     fun observeAll(pendingDelete: String = SyncStatus.PENDING_DELETE): Flow<List<TransactionEntity>>
 
-    @Query("""
+    @Query(
+        """
         SELECT * FROM transactions
         WHERE deleted_at IS NULL AND sync_status != :pendingDelete
           AND (parent_id = '' OR excluded_from_stats = 0)
@@ -30,7 +33,8 @@ interface TransactionDao {
           AND (:from IS NULL OR date >= :from)
           AND (:to IS NULL OR date <= :to)
         ORDER BY date DESC
-    """)
+    """
+    )
     fun observeFiltered(
         type: String?,
         from: String?,
@@ -41,12 +45,14 @@ interface TransactionDao {
 
     // Children of a parent transaction — used when fulfilling a detail-request
     // so the assignee can see what they've already added.
-    @Query("""
+    @Query(
+        """
         SELECT * FROM transactions
         WHERE deleted_at IS NULL AND parent_id = :parentId
           AND sync_status != :pendingDelete
         ORDER BY date DESC, created_at DESC
-    """)
+    """
+    )
     fun observeChildren(parentId: String, pendingDelete: String = SyncStatus.PENDING_DELETE): Flow<List<TransactionEntity>>
 
     @Query("SELECT * FROM transactions WHERE id = :id")
@@ -82,7 +88,8 @@ interface TransactionDao {
     // instead of once per row, which kept the LazyColumn from recomposing N
     // times when a multi-select hide/delete was applied.
 
-    @Query("""
+    @Query(
+        """
         UPDATE transactions
         SET hidden = :hidden,
             sync_status = CASE WHEN sync_status = :pendingCreate THEN sync_status ELSE :pendingUpdate END,
@@ -91,7 +98,8 @@ interface TransactionDao {
             last_modified_by_name = :userName,
             last_modified_by_avatar = :userAvatar
         WHERE id IN (:ids)
-    """)
+    """
+    )
     suspend fun bulkSetHidden(
         ids: List<String>,
         hidden: Boolean,
@@ -109,12 +117,14 @@ interface TransactionDao {
         pendingCreate: String = SyncStatus.PENDING_CREATE,
     )
 
-    @Query("""
+    @Query(
+        """
         UPDATE transactions
         SET sync_status = :pendingDelete,
             updated_at = :updatedAt
         WHERE id IN (:ids) AND sync_status != :pendingCreate
-    """)
+    """
+    )
     suspend fun bulkMarkDeleted(
         ids: List<String>,
         updatedAt: String,
@@ -164,7 +174,8 @@ interface WishlistDao {
     @Query("DELETE FROM wishlist WHERE id = :id")
     suspend fun deleteHard(id: String)
 
-    @Query("""
+    @Query(
+        """
         UPDATE wishlist
         SET purchased = :purchased,
             sync_status = CASE WHEN sync_status = :pendingCreate THEN sync_status ELSE :pendingUpdate END,
@@ -173,7 +184,8 @@ interface WishlistDao {
             last_modified_by_name = :userName,
             last_modified_by_avatar = :userAvatar
         WHERE id IN (:ids)
-    """)
+    """
+    )
     suspend fun bulkSetPurchased(
         ids: List<String>,
         purchased: Boolean,
@@ -191,12 +203,14 @@ interface WishlistDao {
         pendingCreate: String = SyncStatus.PENDING_CREATE,
     )
 
-    @Query("""
+    @Query(
+        """
         UPDATE wishlist
         SET sync_status = :pendingDelete,
             updated_at = :updatedAt
         WHERE id IN (:ids) AND sync_status != :pendingCreate
-    """)
+    """
+    )
     suspend fun bulkMarkDeleted(
         ids: List<String>,
         updatedAt: String,

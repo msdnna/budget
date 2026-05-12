@@ -1,6 +1,5 @@
 package website.msdnna.budget_app.ui.components
 
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Animatable
@@ -8,14 +7,13 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -29,12 +27,11 @@ import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.*
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.foundation.Image
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusEvent
@@ -43,15 +40,15 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import website.msdnna.budget_app.R
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
-import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.util.Locale
+import kotlinx.coroutines.launch
+import website.msdnna.budget_app.R
 
 /**
  * Provides a single shared shimmer-pulse alpha to all `SkeletonBox` instances
@@ -537,14 +534,20 @@ fun formatDate(isoDate: String): String {
     return try {
         val parts = isoDate.substring(0, 10).split("-")
         "${parts[2]}.${parts[1]}.${parts[0]}"
-    } catch (e: Exception) { isoDate }
+    } catch (e: Exception) {
+        isoDate
+    }
 }
 
-val MONTHS_SHORT = listOf("Янв", "Фев", "Мар", "Апр", "Май", "Июн",
-    "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек")
+val MONTHS_SHORT = listOf(
+    "Янв", "Фев", "Мар", "Апр", "Май", "Июн",
+    "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек"
+)
 
-val MONTHS_FULL = listOf("Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
-    "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь")
+val MONTHS_FULL = listOf(
+    "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
+    "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"
+)
 
 fun monthName(month: Int, full: Boolean = false): String {
     val idx = (month - 1).coerceIn(0, 11)
@@ -572,7 +575,7 @@ fun BoxScope.SelectionOverlay(
         visible = visible,
         modifier = Modifier.matchParentSize(),
         enter = fadeIn(animationSpec = tween(140)),
-        exit  = fadeOut(animationSpec = tween(140)),
+        exit = fadeOut(animationSpec = tween(140)),
     ) {
         Box(
             modifier = Modifier

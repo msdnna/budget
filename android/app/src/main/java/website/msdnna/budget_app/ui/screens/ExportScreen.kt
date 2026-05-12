@@ -19,12 +19,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import website.msdnna.budget_app.data.api.RetrofitClient
-import website.msdnna.budget_app.ui.components.SummaryCard
-import java.io.File
 
 private val EXPORT_TYPES = listOf(
     "" to "Все операции",
@@ -79,7 +78,8 @@ fun ExportScreen(serverUrl: String, primaryColor: Color) {
                 Button(
                     onClick = {
                         scope.launch {
-                            loading = true; message = null
+                            loading = true
+                            message = null
                             try {
                                 val body = service.exportExcel(
                                     type = selectedType.ifBlank { null }
@@ -113,7 +113,8 @@ fun ExportScreen(serverUrl: String, primaryColor: Color) {
                 OutlinedButton(
                     onClick = {
                         scope.launch {
-                            loading = true; message = null
+                            loading = true
+                            message = null
                             try {
                                 val body = service.exportPdf(
                                     type = selectedType.ifBlank { null }

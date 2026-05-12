@@ -3,12 +3,12 @@ package website.msdnna.budget_app.ui.viewmodels
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import java.util.Calendar
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
 import website.msdnna.budget_app.data.api.RetrofitClient
 import website.msdnna.budget_app.data.model.*
-import java.util.Calendar
 
 enum class StatsPeriod { MONTH, YEAR, RANGE }
 
@@ -26,23 +26,26 @@ class StatisticsViewModel(serverUrl: String) : ViewModel() {
     private val now = Calendar.getInstance()
 
     private val _period = MutableStateFlow(StatsPeriod.MONTH)
-    private val _year   = MutableStateFlow(now.get(Calendar.YEAR))
-    private val _month  = MutableStateFlow(now.get(Calendar.MONTH) + 1)
-    private val _from   = MutableStateFlow<String?>(null)
-    private val _to     = MutableStateFlow<String?>(null)
+    private val _year = MutableStateFlow(now.get(Calendar.YEAR))
+    private val _month = MutableStateFlow(now.get(Calendar.MONTH) + 1)
+    private val _from = MutableStateFlow<String?>(null)
+    private val _to = MutableStateFlow<String?>(null)
     private val _refreshTick = MutableStateFlow(0)
-    private val _state  = MutableStateFlow(StatsUiState())
+    private val _state = MutableStateFlow(StatsUiState())
 
     val period = _period.asStateFlow()
-    val year   = _year.asStateFlow()
-    val month  = _month.asStateFlow()
-    val from   = _from.asStateFlow()
-    val to     = _to.asStateFlow()
-    val state  = _state.asStateFlow()
+    val year = _year.asStateFlow()
+    val month = _month.asStateFlow()
+    val from = _from.asStateFlow()
+    val to = _to.asStateFlow()
+    val state = _state.asStateFlow()
 
     private data class Inputs(
-        val period: StatsPeriod, val year: Int, val month: Int,
-        val from: String?, val to: String?,
+        val period: StatsPeriod,
+        val year: Int,
+        val month: Int,
+        val from: String?,
+        val to: String?,
     )
 
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -59,7 +62,8 @@ class StatisticsViewModel(serverUrl: String) : ViewModel() {
         // Initialise range when first switching to RANGE so the UI has something to show.
         if (p == StatsPeriod.RANGE && (_from.value == null || _to.value == null)) {
             val cal = Calendar.getInstance()
-            val y = cal.get(Calendar.YEAR); val m = cal.get(Calendar.MONTH) + 1
+            val y = cal.get(Calendar.YEAR)
+            val m = cal.get(Calendar.MONTH) + 1
             cal.set(y, m - 1, 1)
             val first = "%04d-%02d-01".format(y, m)
             val last = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
@@ -82,13 +86,15 @@ class StatisticsViewModel(serverUrl: String) : ViewModel() {
         _to.value = to
     }
 
-    fun reload() { _refreshTick.value += 1 }
+    fun reload() {
+        _refreshTick.value += 1
+    }
 
     private fun loadFlow(inputs: Inputs): Flow<StatsUiState> = flow {
         emit(_state.value.copy(loading = true, error = null))
         val mon = if (inputs.period == StatsPeriod.MONTH)
             "%04d-%02d".format(inputs.year, inputs.month) else null
-        val yr  = if (inputs.period == StatsPeriod.YEAR)
+        val yr = if (inputs.period == StatsPeriod.YEAR)
             inputs.year.toString() else null
         val (fromArg, toArg) = if (inputs.period == StatsPeriod.RANGE)
             inputs.from to inputs.to else null to null
