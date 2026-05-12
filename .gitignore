@@ -32,6 +32,9 @@ android/*.aab
 # Self-distributed APK store (served by frontend nginx at /apks/)
 apks/*.apk
 
+# ─── Aggregated reports (make lint / make test → tools/aggregate-reports.py) ─
+reports/
+
 # ─── IDE ─────────────────────────────────────────────────────────────────────
 .idea/
 *.iml

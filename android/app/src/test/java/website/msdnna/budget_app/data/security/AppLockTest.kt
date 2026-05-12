@@ -2,13 +2,13 @@ package website.msdnna.budget_app.data.security
 
 import android.os.SystemClock
 import com.google.common.truth.Truth.assertThat
+import java.time.Duration
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowSystemClock
-import java.time.Duration
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])

@@ -131,7 +131,8 @@ format-android: ## Auto-format Kotlin sources via ktlint
 	@$(ANDROID_GRADLE) :app:ktlintFormat
 
 .PHONY: lint
-lint: lint-backend lint-web lint-android ## Run all linters (backend + web + android)
+lint: ## Run all linters and produce reports/lint.html (uses tools/aggregate-reports.py)
+	@python3 tools/aggregate-reports.py lint
 
 .PHONY: test-android
 test-android: ## Run Android unit tests (JUnit 4 + Robolectric + MockWebServer)
@@ -143,7 +144,8 @@ test-android-cover: ## Run Android unit tests with JaCoCo coverage (app/build/re
 	@echo "Coverage report: $(ANDROID_DIR)/app/build/reports/jacoco/jacocoTestReport/html/index.html"
 
 .PHONY: test
-test: test-backend test-web test-android ## Run all unit test suites
+test: ## Run all test suites and produce reports/test.html (uses tools/aggregate-reports.py)
+	@python3 tools/aggregate-reports.py test
 
 .PHONY: test-backend
 test-backend: ## Run Go unit tests (skips integration tests requiring Docker)
@@ -168,9 +170,6 @@ test-web: ## Run Vitest unit tests on the Vue frontend
 test-web-cover: ## Run Vitest with coverage (frontend/coverage/index.html)
 	cd $(FRONTEND_DIR) && npm run test:coverage
 	@echo "Coverage report: $(FRONTEND_DIR)/coverage/index.html"
-
-.PHONY: test
-test: test-backend test-web ## Run all unit test suites
 
 # ─── Install / Update ────────────────────────────────────────────────────────
 
