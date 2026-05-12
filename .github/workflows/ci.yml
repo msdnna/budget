@@ -43,8 +43,11 @@ jobs:
               - 'Makefile'
               - '.github/workflows/ci.yml'
 
+  # Job display names are kept short and ASCII-only so they can be filtered
+  # in shields.io badge URLs via `?jobName=...` without heavy URL-encoding.
+
   backend:
-    name: Backend (Go) — lint + test
+    name: Backend
     needs: changes
     if: ${{ needs.changes.outputs.backend == 'true' }}
     runs-on: ubuntu-latest
@@ -62,8 +65,8 @@ jobs:
       - name: Lint (gofmt + go vet + golangci-lint)
         run: make lint-backend
 
-      - name: Unit tests
-        run: make test-backend
+      - name: Unit tests (with coverage)
+        run: make test-backend-cover
 
       - name: Integration tests (testcontainers + MongoDB)
         run: make test-backend-integration
@@ -77,8 +80,18 @@ jobs:
             exit 1
           fi
 
+      - name: Upload coverage to Codecov
+        if: always()
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./backend/coverage.out
+          flags: backend
+          disable_search: true
+          fail_ci_if_error: false
+
   web:
-    name: Web (Vue 3) — lint + test
+    name: Web
     needs: changes
     if: ${{ needs.changes.outputs.web == 'true' }}
     runs-on: ubuntu-latest
@@ -108,12 +121,20 @@ jobs:
         working-directory: frontend
         run: corepack yarn format:check
 
-      - name: Test (Vitest)
-        working-directory: frontend
-        run: corepack yarn test
+      - name: Test (Vitest with coverage)
+        run: make test-web-cover
+
+      - name: Upload coverage to Codecov
+        if: always()
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          directory: ./frontend/coverage
+          flags: web
+          fail_ci_if_error: false
 
   android:
-    name: Android (Kotlin/Compose) — lint + test
+    name: Android
     needs: changes
     if: ${{ needs.changes.outputs.android == 'true' }}
     runs-on: ubuntu-latest
@@ -135,13 +156,6 @@ jobs:
           # side-by-side and use that fresher sdkmanager.
           sdkmanager --install 'cmdline-tools;latest' >/dev/null
           SDKMGR="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-          echo "::group::sdkmanager diagnostics"
-          "$SDKMGR" --version
-          echo "Platform packages visible in canary channel:"
-          "$SDKMGR" --list --channel=3 2>/dev/null \
-            | awk '/^Available Packages/{p=1} p && /^[[:space:]]*platforms;android-/{print $1}' \
-            | sort -u | head -40
-          echo "::endgroup::"
           yes | "$SDKMGR" --licenses --channel=3 >/dev/null 2>&1 || true
           # Google publishes preview platforms with a minor suffix
           # (`android-37.0`, not `android-37`) until API finalisation.
@@ -156,5 +170,89 @@ jobs:
       - name: Lint (ktlint + detekt)
         run: make lint-android
 
-      - name: Unit tests (JUnit 4 + Robolectric + MockWebServer)
-        run: make test-android
+      - name: Unit tests + JaCoCo coverage
+        run: make test-android-cover
+
+      - name: Upload coverage to Codecov
+        if: always()
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./android/app/build/reports/jacoco/jacocoTestReport/jacocoTestReport.xml
+          flags: android
+          disable_search: true
+          fail_ci_if_error: false
+
+  # ─── Build verification (only on push to main/develop) ────────────────────
+  # Validates that production Dockerfiles / Gradle release path still produce
+  # an image / APK after merge, before anyone cuts a release tag. Skipped on
+  # PRs to keep PR feedback fast — the release-* workflows will catch any
+  # build break that slips through.
+
+  backend-build:
+    name: Backend build
+    needs: [changes, backend]
+    if: ${{ needs.changes.outputs.backend == 'true' && github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build backend image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          file: backend/Dockerfile.prod
+          push: false
+          tags: budget-backend:ci-${{ github.sha }}
+          build-args: |
+            API_VERSION=ci-${{ github.sha }}
+            VCS_REF=${{ github.sha }}
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+
+  web-build:
+    name: Web build
+    needs: [changes, web]
+    if: ${{ needs.changes.outputs.web == 'true' && github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build frontend image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: frontend
+          file: frontend/Dockerfile
+          push: false
+          tags: budget-frontend:ci-${{ github.sha }}
+          build-args: |
+            WEB_VERSION=ci-${{ github.sha }}
+            VCS_REF=${{ github.sha }}
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
+
+  android-build:
+    name: Android build
+    needs: [changes, android]
+    if: ${{ needs.changes.outputs.android == 'true' && github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android SDK 37 (preview channel)
+        run: |
+          set -euo pipefail
+          sdkmanager --install 'cmdline-tools;latest' >/dev/null
+          SDKMGR="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMGR" --licenses --channel=3 >/dev/null 2>&1 || true
+          "$SDKMGR" --channel=3 'platforms;android-37.0'
+          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Stub android/local.env
+        run: touch android/local.env
+      - name: Assemble debug APK
+        run: cd android && ./gradlew --no-daemon :app:assembleDebug
