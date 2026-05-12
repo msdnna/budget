@@ -1,12 +1,12 @@
 <template>
   <n-popover
     :show="open"
-    @update:show="onPopoverShow"
     trigger="click"
     placement="bottom-start"
     :show-arrow="false"
     raw
     style="background: transparent"
+    @update:show="onPopoverShow"
   >
     <template #trigger>
       <n-input
@@ -42,8 +42,18 @@
         </div>
       </div>
       <div class="tpp-actions">
-        <n-button size="tiny" tertiary @click="setNow">{{ type === 'month' ? 'Текущий' : 'Этот год' }}</n-button>
-        <n-button v-if="clearable && value != null" size="tiny" quaternary type="error" @click="clear">Очистить</n-button>
+        <n-button size="tiny" tertiary @click="setNow">
+          {{ type === 'month' ? 'Текущий' : 'Этот год' }}
+        </n-button>
+        <n-button
+          v-if="clearable && value != null"
+          size="tiny"
+          quaternary
+          type="error"
+          @click="clear"
+        >
+          Очистить
+        </n-button>
       </div>
     </div>
   </n-popover>
@@ -71,17 +81,46 @@ const { primaryColor, palette } = storeToRefs(useThemeStore())
 const open = ref(false)
 const cursor = ref(new Date(props.value || Date.now()))
 
-watch(() => props.value, v => {
-  if (v != null) cursor.value = new Date(v)
-})
+watch(
+  () => props.value,
+  (v) => {
+    if (v != null) cursor.value = new Date(v)
+  },
+)
 
 function onPopoverShow(v) {
   open.value = v
   if (v) cursor.value = new Date(props.value || Date.now())
 }
 
-const MONTH_NAMES_FULL = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь']
-const MONTH_NAMES_SHORT = ['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек']
+const MONTH_NAMES_FULL = [
+  'Январь',
+  'Февраль',
+  'Март',
+  'Апрель',
+  'Май',
+  'Июнь',
+  'Июль',
+  'Август',
+  'Сентябрь',
+  'Октябрь',
+  'Ноябрь',
+  'Декабрь',
+]
+const MONTH_NAMES_SHORT = [
+  'Янв',
+  'Фев',
+  'Мар',
+  'Апр',
+  'Май',
+  'Июн',
+  'Июл',
+  'Авг',
+  'Сен',
+  'Окт',
+  'Ноя',
+  'Дек',
+]
 
 const formatted = computed(() => {
   if (props.value == null) return ''
@@ -105,7 +144,9 @@ const cells = computed(() => {
     const sel = props.value != null ? new Date(props.value) : null
     const today = new Date()
     return MONTH_NAMES_SHORT.map((label, i) => ({
-      label, year: cy, month: i,
+      label,
+      year: cy,
+      month: i,
       active: !!sel && sel.getFullYear() === cy && sel.getMonth() === i,
       today: today.getFullYear() === cy && today.getMonth() === i,
       muted: false,
@@ -118,7 +159,9 @@ const cells = computed(() => {
   return Array.from({ length: 12 }, (_, i) => {
     const y = start + i
     return {
-      label: String(y), year: y, month: 0,
+      label: String(y),
+      year: y,
+      month: 0,
       active: !!sel && sel.getFullYear() === y,
       today: today === y,
       muted: i === 0 || i === 11,
@@ -148,9 +191,10 @@ function navNext() {
 
 function setNow() {
   const now = new Date()
-  const d = props.type === 'month'
-    ? new Date(now.getFullYear(), now.getMonth(), 1)
-    : new Date(now.getFullYear(), 0, 1)
+  const d =
+    props.type === 'month'
+      ? new Date(now.getFullYear(), now.getMonth(), 1)
+      : new Date(now.getFullYear(), 0, 1)
   emit('update:value', d.getTime())
   open.value = false
 }
@@ -214,7 +258,9 @@ const cssVars = computed(() => ({
   font-size: 18px;
   line-height: 1;
   color: var(--tpp-fg-muted);
-  transition: background 0.12s, color 0.12s;
+  transition:
+    background 0.12s,
+    color 0.12s;
 }
 .tpp-arrow:hover {
   background: var(--tpp-hover);
@@ -231,7 +277,10 @@ const cssVars = computed(() => ({
   border-radius: 4px;
   cursor: pointer;
   user-select: none;
-  transition: background 0.12s, color 0.12s, outline-color 0.12s;
+  transition:
+    background 0.12s,
+    color 0.12s,
+    outline-color 0.12s;
   outline: 1px solid transparent;
 }
 .tpp-cell:hover {

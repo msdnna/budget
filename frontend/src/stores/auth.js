@@ -11,10 +11,10 @@ export const useAuthStore = defineStore('auth', () => {
   function setAuth(loginResponse) {
     token.value = loginResponse.token
     user.value = {
-      user_id:      loginResponse.user_id,
+      user_id: loginResponse.user_id,
       display_name: loginResponse.display_name,
-      avatar_url:   loginResponse.avatar_url || '',
-      expires_at:   loginResponse.expires_at,
+      avatar_url: loginResponse.avatar_url || '',
+      expires_at: loginResponse.expires_at,
     }
     localStorage.setItem('auth_token', token.value)
     localStorage.setItem('auth_user', JSON.stringify(user.value))

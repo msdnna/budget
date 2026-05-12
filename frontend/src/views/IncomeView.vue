@@ -3,9 +3,9 @@
     <SplitPane storage-key="income-split" :default-left="45" :min-left="20" :max-left="75">
       <template #left>
         <!-- Initial balance card -->
-        <n-card style="margin-bottom:12px">
+        <n-card style="margin-bottom: 12px">
           <template #header>
-            <n-space align="center" justify="space-between" style="width:100%">
+            <n-space align="center" justify="space-between" style="width: 100%">
               <n-text strong>Баланс на начало месяца</n-text>
               <TilePeriodPicker
                 v-model:value="ibMonth"
@@ -17,12 +17,17 @@
             </n-space>
           </template>
           <n-space align="center" justify="space-between">
-            <n-text v-if="ibRecord" :style="`color:${incomeColor};font-weight:600;font-size:18px${valuesHidden ? ';filter:blur(7px);user-select:none' : ''}`">
+            <n-text
+              v-if="ibRecord"
+              :style="`color:${incomeColor};font-weight:600;font-size:18px${valuesHidden ? ';filter:blur(7px);user-select:none' : ''}`"
+            >
               {{ ibRecord.amount.toLocaleString('ru-RU') }} ₽
             </n-text>
             <n-text v-else type="tertiary">Не задан</n-text>
             <n-space>
-              <n-button v-if="ibRecord" size="small" quaternary type="error" @click="deleteIb">✕</n-button>
+              <n-button v-if="ibRecord" size="small" quaternary type="error" @click="deleteIb">
+                ✕
+              </n-button>
               <n-button size="small" type="primary" @click="showIbForm = true">
                 {{ ibRecord ? 'Изменить' : 'Задать' }}
               </n-button>
@@ -35,12 +40,18 @@
             <n-grid :cols="2" :x-gap="12" :item-responsive="true">
               <n-grid-item span="2 s:1">
                 <n-form-item label="Сумма (₽)" path="amount">
-                  <n-input-number v-model:value="form.amount" :min="0.01" :precision="2" style="width:100%" placeholder="0.00" />
+                  <n-input-number
+                    v-model:value="form.amount"
+                    :min="0.01"
+                    :precision="2"
+                    style="width: 100%"
+                    placeholder="0.00"
+                  />
                 </n-form-item>
               </n-grid-item>
               <n-grid-item span="2 s:1">
                 <n-form-item label="Дата" path="date">
-                  <n-date-picker v-model:value="form.date" type="date" style="width:100%" />
+                  <n-date-picker v-model:value="form.date" type="date" style="width: 100%" />
                 </n-form-item>
               </n-grid-item>
               <n-grid-item span="2 s:1">
@@ -64,11 +75,14 @@
               </n-grid-item>
               <n-grid-item span="2">
                 <n-form-item label="Описание">
-                  <n-input v-model:value="form.description" placeholder="Дополнительно (необязательно)" />
+                  <n-input
+                    v-model:value="form.description"
+                    placeholder="Дополнительно (необязательно)"
+                  />
                 </n-form-item>
               </n-grid-item>
             </n-grid>
-            <n-button type="primary" :loading="saving" @click="submit" block>
+            <n-button type="primary" :loading="saving" block @click="submit">
               Добавить доход
             </n-button>
           </n-form>
@@ -77,16 +91,22 @@
 
       <template #right>
         <n-card title="История доходов">
-          <n-space style="margin-bottom:12px" wrap align="center" justify="space-between">
+          <n-space style="margin-bottom: 12px" wrap align="center" justify="space-between">
             <n-space wrap>
-              <n-date-picker v-model:value="filterRange" type="daterange" clearable size="small" @update:value="applyFilters" />
+              <n-date-picker
+                v-model:value="filterRange"
+                type="daterange"
+                clearable
+                size="small"
+                @update:value="applyFilters"
+              />
               <n-select
                 v-model:value="filterCategories"
                 :options="categoryOptions"
                 multiple
                 clearable
                 size="small"
-                style="width:230px"
+                style="width: 230px"
                 placeholder="Все категории"
                 :max-tag-count="1"
                 to="body"
@@ -98,7 +118,7 @@
                 <n-button size="small" @click="enterBulkMode">Пакетное редактирование</n-button>
               </template>
               <template v-else>
-                <n-text v-if="selectedIds.size" depth="2" style="font-size:12px">
+                <n-text v-if="selectedIds.size" depth="2" style="font-size: 12px">
                   Выбрано: {{ selectedIds.size }}
                 </n-text>
                 <template v-if="selectedIds.size">
@@ -126,35 +146,57 @@
             :pagination="pagination"
             :row-props="getRowProps"
             remote
-            @update:page="store.setPage"
             :scroll-x="960"
+            @update:page="store.setPage"
           />
         </n-card>
       </template>
     </SplitPane>
 
     <!-- Initial balance modal -->
-    <n-modal v-model:show="showIbForm" preset="card" title="Баланс на начало месяца" style="max-width:320px">
+    <n-modal
+      v-model:show="showIbForm"
+      preset="card"
+      title="Баланс на начало месяца"
+      style="max-width: 320px"
+    >
       <n-form label-placement="top">
         <n-form-item label="Сумма (₽)">
-          <n-input-number v-model:value="ibAmount" :min="0.01" :precision="2" style="width:100%" placeholder="0.00" />
+          <n-input-number
+            v-model:value="ibAmount"
+            :min="0.01"
+            :precision="2"
+            style="width: 100%"
+            placeholder="0.00"
+          />
         </n-form-item>
       </n-form>
       <template #footer>
         <n-space justify="end">
           <n-button @click="showIbForm = false">Отмена</n-button>
-          <n-button type="primary" :loading="ibSaving" :disabled="!ibAmount" @click="saveIb">Сохранить</n-button>
+          <n-button type="primary" :loading="ibSaving" :disabled="!ibAmount" @click="saveIb">
+            Сохранить
+          </n-button>
         </n-space>
       </template>
     </n-modal>
 
     <!-- Reassign user modal -->
-    <n-modal v-model:show="showReassign" preset="card" title="Изменить автора" style="max-width:320px">
+    <n-modal
+      v-model:show="showReassign"
+      preset="card"
+      title="Изменить автора"
+      style="max-width: 320px"
+    >
       <n-spin :show="loadingUsers">
         <n-list hoverable clickable>
           <n-list-item v-for="u in usersList" :key="u.user_id" @click="doReassign(u)">
             <n-space align="center">
-              <UserAvatar :displayName="u.display_name" :avatarUrl="u.avatar_url || ''" :size="28" />
+              <UserAvatar
+                :displayName="u.display_name"
+                :avatarUrl="u.avatar_url || ''"
+                :size="28"
+              />
               <n-text>{{ u.display_name }}</n-text>
             </n-space>
           </n-list-item>
@@ -173,9 +215,25 @@ function toLocalDateString(ts) {
 }
 import { useMessage } from 'naive-ui'
 import {
-  NCard, NGrid, NGridItem, NForm, NFormItem, NInput, NInputNumber,
-  NSelect, NDatePicker, NButton, NDataTable, NSpace, NText, NPopconfirm, NTooltip,
-  NModal, NSpin, NList, NListItem
+  NCard,
+  NGrid,
+  NGridItem,
+  NForm,
+  NFormItem,
+  NInput,
+  NInputNumber,
+  NSelect,
+  NDatePicker,
+  NButton,
+  NDataTable,
+  NSpace,
+  NText,
+  NPopconfirm,
+  NTooltip,
+  NModal,
+  NSpin,
+  NList,
+  NListItem,
 } from 'naive-ui'
 import { useTransactionsStore } from '@/stores/transactions'
 import { useThemeStore } from '@/stores/theme'
@@ -214,7 +272,9 @@ async function loadInitialBalance() {
   try {
     const { data } = await txApi.list({ type: 'initial_balance', from, to, limit: 1 })
     ibRecord.value = (data.data || [])[0] || null
-  } catch { ibRecord.value = null }
+  } catch {
+    ibRecord.value = null
+  }
 }
 
 async function saveIb() {
@@ -226,7 +286,12 @@ async function saveIb() {
     if (ibRecord.value) {
       await txApi.update(ibRecord.value.id, { amount: ibAmount.value })
     } else {
-      await txApi.create({ type: 'initial_balance', amount: ibAmount.value, date, category: 'Начальный баланс' })
+      await txApi.create({
+        type: 'initial_balance',
+        amount: ibAmount.value,
+        date,
+        category: 'Начальный баланс',
+      })
     }
     await loadInitialBalance()
     showIbForm.value = false
@@ -257,39 +322,60 @@ function handleCategoryCreate(value) {
   return { label: value, value, id: null, is_default: false }
 }
 
-const trashIcon = () => h('svg', {
-  width: 13, height: 13, viewBox: '0 0 24 24', fill: 'none',
-  stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round',
-  style: 'display:block'
-}, [
-  h('polyline', { points: '3 6 5 6 21 6' }),
-  h('path', { d: 'M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6' }),
-  h('path', { d: 'M10 11v6' }),
-  h('path', { d: 'M14 11v6' }),
-  h('path', { d: 'M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2' }),
-])
+const trashIcon = () =>
+  h(
+    'svg',
+    {
+      width: 13,
+      height: 13,
+      viewBox: '0 0 24 24',
+      fill: 'none',
+      stroke: 'currentColor',
+      'stroke-width': '2',
+      'stroke-linecap': 'round',
+      'stroke-linejoin': 'round',
+      style: 'display:block',
+    },
+    [
+      h('polyline', { points: '3 6 5 6 21 6' }),
+      h('path', { d: 'M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6' }),
+      h('path', { d: 'M10 11v6' }),
+      h('path', { d: 'M14 11v6' }),
+      h('path', { d: 'M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2' }),
+    ],
+  )
 
 function renderCategoryOption({ node, option }) {
   if (option.is_default || !option.id) return node
   return h('div', { style: 'display:flex;align-items:center;width:100%' }, [
     h('span', { style: 'flex:1;min-width:0' }, [node]),
-    h('span', {
-      style: `opacity:0.55;cursor:pointer;flex-shrink:0;padding:2px 4px;margin-right:14px;display:inline-flex;align-items:center;transition:opacity .15s;color:${palette.value.text2}`,
-      title: 'Удалить категорию',
-      onClick: async (e) => {
-        e.stopPropagation()
-        try {
-          await catStore.remove(option.id, 'income')
-          if (form.value.category === option.value) form.value.category = ''
-          if (filterCategories.value.includes(option.value)) {
-            filterCategories.value = filterCategories.value.filter(v => v !== option.value)
-            applyFilters()
+    h(
+      'span',
+      {
+        style: `opacity:0.55;cursor:pointer;flex-shrink:0;padding:2px 4px;margin-right:14px;display:inline-flex;align-items:center;transition:opacity .15s;color:${palette.value.text2}`,
+        title: 'Удалить категорию',
+        onClick: async (e) => {
+          e.stopPropagation()
+          try {
+            await catStore.remove(option.id, 'income')
+            if (form.value.category === option.value) form.value.category = ''
+            if (filterCategories.value.includes(option.value)) {
+              filterCategories.value = filterCategories.value.filter((v) => v !== option.value)
+              applyFilters()
+            }
+          } catch {
+            message.error('Не удалось удалить категорию')
           }
-        } catch { message.error('Не удалось удалить категорию') }
+        },
+        onMouseenter: (e) => {
+          e.currentTarget.style.opacity = '1'
+        },
+        onMouseleave: (e) => {
+          e.currentTarget.style.opacity = '0.55'
+        },
       },
-      onMouseenter: e => { e.currentTarget.style.opacity = '1' },
-      onMouseleave: e => { e.currentTarget.style.opacity = '0.55' },
-    }, [trashIcon()]),
+      [trashIcon()],
+    ),
   ])
 }
 
@@ -300,11 +386,15 @@ const rules = {
 }
 
 async function submit() {
-  try { await formRef.value?.validate() } catch { return }
+  try {
+    await formRef.value?.validate()
+  } catch {
+    return
+  }
   saving.value = true
   try {
     const cat = form.value.category
-    if (cat && !catStore.bySection.income.find(c => c.name === cat)) {
+    if (cat && !catStore.bySection.income.find((c) => c.name === cat)) {
       await catStore.add('income', cat).catch(() => {})
     }
     await store.create({
@@ -335,7 +425,13 @@ function getRowProps(row) {
 }
 
 function fillFromTemplate(row) {
-  form.value = { amount: row.amount, date: Date.now(), category: row.category, source: row.source || '', description: row.description || '' }
+  form.value = {
+    amount: row.amount,
+    date: Date.now(),
+    category: row.category,
+    source: row.source || '',
+    description: row.description || '',
+  }
   message.info('Форма заполнена по шаблону')
 }
 
@@ -409,7 +505,11 @@ async function openReassign(row) {
 async function doReassign(user) {
   try {
     await store.update(reassignRow.value.id, {
-      created_by: { user_id: user.user_id, display_name: user.display_name, avatar_url: user.avatar_url || '' }
+      created_by: {
+        user_id: user.user_id,
+        display_name: user.display_name,
+        avatar_url: user.avatar_url || '',
+      },
     })
     message.success(`Автор: ${user.display_name}`)
   } catch (e) {
@@ -421,45 +521,99 @@ async function doReassign(user) {
 
 // ── Render helpers ────────────────────────────────────────────────────────────
 
-const pencilSvg = () => h('svg', {
-  width: 12, height: 12, viewBox: '0 0 24 24', fill: 'none',
-  stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round',
-  style: 'display:block'
-}, [
-  h('path', { d: 'M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7' }),
-  h('path', { d: 'M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z' }),
-])
+const pencilSvg = () =>
+  h(
+    'svg',
+    {
+      width: 12,
+      height: 12,
+      viewBox: '0 0 24 24',
+      fill: 'none',
+      stroke: 'currentColor',
+      'stroke-width': '2',
+      'stroke-linecap': 'round',
+      'stroke-linejoin': 'round',
+      style: 'display:block',
+    },
+    [
+      h('path', { d: 'M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7' }),
+      h('path', { d: 'M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z' }),
+    ],
+  )
 
-const pencilBtn = (onClick) => h('span', {
-  style: 'opacity:0.28;cursor:pointer;display:inline-flex;align-items:center;margin-left:3px;vertical-align:middle;transition:opacity .15s;color:inherit',
-  onMouseenter: e => { e.currentTarget.style.opacity = '0.72' },
-  onMouseleave: e => { e.currentTarget.style.opacity = '0.28' },
-  onClick,
-}, [pencilSvg()])
+const pencilBtn = (onClick) =>
+  h(
+    'span',
+    {
+      style:
+        'opacity:0.28;cursor:pointer;display:inline-flex;align-items:center;margin-left:3px;vertical-align:middle;transition:opacity .15s;color:inherit',
+      onMouseenter: (e) => {
+        e.currentTarget.style.opacity = '0.72'
+      },
+      onMouseleave: (e) => {
+        e.currentTarget.style.opacity = '0.28'
+      },
+      onClick,
+    },
+    [pencilSvg()],
+  )
 
-const okBtn = (onClick) => h(NButton, {
-  size: 'tiny', type: 'primary',
-  style: 'padding:0 4px;min-width:22px;height:22px',
-  onClick,
-}, { default: () => '✓' })
+const okBtn = (onClick) =>
+  h(
+    NButton,
+    {
+      size: 'tiny',
+      type: 'primary',
+      style: 'padding:0 4px;min-width:22px;height:22px',
+      onClick,
+    },
+    { default: () => '✓' },
+  )
 
-const cancelBtn = (onClick) => h(NButton, {
-  size: 'tiny',
-  style: 'padding:0 4px;min-width:22px;height:22px',
-  onClick,
-}, { default: () => '✗' })
+const cancelBtn = (onClick) =>
+  h(
+    NButton,
+    {
+      size: 'tiny',
+      style: 'padding:0 4px;min-width:22px;height:22px',
+      onClick,
+    },
+    { default: () => '✗' },
+  )
 
-const userPlaceholder = (onClick) => h('div', {
-  style: 'cursor:pointer;display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;border:1px dashed currentColor;opacity:0.35;transition:opacity .15s',
-  onMouseenter: e => { e.currentTarget.style.opacity = '0.7' },
-  onMouseleave: e => { e.currentTarget.style.opacity = '0.35' },
-  onClick,
-}, [
-  h('svg', { width: 12, height: 12, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2', style: 'display:block' }, [
-    h('path', { d: 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2' }),
-    h('circle', { cx: 12, cy: 7, r: 4 }),
-  ])
-])
+const userPlaceholder = (onClick) =>
+  h(
+    'div',
+    {
+      style:
+        'cursor:pointer;display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;border:1px dashed currentColor;opacity:0.35;transition:opacity .15s',
+      onMouseenter: (e) => {
+        e.currentTarget.style.opacity = '0.7'
+      },
+      onMouseleave: (e) => {
+        e.currentTarget.style.opacity = '0.35'
+      },
+      onClick,
+    },
+    [
+      h(
+        'svg',
+        {
+          width: 12,
+          height: 12,
+          viewBox: '0 0 24 24',
+          fill: 'none',
+          stroke: 'currentColor',
+          'stroke-width': '2',
+          style: 'display:block',
+        },
+        [
+          h('path', { d: 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2' }),
+          h('circle', { cx: 12, cy: 7, r: 4 }),
+        ],
+      ),
+    ],
+  )
 
 // ── Bulk edit ─────────────────────────────────────────────────────────────────
 
@@ -479,21 +633,24 @@ function exitBulkMode() {
 
 function toggleSelect(id) {
   const s = new Set(selectedIds.value)
-  if (s.has(id)) s.delete(id); else s.add(id)
+  if (s.has(id)) s.delete(id)
+  else s.add(id)
   selectedIds.value = s
 }
 
 const allSelectedHidden = computed(() => {
   if (!selectedIds.value.size) return false
-  const sel = store.items.filter(r => selectedIds.value.has(r.id))
-  return sel.length > 0 && sel.every(r => r.hidden)
+  const sel = store.items.filter((r) => selectedIds.value.has(r.id))
+  return sel.length > 0 && sel.every((r) => r.hidden)
 })
 
 async function bulkToggleHidden() {
   const target = !allSelectedHidden.value
   bulkBusy.value = true
   try {
-    await Promise.all(Array.from(selectedIds.value).map(id => txApi.update(id, { hidden: target })))
+    await Promise.all(
+      Array.from(selectedIds.value).map((id) => txApi.update(id, { hidden: target })),
+    )
     exitBulkMode()
     await store.fetch()
     message.success(target ? 'Записи скрыты' : 'Записи показаны')
@@ -507,7 +664,7 @@ async function bulkToggleHidden() {
 async function bulkDelete() {
   bulkBusy.value = true
   try {
-    await Promise.all(Array.from(selectedIds.value).map(id => txApi.remove(id)))
+    await Promise.all(Array.from(selectedIds.value).map((id) => txApi.remove(id)))
     exitBulkMode()
     await store.fetch()
     message.success('Записи удалены')
@@ -520,22 +677,43 @@ async function bulkDelete() {
 
 const selectionCheckbox = (row) => {
   const sel = selectedIds.value.has(row.id)
-  return h('div', {
-    style: `cursor:pointer;display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;border:2px solid ${sel ? primaryColor.value : palette.value.text3};background:${sel ? primaryColor.value : 'transparent'};color:#fff;transition:background .15s,border-color .15s;box-sizing:border-box`,
-    onClick: () => toggleSelect(row.id),
-  }, sel ? [h('svg', {
-    width: 12, height: 12, viewBox: '0 0 24 24', fill: 'none',
-    stroke: 'currentColor', 'stroke-width': '3', 'stroke-linecap': 'round', 'stroke-linejoin': 'round',
-    style: 'display:block',
-  }, [h('polyline', { points: '20 6 9 17 4 12' })])] : [])
+  return h(
+    'div',
+    {
+      style: `cursor:pointer;display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;border:2px solid ${sel ? primaryColor.value : palette.value.text3};background:${sel ? primaryColor.value : 'transparent'};color:#fff;transition:background .15s,border-color .15s;box-sizing:border-box`,
+      onClick: () => toggleSelect(row.id),
+    },
+    sel
+      ? [
+          h(
+            'svg',
+            {
+              width: 12,
+              height: 12,
+              viewBox: '0 0 24 24',
+              fill: 'none',
+              stroke: 'currentColor',
+              'stroke-width': '3',
+              'stroke-linecap': 'round',
+              'stroke-linejoin': 'round',
+              style: 'display:block',
+            },
+            [h('polyline', { points: '20 6 9 17 4 12' })],
+          ),
+        ]
+      : [],
+  )
 }
 
 // ── Columns ───────────────────────────────────────────────────────────────────
 
 const columns = computed(() => [
   {
-    title: '', key: 'created_by', width: 36, align: 'center',
-    render: row => {
+    title: '',
+    key: 'created_by',
+    width: 36,
+    align: 'center',
+    render: (row) => {
       if (bulkMode.value) return selectionCheckbox(row)
       if (!row.created_by) {
         return h(NTooltip, null, {
@@ -544,158 +722,268 @@ const columns = computed(() => [
         })
       }
       return h(NTooltip, null, {
-        trigger: () => h('div', {
-          style: 'cursor:pointer',
-          onClick: () => openReassign(row)
-        }, h(UserAvatar, { displayName: row.created_by.display_name, avatarUrl: row.created_by.avatar_url || '', size: 24 })),
+        trigger: () =>
+          h(
+            'div',
+            {
+              style: 'cursor:pointer',
+              onClick: () => openReassign(row),
+            },
+            h(UserAvatar, {
+              displayName: row.created_by.display_name,
+              avatarUrl: row.created_by.avatar_url || '',
+              size: 24,
+            }),
+          ),
         default: () => `${row.created_by.display_name} · нажмите для смены`,
       })
-    }
+    },
   },
   {
-    title: 'Дата', key: 'date', width: 100,
-    render: row => new Date(row.date).toLocaleDateString('ru-RU')
+    title: 'Дата',
+    key: 'date',
+    width: 100,
+    render: (row) => new Date(row.date).toLocaleDateString('ru-RU'),
   },
   {
-    title: 'Категория', key: 'category', width: 140,
-    render: row => {
+    title: 'Категория',
+    key: 'category',
+    width: 140,
+    render: (row) => {
       if (isEditing(row.id, 'category')) {
-        return h(NSpace, { size: 2, wrap: false, align: 'center' }, {
-          default: () => [
-            h(NSelect, {
-              value: editCellValue.value,
-              options: categoryOptions.value,
-              filterable: true, tag: true,
-              renderOption: renderCategoryOption,
-              onCreate: (val) => ({ label: val, value: val, id: null, is_default: false }),
-              size: 'small', to: 'body',
-              style: 'width:110px',
-              'onUpdate:value': async (v) => {
-                editCellValue.value = v
-                const isNew = v && !catStore.bySection.income.find(c => c.name === v)
-                if (isNew) await catStore.add('income', v)
-              },
-            }),
-            okBtn(() => confirmCellEdit(row, 'category')),
-            cancelBtn(cancelCellEdit),
-          ]
-        })
+        return h(
+          NSpace,
+          { size: 2, wrap: false, align: 'center' },
+          {
+            default: () => [
+              h(NSelect, {
+                value: editCellValue.value,
+                options: categoryOptions.value,
+                filterable: true,
+                tag: true,
+                renderOption: renderCategoryOption,
+                onCreate: (val) => ({ label: val, value: val, id: null, is_default: false }),
+                size: 'small',
+                to: 'body',
+                style: 'width:110px',
+                'onUpdate:value': async (v) => {
+                  editCellValue.value = v
+                  const isNew = v && !catStore.bySection.income.find((c) => c.name === v)
+                  if (isNew) await catStore.add('income', v)
+                },
+              }),
+              okBtn(() => confirmCellEdit(row, 'category')),
+              cancelBtn(cancelCellEdit),
+            ],
+          },
+        )
       }
-      return h(NSpace, { size: 2, wrap: false, align: 'center' }, {
-        default: () => [
-          h('span', {}, row.category),
-          pencilBtn(() => startCellEdit(row.id, 'category', row.category)),
-        ]
-      })
-    }
+      return h(
+        NSpace,
+        { size: 2, wrap: false, align: 'center' },
+        {
+          default: () => [
+            h('span', {}, row.category),
+            pencilBtn(() => startCellEdit(row.id, 'category', row.category)),
+          ],
+        },
+      )
+    },
   },
   {
-    title: 'Источник', key: 'source', width: 150,
-    render: row => {
+    title: 'Источник',
+    key: 'source',
+    width: 150,
+    render: (row) => {
       if (isEditing(row.id, 'source')) {
-        return h(NSpace, { size: 2, wrap: false, align: 'center' }, {
-          default: () => [
-            h(NInput, {
-              value: editCellValue.value,
-              size: 'small', style: 'width:110px',
-              'onUpdate:value': v => { editCellValue.value = v },
-              onKeydown: e => { if (e.key === 'Enter') confirmCellEdit(row, 'source'); if (e.key === 'Escape') cancelCellEdit() },
-            }),
-            okBtn(() => confirmCellEdit(row, 'source')),
-            cancelBtn(cancelCellEdit),
-          ]
-        })
+        return h(
+          NSpace,
+          { size: 2, wrap: false, align: 'center' },
+          {
+            default: () => [
+              h(NInput, {
+                value: editCellValue.value,
+                size: 'small',
+                style: 'width:110px',
+                'onUpdate:value': (v) => {
+                  editCellValue.value = v
+                },
+                onKeydown: (e) => {
+                  if (e.key === 'Enter') confirmCellEdit(row, 'source')
+                  if (e.key === 'Escape') cancelCellEdit()
+                },
+              }),
+              okBtn(() => confirmCellEdit(row, 'source')),
+              cancelBtn(cancelCellEdit),
+            ],
+          },
+        )
       }
-      return h(NSpace, { size: 2, wrap: false, align: 'center' }, {
-        default: () => [
-          h('span', {}, row.source || ''),
-          pencilBtn(() => startCellEdit(row.id, 'source', row.source || '')),
-        ]
-      })
-    }
+      return h(
+        NSpace,
+        { size: 2, wrap: false, align: 'center' },
+        {
+          default: () => [
+            h('span', {}, row.source || ''),
+            pencilBtn(() => startCellEdit(row.id, 'source', row.source || '')),
+          ],
+        },
+      )
+    },
   },
   {
-    title: 'Описание', key: 'description',
-    render: row => {
+    title: 'Описание',
+    key: 'description',
+    render: (row) => {
       if (isEditing(row.id, 'description')) {
-        return h(NSpace, { size: 2, wrap: false, align: 'center' }, {
-          default: () => [
-            h(NInput, {
-              value: editCellValue.value,
-              size: 'small', style: 'min-width:120px',
-              'onUpdate:value': v => { editCellValue.value = v },
-              onKeydown: e => { if (e.key === 'Enter') confirmCellEdit(row, 'description'); if (e.key === 'Escape') cancelCellEdit() },
-            }),
-            okBtn(() => confirmCellEdit(row, 'description')),
-            cancelBtn(cancelCellEdit),
-          ]
-        })
+        return h(
+          NSpace,
+          { size: 2, wrap: false, align: 'center' },
+          {
+            default: () => [
+              h(NInput, {
+                value: editCellValue.value,
+                size: 'small',
+                style: 'min-width:120px',
+                'onUpdate:value': (v) => {
+                  editCellValue.value = v
+                },
+                onKeydown: (e) => {
+                  if (e.key === 'Enter') confirmCellEdit(row, 'description')
+                  if (e.key === 'Escape') cancelCellEdit()
+                },
+              }),
+              okBtn(() => confirmCellEdit(row, 'description')),
+              cancelBtn(cancelCellEdit),
+            ],
+          },
+        )
       }
-      return h(NSpace, { size: 2, wrap: false, align: 'center' }, {
-        default: () => [
-          h('span', {}, row.description || ''),
-          pencilBtn(() => startCellEdit(row.id, 'description', row.description || '')),
-        ]
-      })
-    }
+      return h(
+        NSpace,
+        { size: 2, wrap: false, align: 'center' },
+        {
+          default: () => [
+            h('span', {}, row.description || ''),
+            pencilBtn(() => startCellEdit(row.id, 'description', row.description || '')),
+          ],
+        },
+      )
+    },
   },
   {
-    title: 'Сумма', key: 'amount', width: 165, align: 'right',
-    render: row => {
+    title: 'Сумма',
+    key: 'amount',
+    width: 165,
+    align: 'right',
+    render: (row) => {
       if (isEditing(row.id, 'amount')) {
-        return h(NSpace, { size: 2, wrap: false, align: 'center', justify: 'end' }, {
-          default: () => [
-            h(NInputNumber, {
-              value: editCellValue.value,
-              min: 0.01, precision: 2, size: 'small', style: 'width:100px',
-              'onUpdate:value': v => { editCellValue.value = v },
-              onKeydown: e => { if (e.key === 'Enter') confirmCellEdit(row, 'amount'); if (e.key === 'Escape') cancelCellEdit() },
-            }),
-            okBtn(() => confirmCellEdit(row, 'amount')),
-            cancelBtn(cancelCellEdit),
-          ]
-        })
+        return h(
+          NSpace,
+          { size: 2, wrap: false, align: 'center', justify: 'end' },
+          {
+            default: () => [
+              h(NInputNumber, {
+                value: editCellValue.value,
+                min: 0.01,
+                precision: 2,
+                size: 'small',
+                style: 'width:100px',
+                'onUpdate:value': (v) => {
+                  editCellValue.value = v
+                },
+                onKeydown: (e) => {
+                  if (e.key === 'Enter') confirmCellEdit(row, 'amount')
+                  if (e.key === 'Escape') cancelCellEdit()
+                },
+              }),
+              okBtn(() => confirmCellEdit(row, 'amount')),
+              cancelBtn(cancelCellEdit),
+            ],
+          },
+        )
       }
-      return h(NSpace, { size: 2, wrap: false, align: 'center', justify: 'end' }, {
-        default: () => [
-          h(NText, {
-            style: `color:${incomeColor.value};font-weight:600;transition:filter .25s${valuesHidden.value ? ';filter:blur(7px);user-select:none' : ''}`
-          }, { default: () => `+${row.amount.toLocaleString('ru-RU')} ₽` }),
-          pencilBtn(() => startCellEdit(row.id, 'amount', row.amount)),
-        ]
-      })
-    }
+      return h(
+        NSpace,
+        { size: 2, wrap: false, align: 'center', justify: 'end' },
+        {
+          default: () => [
+            h(
+              NText,
+              {
+                style: `color:${incomeColor.value};font-weight:600;transition:filter .25s${valuesHidden.value ? ';filter:blur(7px);user-select:none' : ''}`,
+              },
+              { default: () => `+${row.amount.toLocaleString('ru-RU')} ₽` },
+            ),
+            pencilBtn(() => startCellEdit(row.id, 'amount', row.amount)),
+          ],
+        },
+      )
+    },
   },
   {
-    title: '', key: 'actions', width: 100, align: 'center',
-    render: row => h(NSpace, { size: 2, justify: 'center', wrap: false }, {
-      default: () => [
-        h(NTooltip, null, {
-          trigger: () => h(NButton, {
-            size: 'small', quaternary: true,
-            type: row.hidden ? 'warning' : 'default',
-            onClick: () => store.toggle(row.id, !row.hidden)
-          }, { default: () => row.hidden ? '●' : '○' }),
-          default: () => row.hidden ? 'Показать' : 'Скрыть'
-        }),
-        h(NTooltip, null, {
-          trigger: () => h(NButton, {
-            size: 'small', quaternary: true, type: 'info',
-            onClick: () => fillFromTemplate(row)
-          }, { default: () => '+' }),
-          default: () => 'Добавить как шаблон'
-        }),
-        h(NPopconfirm, { onPositiveClick: () => store.remove(row.id) }, {
-          trigger: () => h(NButton, { size: 'small', type: 'error', quaternary: true }, { default: () => '✕' }),
-          default: () => 'Удалить запись?'
-        })
-      ]
-    })
-  }
+    title: '',
+    key: 'actions',
+    width: 100,
+    align: 'center',
+    render: (row) =>
+      h(
+        NSpace,
+        { size: 2, justify: 'center', wrap: false },
+        {
+          default: () => [
+            h(NTooltip, null, {
+              trigger: () =>
+                h(
+                  NButton,
+                  {
+                    size: 'small',
+                    quaternary: true,
+                    type: row.hidden ? 'warning' : 'default',
+                    onClick: () => store.toggle(row.id, !row.hidden),
+                  },
+                  { default: () => (row.hidden ? '●' : '○') },
+                ),
+              default: () => (row.hidden ? 'Показать' : 'Скрыть'),
+            }),
+            h(NTooltip, null, {
+              trigger: () =>
+                h(
+                  NButton,
+                  {
+                    size: 'small',
+                    quaternary: true,
+                    type: 'info',
+                    onClick: () => fillFromTemplate(row),
+                  },
+                  { default: () => '+' },
+                ),
+              default: () => 'Добавить как шаблон',
+            }),
+            h(
+              NPopconfirm,
+              { onPositiveClick: () => store.remove(row.id) },
+              {
+                trigger: () =>
+                  h(
+                    NButton,
+                    { size: 'small', type: 'error', quaternary: true },
+                    { default: () => '✕' },
+                  ),
+                default: () => 'Удалить запись?',
+              },
+            ),
+          ],
+        },
+      ),
+  },
 ])
 
 const pagination = computed(() => ({
-  page: store.page, pageSize: store.limit, itemCount: store.total, showSizePicker: false
+  page: store.page,
+  pageSize: store.limit,
+  itemCount: store.total,
+  showSizePicker: false,
 }))
 
 onMounted(() => {

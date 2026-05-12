@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import { detailRequests as api } from '@/api'
 
 // Single global store: detail-requests are sparse and used across multiple
@@ -13,10 +13,18 @@ export const useDetailRequestsStore = defineStore('detailRequests', () => {
   // Pending creation state — when set, App.vue surfaces the assignee picker.
   const creatingForTx = ref(null)
 
-  function openRequest(id) { openRequestId.value = id }
-  function closeRequest() { openRequestId.value = null }
-  function startCreate(tx) { creatingForTx.value = tx }
-  function cancelCreate() { creatingForTx.value = null }
+  function openRequest(id) {
+    openRequestId.value = id
+  }
+  function closeRequest() {
+    openRequestId.value = null
+  }
+  function startCreate(tx) {
+    creatingForTx.value = tx
+  }
+  function cancelCreate() {
+    creatingForTx.value = null
+  }
 
   async function fetchAll() {
     loading.value = true
@@ -50,13 +58,11 @@ export const useDetailRequestsStore = defineStore('detailRequests', () => {
   }
 
   function getMyOpen(userId) {
-    return items.value.filter(
-      r => r.status === 'open' && r.assignee?.user_id === userId,
-    )
+    return items.value.filter((r) => r.status === 'open' && r.assignee?.user_id === userId)
   }
 
   function getByParentTxId(txId) {
-    return items.value.find(r => r.parent_transaction_id === txId)
+    return items.value.find((r) => r.parent_transaction_id === txId)
   }
 
   return {

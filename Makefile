@@ -111,8 +111,13 @@ lint-backend: ## Run gofmt + go vet + golangci-lint on the Go backend
 	  exit 1; }
 	cd $(BACKEND_DIR) && $(GOLANGCI_LINT) run ./...
 
+.PHONY: lint-web
+lint-web: ## Run ESLint + Prettier check on the Vue frontend
+	cd $(FRONTEND_DIR) && npm run lint
+	cd $(FRONTEND_DIR) && npm run format:check
+
 .PHONY: lint
-lint: lint-backend ## Run all linters (currently backend only — web/android coming)
+lint: lint-backend lint-web ## Run all linters (backend + web; android coming)
 
 .PHONY: test-backend
 test-backend: ## Run Go unit tests (skips integration tests requiring Docker)

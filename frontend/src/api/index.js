@@ -3,7 +3,7 @@ import axios from 'axios'
 const api = axios.create({ baseURL: '/api' })
 
 // Attach JWT token from localStorage on every request.
-api.interceptors.request.use(config => {
+api.interceptors.request.use((config) => {
   const token = localStorage.getItem('auth_token')
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
@@ -12,8 +12,8 @@ api.interceptors.request.use(config => {
 })
 
 api.interceptors.response.use(
-  res => res,
-  err => {
+  (res) => res,
+  (err) => {
     if (err.response?.status === 401) {
       // Clear stale credentials and emit a custom event so App.vue can react.
       localStorage.removeItem('auth_token')
@@ -22,7 +22,7 @@ api.interceptors.response.use(
     }
     const msg = err.response?.data?.error || err.message || 'Ошибка запроса'
     return Promise.reject(new Error(msg))
-  }
+  },
 )
 
 export const transactions = {

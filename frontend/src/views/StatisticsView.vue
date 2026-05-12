@@ -1,28 +1,66 @@
 <template>
   <div>
     <!-- Period selector -->
-    <n-card style="margin-bottom: 16px;">
+    <n-card style="margin-bottom: 16px">
       <n-space align="center" wrap>
         <n-text strong>Период:</n-text>
         <n-button-group>
-          <n-button :type="period === 'month' ? 'primary' : 'default'" @click="setPeriod('month')">Месяц</n-button>
-          <n-button :type="period === 'year' ? 'primary' : 'default'" @click="setPeriod('year')">Год</n-button>
-          <n-button :type="period === 'custom' ? 'primary' : 'default'" @click="setPeriod('custom')">Период</n-button>
+          <n-button :type="period === 'month' ? 'primary' : 'default'" @click="setPeriod('month')">
+            Месяц
+          </n-button>
+          <n-button :type="period === 'year' ? 'primary' : 'default'" @click="setPeriod('year')">
+            Год
+          </n-button>
+          <n-button
+            :type="period === 'custom' ? 'primary' : 'default'"
+            @click="setPeriod('custom')"
+          >
+            Период
+          </n-button>
         </n-button-group>
-        <TilePeriodPicker v-if="period === 'month'" v-model:value="selectedMonth" type="month" @update:value="onPeriodValueChange" />
-        <TilePeriodPicker v-if="period === 'year'" v-model:value="selectedYear" type="year" @update:value="onPeriodValueChange" />
-        <n-date-picker v-if="period === 'custom'" v-model:value="dateRange" type="daterange" @update:value="onPeriodValueChange" clearable />
+        <TilePeriodPicker
+          v-if="period === 'month'"
+          v-model:value="selectedMonth"
+          type="month"
+          @update:value="onPeriodValueChange"
+        />
+        <TilePeriodPicker
+          v-if="period === 'year'"
+          v-model:value="selectedYear"
+          type="year"
+          @update:value="onPeriodValueChange"
+        />
+        <n-date-picker
+          v-if="period === 'custom'"
+          v-model:value="dateRange"
+          type="daterange"
+          clearable
+          @update:value="onPeriodValueChange"
+        />
       </n-space>
     </n-card>
 
     <!-- Summary cards -->
-    <n-grid :cols="3" :x-gap="16" :y-gap="16" responsive="screen" :item-responsive="true" style="margin-bottom: 16px;">
+    <n-grid
+      :cols="3"
+      :x-gap="16"
+      :y-gap="16"
+      responsive="screen"
+      :item-responsive="true"
+      style="margin-bottom: 16px"
+    >
       <n-grid-item span="3 m:1">
         <n-card>
           <n-statistic label="Доходы">
             <template #prefix><span :style="{ color: primaryColor }">↑</span></template>
             <template #default>
-              <span :style="valuesHidden ? 'filter:blur(8px);user-select:none;transition:filter .25s' : 'transition:filter .25s'">
+              <span
+                :style="
+                  valuesHidden
+                    ? 'filter:blur(8px);user-select:none;transition:filter .25s'
+                    : 'transition:filter .25s'
+                "
+              >
                 {{ Math.round(summary.total_income).toLocaleString('ru') }}
               </span>
             </template>
@@ -35,7 +73,13 @@
           <n-statistic label="Расходы">
             <template #prefix><span :style="{ color: palette.expense }">↓</span></template>
             <template #default>
-              <span :style="valuesHidden ? 'filter:blur(8px);user-select:none;transition:filter .25s' : 'transition:filter .25s'">
+              <span
+                :style="
+                  valuesHidden
+                    ? 'filter:blur(8px);user-select:none;transition:filter .25s'
+                    : 'transition:filter .25s'
+                "
+              >
                 {{ Math.round(summary.total_expense).toLocaleString('ru') }}
               </span>
             </template>
@@ -52,7 +96,13 @@
               </span>
             </template>
             <template #default>
-              <span :style="valuesHidden ? 'filter:blur(8px);user-select:none;transition:filter .25s' : 'transition:filter .25s'">
+              <span
+                :style="
+                  valuesHidden
+                    ? 'filter:blur(8px);user-select:none;transition:filter .25s'
+                    : 'transition:filter .25s'
+                "
+              >
                 {{ Math.round(Math.abs(summary.balance)).toLocaleString('ru') }}
               </span>
             </template>
@@ -63,20 +113,37 @@
     </n-grid>
 
     <!-- Charts row -->
-    <n-grid :cols="2" :x-gap="16" :y-gap="16" responsive="screen" :item-responsive="true" style="margin-bottom: 16px;">
+    <n-grid
+      :cols="2"
+      :x-gap="16"
+      :y-gap="16"
+      responsive="screen"
+      :item-responsive="true"
+      style="margin-bottom: 16px"
+    >
       <n-grid-item span="2 m:1">
         <n-card title="Расходы по категориям">
           <n-spin :show="loadingCharts">
-            <v-chart v-if="expensePieData.length" :option="expensePieOption" style="height: 320px;" autoresize />
-            <n-empty v-else description="Нет данных" style="padding: 60px 0;" />
+            <v-chart
+              v-if="expensePieData.length"
+              :option="expensePieOption"
+              style="height: 320px"
+              autoresize
+            />
+            <n-empty v-else description="Нет данных" style="padding: 60px 0" />
           </n-spin>
         </n-card>
       </n-grid-item>
       <n-grid-item span="2 m:1">
         <n-card title="Доходы по источникам">
           <n-spin :show="loadingCharts">
-            <v-chart v-if="incomePieData.length" :option="incomePieOption" style="height: 320px;" autoresize />
-            <n-empty v-else description="Нет данных" style="padding: 60px 0;" />
+            <v-chart
+              v-if="incomePieData.length"
+              :option="incomePieOption"
+              style="height: 320px"
+              autoresize
+            />
+            <n-empty v-else description="Нет данных" style="padding: 60px 0" />
           </n-spin>
         </n-card>
       </n-grid-item>
@@ -88,10 +155,9 @@
         <v-chart
           ref="monthlyChartRef"
           :option="monthlyBarOption"
-          style="height: 320px;"
+          style="height: 320px"
           autoresize
           @brushSelected="onBrushSelected"
-          @brushselected="onBrushSelected"
         />
       </n-spin>
     </n-card>
@@ -102,12 +168,28 @@
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { use } from 'echarts/core'
 import { PieChart, BarChart } from 'echarts/charts'
-import { TitleComponent, TooltipComponent, LegendComponent, GridComponent, BrushComponent, ToolboxComponent } from 'echarts/components'
+import {
+  TitleComponent,
+  TooltipComponent,
+  LegendComponent,
+  GridComponent,
+  BrushComponent,
+  ToolboxComponent,
+} from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import VChart from 'vue-echarts'
 import {
-  NCard, NGrid, NGridItem, NStatistic, NSpin, NEmpty,
-  NSpace, NText, NButton, NButtonGroup, NDatePicker
+  NCard,
+  NGrid,
+  NGridItem,
+  NStatistic,
+  NSpin,
+  NEmpty,
+  NSpace,
+  NText,
+  NButton,
+  NButtonGroup,
+  NDatePicker,
 } from 'naive-ui'
 import { statistics } from '@/api'
 import { storeToRefs } from 'pinia'
@@ -116,9 +198,20 @@ import TilePeriodPicker from '@/components/TilePeriodPicker.vue'
 
 // ToolboxComponent is registered (without UI) because the Brush component
 // depends on it internally; we hide the buttons via `toolbox.show: false`.
-use([PieChart, BarChart, TitleComponent, TooltipComponent, LegendComponent, GridComponent, BrushComponent, ToolboxComponent, CanvasRenderer])
+use([
+  PieChart,
+  BarChart,
+  TitleComponent,
+  TooltipComponent,
+  LegendComponent,
+  GridComponent,
+  BrushComponent,
+  ToolboxComponent,
+  CanvasRenderer,
+])
 
-const { chartColors, primaryColor, palette, valuesHidden, pieChartUnit } = storeToRefs(useThemeStore())
+const { chartColors, primaryColor, palette, valuesHidden, pieChartUnit } =
+  storeToRefs(useThemeStore())
 
 const period = ref('month')
 const selectedMonth = ref(Date.now())
@@ -214,7 +307,7 @@ function onPeriodValueChange() {
 function tooltipStyle() {
   return {
     backgroundColor: palette.value.tooltipBg,
-    borderColor:     palette.value.tooltipBorder,
+    borderColor: palette.value.tooltipBorder,
     textStyle: { color: palette.value.tooltipText },
   }
 }
@@ -223,35 +316,50 @@ function makePieOption(data) {
   const p = palette.value
   const isRuble = pieChartUnit.value === 'ruble'
   const hideValues = isRuble && valuesHidden.value
-  const labelFmt   = isRuble ? (hideValues ? '{b}' : '{b}\n{c} ₽') : '{b}\n{d}%'
+  const labelFmt = isRuble ? (hideValues ? '{b}' : '{b}\n{c} ₽') : '{b}\n{d}%'
   const tooltipFmt = isRuble ? (hideValues ? '{b}' : '{b}: {c} ₽') : '{b}: {d}%'
   return {
     tooltip: { trigger: 'item', formatter: tooltipFmt, ...tooltipStyle() },
     legend: { bottom: 0, type: 'scroll', textStyle: { color: p.chartLabel } },
     color: chartColors.value,
-    series: [{
-      type: 'pie',
-      radius: ['38%', '65%'],
-      center: ['50%', '44%'],
-      data: data.map(d => ({ name: d.category, value: Math.round(d.amount) })),
-      emphasis: { itemStyle: { shadowBlur: 10, shadowColor: p.chartShadow } },
-      label: { color: p.chartLabel, formatter: labelFmt },
-      labelLine: { lineStyle: { color: p.chartLabel } },
-    }],
+    series: [
+      {
+        type: 'pie',
+        radius: ['38%', '65%'],
+        center: ['50%', '44%'],
+        data: data.map((d) => ({ name: d.category, value: Math.round(d.amount) })),
+        emphasis: { itemStyle: { shadowBlur: 10, shadowColor: p.chartShadow } },
+        label: { color: p.chartLabel, formatter: labelFmt },
+        labelLine: { lineStyle: { color: p.chartLabel } },
+      },
+    ],
   }
 }
 
 const expensePieOption = computed(() => makePieOption(expensePieData.value))
-const incomePieOption  = computed(() => makePieOption(incomePieData.value))
+const incomePieOption = computed(() => makePieOption(incomePieData.value))
 
-const MONTH_NAMES = ['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек']
+const MONTH_NAMES = [
+  'Янв',
+  'Фев',
+  'Мар',
+  'Апр',
+  'Май',
+  'Июн',
+  'Июл',
+  'Авг',
+  'Сен',
+  'Окт',
+  'Ноя',
+  'Дек',
+]
 
 const monthlyChartRef = ref(null)
 
 function monthLabel(m) {
   // Cross-year labels include the year so users can tell adjacent years apart.
   // Single-year labels stay compact ("Янв", "Фев", …).
-  const years = new Set(monthlyData.value.map(x => x.year))
+  const years = new Set(monthlyData.value.map((x) => x.year))
   const base = MONTH_NAMES[(m.month || 1) - 1]
   if (years.size > 1) {
     return `${base}\n${String(m.year).slice(2)}`
@@ -264,16 +372,18 @@ const monthlyBarOption = computed(() => {
   return {
     tooltip: {
       trigger: 'axis',
-      formatter: params => {
+      formatter: (params) => {
         if (!params?.length) return ''
         const idx = params[0].dataIndex
         const m = monthlyData.value[idx]
         if (!m) return ''
         const header = `${MONTH_NAMES[(m.month || 1) - 1]} ${m.year}`
-        const rows = params.map(s => {
-          const val = valuesHidden.value ? '••••' : Number(s.value).toLocaleString('ru')
-          return `${s.marker} ${s.seriesName}: <b>${val}</b> ₽`
-        }).join('<br/>')
+        const rows = params
+          .map((s) => {
+            const val = valuesHidden.value ? '••••' : Number(s.value).toLocaleString('ru')
+            return `${s.marker} ${s.seriesName}: <b>${val}</b> ₽`
+          })
+          .join('<br/>')
         return `${header}<br/>${rows}`
       },
       ...tooltipStyle(),
@@ -306,13 +416,26 @@ const monthlyBarOption = computed(() => {
     },
     yAxis: {
       type: 'value',
-      axisLabel: { formatter: valuesHidden.value ? () => '' : v => v.toLocaleString('ru'), color: p.chartAxis },
+      axisLabel: {
+        formatter: valuesHidden.value ? () => '' : (v) => v.toLocaleString('ru'),
+        color: p.chartAxis,
+      },
       splitLine: { lineStyle: { color: p.chartGrid } },
       axisLine: { lineStyle: { color: p.chartGrid } },
     },
     series: [
-      { name: 'Доходы',  type: 'bar', data: monthlyData.value.map(m => Math.round(m.income)),  barMaxWidth: 32 },
-      { name: 'Расходы', type: 'bar', data: monthlyData.value.map(m => Math.round(m.expense)), barMaxWidth: 32 },
+      {
+        name: 'Доходы',
+        type: 'bar',
+        data: monthlyData.value.map((m) => Math.round(m.income)),
+        barMaxWidth: 32,
+      },
+      {
+        name: 'Расходы',
+        type: 'bar',
+        data: monthlyData.value.map((m) => Math.round(m.expense)),
+        barMaxWidth: 32,
+      },
     ],
   }
 })
@@ -344,12 +467,14 @@ function applyBrushSelection(indices) {
   applyingBrush = true
   period.value = 'custom'
   dateRange.value = [fromTs, toTs]
-  reload().then(() => nextTick(() => {
-    // Clear the highlight rectangle and re-arm brush mode for the next drag.
-    monthlyChartRef.value?.dispatchAction?.({ type: 'brush', areas: [] })
-    activateBrush()
-    applyingBrush = false
-  }))
+  reload().then(() =>
+    nextTick(() => {
+      // Clear the highlight rectangle and re-arm brush mode for the next drag.
+      monthlyChartRef.value?.dispatchAction?.({ type: 'brush', areas: [] })
+      activateBrush()
+      applyingBrush = false
+    }),
+  )
 }
 
 function onBrushSelected(p) {

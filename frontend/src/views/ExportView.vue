@@ -1,9 +1,9 @@
 <template>
   <div>
-    <n-card title="Экспорт данных" style="max-width: 640px; margin: 0 auto;">
+    <n-card title="Экспорт данных" style="max-width: 640px; margin: 0 auto">
       <n-form label-placement="top">
         <n-form-item label="Период">
-          <n-date-picker v-model:value="dateRange" type="daterange" clearable style="width:100%" />
+          <n-date-picker v-model:value="dateRange" type="daterange" clearable style="width: 100%" />
         </n-form-item>
         <n-form-item label="Тип транзакций">
           <n-radio-group v-model:value="txType">
@@ -19,38 +19,47 @@
       <n-divider />
 
       <n-space vertical size="large">
-        <n-card embedded style="border-radius: 8px;">
+        <n-card embedded style="border-radius: 8px">
           <n-space align="center" justify="space-between">
             <div>
-              <n-text strong style="font-size:15px;">Excel (.xlsx)</n-text>
-              <n-text depth="3" display="block" style="font-size:13px;margin-top:4px;">
+              <n-text strong style="font-size: 15px">Excel (.xlsx)</n-text>
+              <n-text depth="3" display="block" style="font-size: 13px; margin-top: 4px">
                 4 листа: транзакции, доходы по категориям, расходы по категориям, месячная сводка
               </n-text>
             </div>
-            <n-button type="primary" :loading="loadingExcel" @click="downloadExcel" style="min-width:120px">
-              <template #icon><n-icon><GridOutline /></n-icon></template>
+            <n-button
+              type="primary"
+              :loading="loadingExcel"
+              style="min-width: 120px"
+              @click="downloadExcel"
+            >
+              <template #icon>
+                <n-icon><GridOutline /></n-icon>
+              </template>
               Скачать Excel
             </n-button>
           </n-space>
         </n-card>
 
-        <n-card embedded style="border-radius: 8px;">
+        <n-card embedded style="border-radius: 8px">
           <n-space align="center" justify="space-between">
             <div>
-              <n-text strong style="font-size:15px;">PDF (.pdf)</n-text>
-              <n-text depth="3" display="block" style="font-size:13px;margin-top:4px;">
+              <n-text strong style="font-size: 15px">PDF (.pdf)</n-text>
+              <n-text depth="3" display="block" style="font-size: 13px; margin-top: 4px">
                 Отчёт с таблицей транзакций и финансовой сводкой
               </n-text>
             </div>
-            <n-button :loading="loadingPdf" @click="downloadPdf" style="min-width:120px">
-              <template #icon><n-icon><DocumentTextOutline /></n-icon></template>
+            <n-button :loading="loadingPdf" style="min-width: 120px" @click="downloadPdf">
+              <template #icon>
+                <n-icon><DocumentTextOutline /></n-icon>
+              </template>
               Скачать PDF
             </n-button>
           </n-space>
         </n-card>
       </n-space>
 
-      <n-alert v-if="!dateRange" type="info" style="margin-top:16px;" :bordered="false">
+      <n-alert v-if="!dateRange" type="info" style="margin-top: 16px" :bordered="false">
         Если период не выбран — будут экспортированы все записи
       </n-alert>
     </n-card>
@@ -61,8 +70,18 @@
 import { ref } from 'vue'
 import { useMessage } from 'naive-ui'
 import {
-  NCard, NForm, NFormItem, NDatePicker, NRadioGroup, NRadio, NSpace,
-  NButton, NText, NDivider, NAlert, NIcon
+  NCard,
+  NForm,
+  NFormItem,
+  NDatePicker,
+  NRadioGroup,
+  NRadio,
+  NSpace,
+  NButton,
+  NText,
+  NDivider,
+  NAlert,
+  NIcon,
 } from 'naive-ui'
 import { GridOutline, DocumentTextOutline } from '@vicons/ionicons5'
 import { exportApi, downloadBlob } from '@/api'

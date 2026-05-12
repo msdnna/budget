@@ -4,43 +4,82 @@
          The two contribution numbers come from the api 1.12.0 split:
          regular_contrib (recurring only) and wishlist_contrib − regular_contrib
          (one-off only). -->
-    <n-grid :cols="4" :x-gap="16" :y-gap="16" responsive="screen" :item-responsive="true" style="margin-bottom: 16px;">
+    <n-grid
+      :cols="4"
+      :x-gap="16"
+      :y-gap="16"
+      responsive="screen"
+      :item-responsive="true"
+      style="margin-bottom: 16px"
+    >
       <n-grid-item span="4 s:2 m:1">
         <n-card>
-          <n-statistic label="Прогноз на месяц" :value="Math.round(forecast.total_monthly)" :precision="0">
+          <n-statistic
+            label="Прогноз на месяц"
+            :value="Math.round(forecast.total_monthly)"
+            :precision="0"
+          >
             <template #suffix>₽</template>
           </n-statistic>
         </n-card>
       </n-grid-item>
       <n-grid-item span="4 s:2 m:1">
         <n-card>
-          <n-statistic label="Среднее (3 мес.)" :value="Math.round(forecast.historical_avg)" :precision="0">
+          <n-statistic
+            label="Среднее (3 мес.)"
+            :value="Math.round(forecast.historical_avg)"
+            :precision="0"
+          >
             <template #suffix>₽</template>
           </n-statistic>
         </n-card>
       </n-grid-item>
       <n-grid-item span="4 s:2 m:1">
         <n-card>
-          <n-statistic label="Регулярные расходы / мес" :value="Math.round(forecast.regular_contrib || 0)" :precision="0">
+          <n-statistic
+            label="Регулярные расходы / мес"
+            :value="Math.round(forecast.regular_contrib || 0)"
+            :precision="0"
+          >
             <template #suffix>₽</template>
           </n-statistic>
         </n-card>
       </n-grid-item>
       <n-grid-item span="4 s:2 m:1">
         <n-card>
-          <n-statistic label="Список желаний / мес" :value="Math.round(wishlistOnlyContrib)" :precision="0">
+          <n-statistic
+            label="Список желаний / мес"
+            :value="Math.round(wishlistOnlyContrib)"
+            :precision="0"
+          >
             <template #suffix>₽</template>
           </n-statistic>
         </n-card>
       </n-grid-item>
     </n-grid>
 
-    <n-grid :cols="2" :x-gap="16" :y-gap="16" responsive="screen" :item-responsive="true" style="margin-bottom: 16px;">
+    <n-grid
+      :cols="2"
+      :x-gap="16"
+      :y-gap="16"
+      responsive="screen"
+      :item-responsive="true"
+      style="margin-bottom: 16px"
+    >
       <n-grid-item span="2 m:1">
         <n-card title="Прогноз по категориям">
           <n-spin :show="loadingForecast">
-            <v-chart v-if="forecast.breakdown?.length" :option="forecastPieOption" style="height:300px" autoresize />
-            <n-empty v-else description="Добавьте транзакции или позиции в список желаний" style="padding: 60px 0;" />
+            <v-chart
+              v-if="forecast.breakdown?.length"
+              :option="forecastPieOption"
+              style="height: 300px"
+              autoresize
+            />
+            <n-empty
+              v-else
+              description="Добавьте транзакции или позиции в список желаний"
+              style="padding: 60px 0"
+            />
           </n-spin>
         </n-card>
       </n-grid-item>
@@ -50,16 +89,20 @@
              Inner sub-cards render each item with consistent columns. -->
         <n-card>
           <template #header>
-            <n-space align="center" justify="space-between" style="width:100%">
+            <n-space align="center" justify="space-between" style="width: 100%">
               <n-text strong>Регулярные расходы</n-text>
               <n-space align="center" :size="8">
                 <template v-if="!regularBulkMode">
-                  <n-button size="small" :disabled="!forecast.regular_items?.length" @click="enterRegularBulkMode">
+                  <n-button
+                    size="small"
+                    :disabled="!forecast.regular_items?.length"
+                    @click="enterRegularBulkMode"
+                  >
                     Пакетное редактирование
                   </n-button>
                 </template>
                 <template v-else>
-                  <n-text v-if="regularSelectedIds.size" depth="2" style="font-size:12px">
+                  <n-text v-if="regularSelectedIds.size" depth="2" style="font-size: 12px">
                     Выбрано: {{ regularSelectedIds.size }}
                   </n-text>
                   <template v-if="regularSelectedIds.size">
@@ -83,7 +126,11 @@
             </n-space>
           </template>
           <n-spin :show="loadingForecast">
-            <n-empty v-if="!forecast.regular_items?.length" description="Нет регулярных позиций" style="padding: 30px 0;" />
+            <n-empty
+              v-if="!forecast.regular_items?.length"
+              description="Нет регулярных позиций"
+              style="padding: 30px 0"
+            />
             <n-space v-else vertical :size="8">
               <n-card
                 v-for="item in forecast.regular_items"
@@ -91,7 +138,11 @@
                 size="small"
                 :bordered="true"
                 embedded
-                :style="regularBulkMode && regularSelectedIds.has(item.id) ? `background:${primaryColor}1f` : ''"
+                :style="
+                  regularBulkMode && regularSelectedIds.has(item.id)
+                    ? `background:${primaryColor}1f`
+                    : ''
+                "
               >
                 <div class="regular-row">
                   <div v-if="regularBulkMode" class="regular-row__avatar">
@@ -101,7 +152,17 @@
                       :style="checkboxStyle(regularSelectedIds.has(item.id))"
                       @click="toggleRegularSelect(item.id)"
                     >
-                      <svg v-if="regularSelectedIds.has(item.id)" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                      <svg
+                        v-if="regularSelectedIds.has(item.id)"
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="3"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
                         <polyline points="20 6 9 17 4 12" />
                       </svg>
                     </div>
@@ -109,18 +170,46 @@
                   <div class="regular-row__main">
                     <div class="regular-row__title">
                       <template v-if="isEditing(item.id, 'name') && !regularBulkMode">
-                        <n-input v-model:value="editValue" size="small" style="width:200px"
-                          @keydown.enter="confirmEdit(item)" @keydown.esc="cancelEdit" />
-                        <n-button size="tiny" type="primary" style="padding:0 5px;min-width:24px" @click="confirmEdit(item)">✓</n-button>
-                        <n-button size="tiny" style="padding:0 5px;min-width:24px" @click="cancelEdit">✗</n-button>
+                        <n-input
+                          v-model:value="editValue"
+                          size="small"
+                          style="width: 200px"
+                          @keydown.enter="confirmEdit(item)"
+                          @keydown.esc="cancelEdit"
+                        />
+                        <n-button
+                          size="tiny"
+                          type="primary"
+                          style="padding: 0 5px; min-width: 24px"
+                          @click="confirmEdit(item)"
+                        >
+                          ✓
+                        </n-button>
+                        <n-button
+                          size="tiny"
+                          style="padding: 0 5px; min-width: 24px"
+                          @click="cancelEdit"
+                        >
+                          ✗
+                        </n-button>
                       </template>
                       <template v-else>
-                        <n-text :style="{
-                          fontWeight: 500,
-                          textDecoration: item.paid_this_period ? 'line-through' : 'none',
-                          color: item.paid_this_period ? palette.text3 : 'inherit',
-                        }">{{ item.name }}</n-text>
-                        <span v-if="!regularBulkMode" class="inline-edit-icon" @click="startEdit(item, 'name')" title="Редактировать название" v-html="pencilIconHtml" />
+                        <n-text
+                          :style="{
+                            fontWeight: 500,
+                            textDecoration: item.paid_this_period ? 'line-through' : 'none',
+                            color: item.paid_this_period ? palette.text3 : 'inherit',
+                          }"
+                        >
+                          {{ item.name }}
+                        </n-text>
+                        <span
+                          v-if="!regularBulkMode"
+                          class="inline-edit-icon"
+                          title="Редактировать название"
+                          @click="startEdit(item, 'name')"
+                          v-html="pencilIconHtml"
+                        />
                       </template>
                       <n-tag type="info" size="small" round>{{ freqLabel(item.frequency) }}</n-tag>
                       <n-tag v-if="item.paid_this_period" type="success" size="small" round>
@@ -129,57 +218,142 @@
                     </div>
                     <div class="regular-row__meta">
                       <template v-if="isEditing(item.id, 'category') && !regularBulkMode">
-                        <n-select v-model:value="editValue" :options="categoryOptions" filterable tag
-                          :on-create="handleCategoryCreate" to="body" size="small" style="min-width:180px"
-                          @keydown.enter="confirmEdit(item)" @keydown.esc="cancelEdit" />
-                        <n-button size="tiny" type="primary" style="padding:0 5px;min-width:24px" @click="confirmEdit(item)">✓</n-button>
-                        <n-button size="tiny" style="padding:0 5px;min-width:24px" @click="cancelEdit">✗</n-button>
+                        <n-select
+                          v-model:value="editValue"
+                          :options="categoryOptions"
+                          filterable
+                          tag
+                          :on-create="handleCategoryCreate"
+                          to="body"
+                          size="small"
+                          style="min-width: 180px"
+                          @keydown.enter="confirmEdit(item)"
+                          @keydown.esc="cancelEdit"
+                        />
+                        <n-button
+                          size="tiny"
+                          type="primary"
+                          style="padding: 0 5px; min-width: 24px"
+                          @click="confirmEdit(item)"
+                        >
+                          ✓
+                        </n-button>
+                        <n-button
+                          size="tiny"
+                          style="padding: 0 5px; min-width: 24px"
+                          @click="cancelEdit"
+                        >
+                          ✗
+                        </n-button>
                       </template>
                       <template v-else>
-                        <n-text depth="3" style="font-size:12px">{{ item.category }}</n-text>
-                        <span v-if="!regularBulkMode" class="inline-edit-icon" @click="startEdit(item, 'category')" title="Редактировать категорию" v-html="pencilIconHtml" />
+                        <n-text depth="3" style="font-size: 12px">{{ item.category }}</n-text>
+                        <span
+                          v-if="!regularBulkMode"
+                          class="inline-edit-icon"
+                          title="Редактировать категорию"
+                          @click="startEdit(item, 'category')"
+                          v-html="pencilIconHtml"
+                        />
                       </template>
-                      <span class="meta-sep" v-if="!isEditing(item.id, 'category')">·</span>
+                      <span v-if="!isEditing(item.id, 'category')" class="meta-sep">·</span>
                       <template v-if="isEditing(item.id, 'notes') && !regularBulkMode">
-                        <n-input v-model:value="editValue" size="small" style="width:240px"
-                          @keydown.enter="confirmEdit(item)" @keydown.esc="cancelEdit" />
-                        <n-button size="tiny" type="primary" style="padding:0 5px;min-width:24px" @click="confirmEdit(item)">✓</n-button>
-                        <n-button size="tiny" style="padding:0 5px;min-width:24px" @click="cancelEdit">✗</n-button>
+                        <n-input
+                          v-model:value="editValue"
+                          size="small"
+                          style="width: 240px"
+                          @keydown.enter="confirmEdit(item)"
+                          @keydown.esc="cancelEdit"
+                        />
+                        <n-button
+                          size="tiny"
+                          type="primary"
+                          style="padding: 0 5px; min-width: 24px"
+                          @click="confirmEdit(item)"
+                        >
+                          ✓
+                        </n-button>
+                        <n-button
+                          size="tiny"
+                          style="padding: 0 5px; min-width: 24px"
+                          @click="cancelEdit"
+                        >
+                          ✗
+                        </n-button>
                       </template>
                       <template v-else>
-                        <n-text depth="3" style="font-size:12px; font-style: italic">
+                        <n-text depth="3" style="font-size: 12px; font-style: italic">
                           {{ item.notes || 'без заметок' }}
                         </n-text>
-                        <span v-if="!regularBulkMode" class="inline-edit-icon" @click="startEdit(item, 'notes')" title="Редактировать заметку" v-html="pencilIconHtml" />
+                        <span
+                          v-if="!regularBulkMode"
+                          class="inline-edit-icon"
+                          title="Редактировать заметку"
+                          @click="startEdit(item, 'notes')"
+                          v-html="pencilIconHtml"
+                        />
                       </template>
                       <template v-if="item.paid_this_period && item.next_due_date">
                         <span class="meta-sep">·</span>
-                        <n-text depth="3" style="font-size:12px">след. оплата: {{ formatDueDate(item.next_due_date) }}</n-text>
+                        <n-text depth="3" style="font-size: 12px">
+                          след. оплата: {{ formatDueDate(item.next_due_date) }}
+                        </n-text>
                       </template>
                     </div>
                   </div>
                   <div class="regular-row__amount">
                     <template v-if="isEditing(item.id, 'cost') && !regularBulkMode">
                       <n-space :size="4" align="center">
-                        <n-input-number v-model:value="editValue" :min="1" size="small" style="width:120px"
-                          @keydown.enter="confirmEdit(item)" @keydown.esc="cancelEdit" />
-                        <n-button size="tiny" type="primary" style="padding:0 5px;min-width:24px" @click="confirmEdit(item)">✓</n-button>
-                        <n-button size="tiny" style="padding:0 5px;min-width:24px" @click="cancelEdit">✗</n-button>
+                        <n-input-number
+                          v-model:value="editValue"
+                          :min="1"
+                          size="small"
+                          style="width: 120px"
+                          @keydown.enter="confirmEdit(item)"
+                          @keydown.esc="cancelEdit"
+                        />
+                        <n-button
+                          size="tiny"
+                          type="primary"
+                          style="padding: 0 5px; min-width: 24px"
+                          @click="confirmEdit(item)"
+                        >
+                          ✓
+                        </n-button>
+                        <n-button
+                          size="tiny"
+                          style="padding: 0 5px; min-width: 24px"
+                          @click="cancelEdit"
+                        >
+                          ✗
+                        </n-button>
                       </n-space>
                     </template>
                     <template v-else>
-                      <n-text strong :style="{
-                        color: item.paid_this_period ? palette.text3 : palette.expense,
-                        textDecoration: item.paid_this_period ? 'line-through' : 'none',
-                        whiteSpace: 'nowrap',
-                      }">
-                        {{ Math.round(item.monthly_cost).toLocaleString('ru-RU') }} {{ freqUnit(item.frequency) }}
+                      <n-text
+                        strong
+                        :style="{
+                          color: item.paid_this_period ? palette.text3 : palette.expense,
+                          textDecoration: item.paid_this_period ? 'line-through' : 'none',
+                          whiteSpace: 'nowrap',
+                        }"
+                      >
+                        {{ Math.round(item.monthly_cost).toLocaleString('ru-RU') }}
+                        {{ freqUnit(item.frequency) }}
                       </n-text>
-                      <span v-if="!regularBulkMode" class="inline-edit-icon" @click="startEdit(item, 'cost')" title="Редактировать стоимость" v-html="pencilIconHtml" />
+                      <span
+                        v-if="!regularBulkMode"
+                        class="inline-edit-icon"
+                        title="Редактировать стоимость"
+                        @click="startEdit(item, 'cost')"
+                        v-html="pencilIconHtml"
+                      />
                     </template>
                   </div>
                   <div v-if="!regularBulkMode" class="regular-row__actions">
-                    <n-button size="small" type="success" @click="openPayRegular(item)">Оплачено</n-button>
+                    <n-button size="small" type="success" @click="openPayRegular(item)">
+                      Оплачено
+                    </n-button>
                     <ConfirmActionButton
                       v-if="item.paid_this_period"
                       label="Отменить"
@@ -218,7 +392,7 @@
                 <n-radio-button value="regular">Регулярный расход</n-radio-button>
               </n-radio-group>
             </n-form-item>
-            <n-grid :cols="2" :x-gap="12" :item-responsive="true" style="margin-top:12px">
+            <n-grid :cols="2" :x-gap="12" :item-responsive="true" style="margin-top: 12px">
               <n-grid-item span="2">
                 <n-form-item label="Название" path="name">
                   <n-input v-model:value="form.name" placeholder="Что хочу купить" />
@@ -226,7 +400,11 @@
               </n-grid-item>
               <n-grid-item span="2 s:1">
                 <n-form-item label="Оценочная стоимость (₽)" path="estimated_cost">
-                  <n-input-number v-model:value="form.estimated_cost" :min="1" style="width:100%" />
+                  <n-input-number
+                    v-model:value="form.estimated_cost"
+                    :min="1"
+                    style="width: 100%"
+                  />
                 </n-form-item>
               </n-grid-item>
               <n-grid-item span="2 s:1">
@@ -254,7 +432,7 @@
                 </n-form-item>
               </n-grid-item>
             </n-grid>
-            <n-button type="primary" :loading="saving" @click="submit" block>
+            <n-button type="primary" :loading="saving" block @click="submit">
               {{ form.kind === 'regular' ? 'Добавить в регулярные' : 'Добавить в список' }}
             </n-button>
           </n-form>
@@ -265,7 +443,7 @@
       <n-grid-item span="2 m:1">
         <n-card>
           <template #header>
-            <n-space align="center" justify="space-between" style="width:100%">
+            <n-space align="center" justify="space-between" style="width: 100%">
               <n-text strong>Список желаний</n-text>
               <n-space align="center" :size="8">
                 <template v-if="!bulkMode">
@@ -274,7 +452,7 @@
                   </n-button>
                 </template>
                 <template v-else>
-                  <n-text v-if="selectedIds.size" depth="2" style="font-size:12px">
+                  <n-text v-if="selectedIds.size" depth="2" style="font-size: 12px">
                     Выбрано: {{ selectedIds.size }}
                   </n-text>
                   <template v-if="selectedIds.size">
@@ -298,7 +476,11 @@
             </n-space>
           </template>
           <n-spin :show="wlStore.loading">
-            <n-empty v-if="!wishlistOnly.length" description="Список пуст" style="padding: 40px 0;" />
+            <n-empty
+              v-if="!wishlistOnly.length"
+              description="Список пуст"
+              style="padding: 40px 0"
+            />
             <n-space v-else vertical :size="8">
               <n-card
                 v-for="item in wishlistOnly"
@@ -317,7 +499,17 @@
                         :style="checkboxStyle(selectedIds.has(item.id))"
                         @click="toggleSelect(item.id)"
                       >
-                        <svg v-if="selectedIds.has(item.id)" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                        <svg
+                          v-if="selectedIds.has(item.id)"
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="3"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
                           <polyline points="20 6 9 17 4 12" />
                         </svg>
                       </div>
@@ -335,73 +527,200 @@
                             :avatarUrl="item.created_by.avatar_url || ''"
                             :size="28"
                           />
-                          <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+                          <svg
+                            v-else
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                          >
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                            <circle cx="12" cy="7" r="4" />
                           </svg>
                         </div>
                       </template>
-                      {{ item.created_by ? item.created_by.display_name + ' · нажмите для смены' : 'Назначить автора' }}
+                      {{
+                        item.created_by
+                          ? item.created_by.display_name + ' · нажмите для смены'
+                          : 'Назначить автора'
+                      }}
                     </n-tooltip>
                   </div>
                   <div class="regular-row__main">
                     <div class="regular-row__title">
                       <template v-if="isEditing(item.id, 'name') && !bulkMode">
-                        <n-input v-model:value="editValue" size="small" style="width:200px"
-                          @keydown.enter="confirmEdit(item)" @keydown.esc="cancelEdit" />
-                        <n-button size="tiny" type="primary" style="padding:0 5px;min-width:24px" @click="confirmEdit(item)">✓</n-button>
-                        <n-button size="tiny" style="padding:0 5px;min-width:24px" @click="cancelEdit">✗</n-button>
+                        <n-input
+                          v-model:value="editValue"
+                          size="small"
+                          style="width: 200px"
+                          @keydown.enter="confirmEdit(item)"
+                          @keydown.esc="cancelEdit"
+                        />
+                        <n-button
+                          size="tiny"
+                          type="primary"
+                          style="padding: 0 5px; min-width: 24px"
+                          @click="confirmEdit(item)"
+                        >
+                          ✓
+                        </n-button>
+                        <n-button
+                          size="tiny"
+                          style="padding: 0 5px; min-width: 24px"
+                          @click="cancelEdit"
+                        >
+                          ✗
+                        </n-button>
                       </template>
                       <template v-else>
-                        <n-text :style="{
-                          fontWeight: 500,
-                          textDecoration: item.purchased ? 'line-through' : 'none',
-                          color: item.purchased ? palette.text3 : 'inherit',
-                        }">{{ item.name }}</n-text>
-                        <span v-if="!bulkMode" class="inline-edit-icon" @click="startEdit(item, 'name')" title="Редактировать название" v-html="pencilIconHtml" />
+                        <n-text
+                          :style="{
+                            fontWeight: 500,
+                            textDecoration: item.purchased ? 'line-through' : 'none',
+                            color: item.purchased ? palette.text3 : 'inherit',
+                          }"
+                        >
+                          {{ item.name }}
+                        </n-text>
+                        <span
+                          v-if="!bulkMode"
+                          class="inline-edit-icon"
+                          title="Редактировать название"
+                          @click="startEdit(item, 'name')"
+                          v-html="pencilIconHtml"
+                        />
                       </template>
                       <n-tag v-if="item.purchased" type="success" size="small" round>Куплено</n-tag>
                     </div>
                     <div class="regular-row__meta">
                       <template v-if="isEditing(item.id, 'category') && !bulkMode">
-                        <n-select v-model:value="editValue" :options="categoryOptions" filterable tag
-                          :on-create="handleCategoryCreate" to="body" size="small" style="min-width:180px"
-                          @keydown.enter="confirmEdit(item)" @keydown.esc="cancelEdit" />
-                        <n-button size="tiny" type="primary" style="padding:0 5px;min-width:24px" @click="confirmEdit(item)">✓</n-button>
-                        <n-button size="tiny" style="padding:0 5px;min-width:24px" @click="cancelEdit">✗</n-button>
+                        <n-select
+                          v-model:value="editValue"
+                          :options="categoryOptions"
+                          filterable
+                          tag
+                          :on-create="handleCategoryCreate"
+                          to="body"
+                          size="small"
+                          style="min-width: 180px"
+                          @keydown.enter="confirmEdit(item)"
+                          @keydown.esc="cancelEdit"
+                        />
+                        <n-button
+                          size="tiny"
+                          type="primary"
+                          style="padding: 0 5px; min-width: 24px"
+                          @click="confirmEdit(item)"
+                        >
+                          ✓
+                        </n-button>
+                        <n-button
+                          size="tiny"
+                          style="padding: 0 5px; min-width: 24px"
+                          @click="cancelEdit"
+                        >
+                          ✗
+                        </n-button>
                       </template>
                       <template v-else>
-                        <n-text depth="3" style="font-size:12px">{{ item.category }}</n-text>
-                        <span v-if="!bulkMode" class="inline-edit-icon" @click="startEdit(item, 'category')" title="Редактировать категорию" v-html="pencilIconHtml" />
+                        <n-text depth="3" style="font-size: 12px">{{ item.category }}</n-text>
+                        <span
+                          v-if="!bulkMode"
+                          class="inline-edit-icon"
+                          title="Редактировать категорию"
+                          @click="startEdit(item, 'category')"
+                          v-html="pencilIconHtml"
+                        />
                       </template>
-                      <span class="meta-sep" v-if="!isEditing(item.id, 'category')">·</span>
+                      <span v-if="!isEditing(item.id, 'category')" class="meta-sep">·</span>
                       <template v-if="isEditing(item.id, 'notes') && !bulkMode">
-                        <n-input v-model:value="editValue" size="small" style="width:240px"
-                          @keydown.enter="confirmEdit(item)" @keydown.esc="cancelEdit" />
-                        <n-button size="tiny" type="primary" style="padding:0 5px;min-width:24px" @click="confirmEdit(item)">✓</n-button>
-                        <n-button size="tiny" style="padding:0 5px;min-width:24px" @click="cancelEdit">✗</n-button>
+                        <n-input
+                          v-model:value="editValue"
+                          size="small"
+                          style="width: 240px"
+                          @keydown.enter="confirmEdit(item)"
+                          @keydown.esc="cancelEdit"
+                        />
+                        <n-button
+                          size="tiny"
+                          type="primary"
+                          style="padding: 0 5px; min-width: 24px"
+                          @click="confirmEdit(item)"
+                        >
+                          ✓
+                        </n-button>
+                        <n-button
+                          size="tiny"
+                          style="padding: 0 5px; min-width: 24px"
+                          @click="cancelEdit"
+                        >
+                          ✗
+                        </n-button>
                       </template>
                       <template v-else>
-                        <n-text depth="3" style="font-size:12px; font-style: italic">
+                        <n-text depth="3" style="font-size: 12px; font-style: italic">
                           {{ item.notes || 'без заметок' }}
                         </n-text>
-                        <span v-if="!bulkMode" class="inline-edit-icon" @click="startEdit(item, 'notes')" title="Редактировать заметку" v-html="pencilIconHtml" />
+                        <span
+                          v-if="!bulkMode"
+                          class="inline-edit-icon"
+                          title="Редактировать заметку"
+                          @click="startEdit(item, 'notes')"
+                          v-html="pencilIconHtml"
+                        />
                       </template>
                     </div>
                   </div>
                   <div class="regular-row__amount">
                     <template v-if="isEditing(item.id, 'cost') && !bulkMode">
                       <n-space :size="4" align="center">
-                        <n-input-number v-model:value="editValue" :min="1" size="small" style="width:120px"
-                          @keydown.enter="confirmEdit(item)" @keydown.esc="cancelEdit" />
-                        <n-button size="tiny" type="primary" style="padding:0 5px;min-width:24px" @click="confirmEdit(item)">✓</n-button>
-                        <n-button size="tiny" style="padding:0 5px;min-width:24px" @click="cancelEdit">✗</n-button>
+                        <n-input-number
+                          v-model:value="editValue"
+                          :min="1"
+                          size="small"
+                          style="width: 120px"
+                          @keydown.enter="confirmEdit(item)"
+                          @keydown.esc="cancelEdit"
+                        />
+                        <n-button
+                          size="tiny"
+                          type="primary"
+                          style="padding: 0 5px; min-width: 24px"
+                          @click="confirmEdit(item)"
+                        >
+                          ✓
+                        </n-button>
+                        <n-button
+                          size="tiny"
+                          style="padding: 0 5px; min-width: 24px"
+                          @click="cancelEdit"
+                        >
+                          ✗
+                        </n-button>
                       </n-space>
                     </template>
                     <template v-else>
-                      <n-text strong :style="{ color: item.purchased ? palette.text3 : primaryColor, whiteSpace: 'nowrap', textDecoration: item.purchased ? 'line-through' : 'none' }">
+                      <n-text
+                        strong
+                        :style="{
+                          color: item.purchased ? palette.text3 : primaryColor,
+                          whiteSpace: 'nowrap',
+                          textDecoration: item.purchased ? 'line-through' : 'none',
+                        }"
+                      >
                         {{ item.estimated_cost.toLocaleString('ru-RU') }} ₽
                       </n-text>
-                      <span v-if="!bulkMode" class="inline-edit-icon" @click="startEdit(item, 'cost')" title="Редактировать стоимость" v-html="pencilIconHtml" />
+                      <span
+                        v-if="!bulkMode"
+                        class="inline-edit-icon"
+                        title="Редактировать стоимость"
+                        @click="startEdit(item, 'cost')"
+                        v-html="pencilIconHtml"
+                      />
                     </template>
                   </div>
                   <div v-if="!bulkMode" class="regular-row__actions">
@@ -430,16 +749,24 @@
     <!-- Prefilled expense modal — single shared modal for "Оплачено"
          (regular расход) and "Куплено" (wishlist purchase). Title swaps
          based on payKind. Values copy verbatim from the source item. -->
-    <n-modal v-model:show="showPay" preset="card"
-             :title="payKind === 'wishlist' ? 'Зафиксировать покупку' : 'Зафиксировать оплату'"
-             style="max-width:460px">
+    <n-modal
+      v-model:show="showPay"
+      preset="card"
+      :title="payKind === 'wishlist' ? 'Зафиксировать покупку' : 'Зафиксировать оплату'"
+      style="max-width: 460px"
+    >
       <template v-if="payItem">
         <n-form label-placement="top">
           <n-form-item label="Сумма (₽)">
-            <n-input-number v-model:value="payForm.amount" :min="1" style="width:100%" />
+            <n-input-number v-model:value="payForm.amount" :min="1" style="width: 100%" />
           </n-form-item>
           <n-form-item label="Дата">
-            <n-date-picker v-model:formatted-value="payForm.date" value-format="yyyy-MM-dd" type="date" style="width:100%" />
+            <n-date-picker
+              v-model:formatted-value="payForm.date"
+              value-format="yyyy-MM-dd"
+              type="date"
+              style="width: 100%"
+            />
           </n-form-item>
           <n-form-item label="Категория">
             <n-select
@@ -461,7 +788,12 @@
         </n-form>
         <n-space justify="end">
           <n-button @click="showPay = false">Отмена</n-button>
-          <n-button type="primary" :loading="payingBusy" :disabled="!payForm.amount || !payForm.category" @click="confirmPay">
+          <n-button
+            type="primary"
+            :loading="payingBusy"
+            :disabled="!payForm.amount || !payForm.category"
+            @click="confirmPay"
+          >
             Сохранить
           </n-button>
         </n-space>
@@ -469,12 +801,21 @@
     </n-modal>
 
     <!-- Reassign user modal -->
-    <n-modal v-model:show="showReassign" preset="card" title="Изменить автора" style="max-width:320px">
+    <n-modal
+      v-model:show="showReassign"
+      preset="card"
+      title="Изменить автора"
+      style="max-width: 320px"
+    >
       <n-spin :show="loadingUsers">
         <n-list hoverable clickable>
           <n-list-item v-for="u in usersList" :key="u.user_id" @click="doReassign(u)">
             <n-space align="center">
-              <UserAvatar :displayName="u.display_name" :avatarUrl="u.avatar_url || ''" :size="28" />
+              <UserAvatar
+                :displayName="u.display_name"
+                :avatarUrl="u.avatar_url || ''"
+                :size="28"
+              />
               <n-text>{{ u.display_name }}</n-text>
             </n-space>
           </n-list-item>
@@ -493,10 +834,29 @@ import { TooltipComponent, LegendComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import VChart from 'vue-echarts'
 import {
-  NCard, NGrid, NGridItem, NStatistic, NSpin, NEmpty, NList, NListItem, NThing,
-  NText, NTag, NSpace, NButton, NPopconfirm, NForm, NFormItem, NInput,
-  NInputNumber, NSelect, NModal, NTooltip, NDatePicker,
-  NRadioGroup, NRadioButton
+  NCard,
+  NGrid,
+  NGridItem,
+  NStatistic,
+  NSpin,
+  NEmpty,
+  NList,
+  NListItem,
+  NText,
+  NTag,
+  NSpace,
+  NButton,
+  NPopconfirm,
+  NForm,
+  NFormItem,
+  NInput,
+  NInputNumber,
+  NSelect,
+  NModal,
+  NTooltip,
+  NDatePicker,
+  NRadioGroup,
+  NRadioButton,
 } from 'naive-ui'
 import { useWishlistStore } from '@/stores/wishlist'
 import { useCategoriesStore } from '@/stores/categories'
@@ -518,21 +878,29 @@ const saving = ref(false)
 const loadingForecast = ref(false)
 
 const forecast = ref({
-  total_monthly: 0, historical_avg: 0, wishlist_contrib: 0,
-  breakdown: [], regular_items: [], unpurchased_wishlist: []
+  total_monthly: 0,
+  historical_avg: 0,
+  wishlist_contrib: 0,
+  breakdown: [],
+  regular_items: [],
+  unpurchased_wishlist: [],
 })
 
 // `kind` selects the destination section: 'wishlist' = one-off purchase,
 // 'regular' = recurring expense. The backend still stores both as wishlist
 // rows distinguished only by `frequency` — `kind` is purely a UI affordance.
 const form = ref({
-  kind: 'wishlist', name: '', estimated_cost: null, category: '',
-  frequency: 'monthly', notes: ''
+  kind: 'wishlist',
+  name: '',
+  estimated_cost: null,
+  category: '',
+  frequency: 'monthly',
+  notes: '',
 })
 
 // Wishlist list excludes recurring items — those live in «Регулярные расходы».
 const wishlistOnly = computed(() =>
-  wlStore.items.filter(it => !it.frequency || it.frequency === 'once')
+  wlStore.items.filter((it) => !it.frequency || it.frequency === 'once'),
 )
 
 // ── Inline editing — per-field pencil icons ─────────────────────────────────
@@ -540,40 +908,50 @@ const wishlistOnly = computed(() =>
 // Mirrors the wishlist pattern but generalised to four fields. Only one
 // row+field can be in edit mode at a time. `editingField` is one of:
 // 'name' | 'cost' | 'category' | 'notes'.
-const editingId    = ref(null)
+const editingId = ref(null)
 const editingField = ref(null)
-const editValue    = ref(null)
+const editValue = ref(null)
 
 function isEditing(id, field) {
   return editingId.value === id && editingField.value === field
 }
 
 function startEdit(item, field) {
-  editingId.value    = item.id
+  editingId.value = item.id
   editingField.value = field
   editValue.value =
-    field === 'cost'     ? item.estimated_cost :
-    field === 'name'     ? (item.name || '') :
-    field === 'category' ? (item.category || '') :
-    field === 'notes'    ? (item.notes || '') :
-    null
+    field === 'cost'
+      ? item.estimated_cost
+      : field === 'name'
+        ? item.name || ''
+        : field === 'category'
+          ? item.category || ''
+          : field === 'notes'
+            ? item.notes || ''
+            : null
 }
 
 function cancelEdit() {
-  editingId.value    = null
+  editingId.value = null
   editingField.value = null
-  editValue.value    = null
+  editValue.value = null
 }
 
 async function confirmEdit(item) {
   const field = editingField.value
   if (!field) return
   const apiKey = field === 'cost' ? 'estimated_cost' : field
-  const value  = editValue.value
+  const value = editValue.value
   // Block obviously-bad values: empty cost / empty name. Category/notes can
   // be cleared deliberately.
-  if (field === 'cost' && (!value || value <= 0)) { cancelEdit(); return }
-  if (field === 'name' && !String(value).trim()) { cancelEdit(); return }
+  if (field === 'cost' && (!value || value <= 0)) {
+    cancelEdit()
+    return
+  }
+  if (field === 'name' && !String(value).trim()) {
+    cancelEdit()
+    return
+  }
   try {
     await wlStore.update(item.id, { [apiKey]: value })
     await loadForecast()
@@ -604,17 +982,20 @@ function exitBulkMode() {
 
 function toggleSelect(id) {
   const s = new Set(selectedIds.value)
-  if (s.has(id)) s.delete(id); else s.add(id)
+  if (s.has(id)) s.delete(id)
+  else s.add(id)
   selectedIds.value = s
 }
 
 const purchasableSelected = computed(() =>
-  wlStore.items.filter(it => selectedIds.value.has(it.id) && (!it.frequency || it.frequency === 'once'))
+  wlStore.items.filter(
+    (it) => selectedIds.value.has(it.id) && (!it.frequency || it.frequency === 'once'),
+  ),
 )
 const purchasableSelectedCount = computed(() => purchasableSelected.value.length)
 const allPurchasableSelectedPurchased = computed(() => {
   const list = purchasableSelected.value
-  return list.length > 0 && list.every(it => it.purchased)
+  return list.length > 0 && list.every((it) => it.purchased)
 })
 
 async function bulkTogglePurchased() {
@@ -623,7 +1004,7 @@ async function bulkTogglePurchased() {
   const target = !allPurchasableSelectedPurchased.value
   bulkBusy.value = true
   try {
-    await Promise.all(list.map(it => wlApi.update(it.id, { purchased: target })))
+    await Promise.all(list.map((it) => wlApi.update(it.id, { purchased: target })))
     exitBulkMode()
     await Promise.all([wlStore.fetch(), loadForecast()])
     message.success(target ? 'Отмечено как куплено' : 'Отмечено как не куплено')
@@ -637,7 +1018,7 @@ async function bulkTogglePurchased() {
 async function bulkDelete() {
   bulkBusy.value = true
   try {
-    await Promise.all(Array.from(selectedIds.value).map(id => wlApi.remove(id)))
+    await Promise.all(Array.from(selectedIds.value).map((id) => wlApi.remove(id)))
     exitBulkMode()
     await Promise.all([wlStore.fetch(), loadForecast()])
     message.success('Записи удалены')
@@ -669,18 +1050,18 @@ function checkboxStyle(checked) {
 // expense linked via wishlist_id) — `payKind` only changes the modal title
 // and whether we additionally flip the wishlist item's `purchased` flag
 // after the transaction lands.
-const showPay         = ref(false)
-const payItem         = ref(null)        // wishlist row OR forecast.regular_items entry
-const payKind         = ref('regular')   // 'regular' | 'wishlist'
-const payingBusy      = ref(false)
-const cancelingId     = ref(null)
+const showPay = ref(false)
+const payItem = ref(null) // wishlist row OR forecast.regular_items entry
+const payKind = ref('regular') // 'regular' | 'wishlist'
+const payingBusy = ref(false)
+const cancelingId = ref(null)
 const payForm = ref({ amount: null, date: '', category: '', purpose: '', description: '' })
 
 // Bulk mode for «Регулярные расходы». Mirrors wishlist's bulkMode/selectedIds
 // but lives in a separate slot so toggling one doesn't bleed into the other.
-const regularBulkMode    = ref(false)
+const regularBulkMode = ref(false)
 const regularSelectedIds = ref(new Set())
-const regularBulkBusy    = ref(false)
+const regularBulkBusy = ref(false)
 
 function enterRegularBulkMode() {
   regularBulkMode.value = true
@@ -693,15 +1074,16 @@ function exitRegularBulkMode() {
 }
 function toggleRegularSelect(id) {
   const s = new Set(regularSelectedIds.value)
-  if (s.has(id)) s.delete(id); else s.add(id)
+  if (s.has(id)) s.delete(id)
+  else s.add(id)
   regularSelectedIds.value = s
 }
 
 const selectedRegularPaidIds = computed(() => {
   const ids = regularSelectedIds.value
   return (forecast.value.regular_items || [])
-    .filter(it => ids.has(it.id) && it.paid_this_period)
-    .map(it => it.id)
+    .filter((it) => ids.has(it.id) && it.paid_this_period)
+    .map((it) => it.id)
 })
 
 async function bulkCancelRegular() {
@@ -709,24 +1091,30 @@ async function bulkCancelRegular() {
   if (!ids.length) return
   regularBulkBusy.value = true
   try {
-    await Promise.all(ids.map(id => wlApi.unlinkPeriod(id)))
+    await Promise.all(ids.map((id) => wlApi.unlinkPeriod(id)))
     exitRegularBulkMode()
     await loadForecast()
     message.success('Привязки сняты')
-  } catch (e) { message.error(e.message) }
-  finally { regularBulkBusy.value = false }
+  } catch (e) {
+    message.error(e.message)
+  } finally {
+    regularBulkBusy.value = false
+  }
 }
 async function bulkDeleteRegular() {
   const ids = Array.from(regularSelectedIds.value)
   if (!ids.length) return
   regularBulkBusy.value = true
   try {
-    await Promise.all(ids.map(id => wlApi.remove(id)))
+    await Promise.all(ids.map((id) => wlApi.remove(id)))
     exitRegularBulkMode()
     await Promise.all([wlStore.fetch(), loadForecast()])
     message.success('Записи удалены')
-  } catch (e) { message.error(e.message) }
-  finally { regularBulkBusy.value = false }
+  } catch (e) {
+    message.error(e.message)
+  } finally {
+    regularBulkBusy.value = false
+  }
 }
 
 const expenseCategoryOptions = computed(() => catStore.options('expense'))
@@ -781,7 +1169,7 @@ async function confirmPay() {
   payingBusy.value = true
   try {
     const cat = payForm.value.category
-    if (cat && !catStore.bySection.expense?.find(c => c.name === cat)) {
+    if (cat && !catStore.bySection.expense?.find((c) => c.name === cat)) {
       await catStore.add('expense', cat).catch(() => {})
     }
     await txApi.create({
@@ -860,7 +1248,11 @@ async function openReassign(itemId) {
 async function doReassign(user) {
   try {
     await wlStore.update(reassignTargetId.value, {
-      created_by: { user_id: user.user_id, display_name: user.display_name, avatar_url: user.avatar_url || '' }
+      created_by: {
+        user_id: user.user_id,
+        display_name: user.display_name,
+        avatar_url: user.avatar_url || '',
+      },
     })
     message.success(`Автор: ${user.display_name}`)
   } catch (e) {
@@ -879,35 +1271,56 @@ function handleCategoryCreate(value) {
   return { label: value, value, id: null, is_default: false }
 }
 
-const trashIcon = () => h('svg', {
-  width: 13, height: 13, viewBox: '0 0 24 24', fill: 'none',
-  stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round',
-  style: 'display:block'
-}, [
-  h('polyline', { points: '3 6 5 6 21 6' }),
-  h('path', { d: 'M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6' }),
-  h('path', { d: 'M10 11v6' }),
-  h('path', { d: 'M14 11v6' }),
-  h('path', { d: 'M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2' }),
-])
+const trashIcon = () =>
+  h(
+    'svg',
+    {
+      width: 13,
+      height: 13,
+      viewBox: '0 0 24 24',
+      fill: 'none',
+      stroke: 'currentColor',
+      'stroke-width': '2',
+      'stroke-linecap': 'round',
+      'stroke-linejoin': 'round',
+      style: 'display:block',
+    },
+    [
+      h('polyline', { points: '3 6 5 6 21 6' }),
+      h('path', { d: 'M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6' }),
+      h('path', { d: 'M10 11v6' }),
+      h('path', { d: 'M14 11v6' }),
+      h('path', { d: 'M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2' }),
+    ],
+  )
 
 function renderCategoryOption({ node, option }) {
   if (option.is_default || !option.id) return node
   return h('div', { style: 'display:flex;align-items:center;width:100%' }, [
     h('span', { style: 'flex:1;min-width:0' }, [node]),
-    h('span', {
-      style: `opacity:0.55;cursor:pointer;flex-shrink:0;padding:2px 4px;margin-right:14px;display:inline-flex;align-items:center;transition:opacity .15s;color:${palette.value.text2}`,
-      title: 'Удалить категорию',
-      onClick: async (e) => {
-        e.stopPropagation()
-        try {
-          await catStore.remove(option.id, 'wishlist')
-          if (form.value.category === option.value) form.value.category = ''
-        } catch { message.error('Не удалось удалить категорию') }
+    h(
+      'span',
+      {
+        style: `opacity:0.55;cursor:pointer;flex-shrink:0;padding:2px 4px;margin-right:14px;display:inline-flex;align-items:center;transition:opacity .15s;color:${palette.value.text2}`,
+        title: 'Удалить категорию',
+        onClick: async (e) => {
+          e.stopPropagation()
+          try {
+            await catStore.remove(option.id, 'wishlist')
+            if (form.value.category === option.value) form.value.category = ''
+          } catch {
+            message.error('Не удалось удалить категорию')
+          }
+        },
+        onMouseenter: (e) => {
+          e.currentTarget.style.opacity = '1'
+        },
+        onMouseleave: (e) => {
+          e.currentTarget.style.opacity = '0.55'
+        },
       },
-      onMouseenter: e => { e.currentTarget.style.opacity = '1' },
-      onMouseleave: e => { e.currentTarget.style.opacity = '0.55' },
-    }, [trashIcon()]),
+      [trashIcon()],
+    ),
   ])
 }
 
@@ -922,19 +1335,26 @@ const recurringFrequencyOptions = [
 
 const rules = {
   name: [{ required: true, message: 'Введите название', trigger: 'blur' }],
-  estimated_cost: [{ required: true, type: 'number', message: 'Введите стоимость', trigger: 'blur' }],
+  estimated_cost: [
+    { required: true, type: 'number', message: 'Введите стоимость', trigger: 'blur' },
+  ],
   category: [{ required: true, message: 'Выберите категорию', trigger: 'change' }],
 }
 
 function freqLabel(f) {
-  const map = { once: 'Однократно', monthly: 'Ежемесячно', quarterly: 'Ежеквартально', yearly: 'Ежегодно' }
+  const map = {
+    once: 'Однократно',
+    monthly: 'Ежемесячно',
+    quarterly: 'Ежеквартально',
+    yearly: 'Ежегодно',
+  }
   return map[f] || f
 }
 
 // Per-period suffix for displayed amounts in «Регулярные расходы» rows.
 function freqUnit(f) {
   if (f === 'quarterly') return '₽/кв'
-  if (f === 'yearly')    return '₽/год'
+  if (f === 'yearly') return '₽/год'
   return '₽/мес'
 }
 
@@ -950,11 +1370,15 @@ function formatDueDate(iso) {
 const pencilIconHtml = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`
 
 async function submit() {
-  try { await formRef.value?.validate() } catch { return }
+  try {
+    await formRef.value?.validate()
+  } catch {
+    return
+  }
   saving.value = true
   try {
     const cat = form.value.category
-    if (cat && !catStore.bySection.wishlist.find(c => c.name === cat)) {
+    if (cat && !catStore.bySection.wishlist.find((c) => c.name === cat)) {
       await catStore.add('wishlist', cat).catch(() => {})
     }
     // Derive frequency from the type pill: wishlist branch is always 'once'.
@@ -968,10 +1392,16 @@ async function submit() {
     })
     catStore.recordUse('wishlist', cat)
     await loadForecast()
-    message.success(form.value.kind === 'regular' ? 'Добавлено в регулярные расходы' : 'Добавлено в список желаний')
+    message.success(
+      form.value.kind === 'regular'
+        ? 'Добавлено в регулярные расходы'
+        : 'Добавлено в список желаний',
+    )
     form.value = {
       kind: form.value.kind, // keep the user's last choice for quick repeat entry
-      name: '', estimated_cost: null, category: '',
+      name: '',
+      estimated_cost: null,
+      category: '',
       frequency: form.value.kind === 'regular' ? form.value.frequency : 'monthly',
       notes: '',
     }
@@ -996,21 +1426,28 @@ const forecastPieOption = computed(() => {
   const p = palette.value
   return {
     tooltip: {
-      trigger: 'item', formatter: '{b}: {c} ₽/мес ({d}%)',
-      backgroundColor: p.tooltipBg, borderColor: p.tooltipBorder,
+      trigger: 'item',
+      formatter: '{b}: {c} ₽/мес ({d}%)',
+      backgroundColor: p.tooltipBg,
+      borderColor: p.tooltipBorder,
       textStyle: { color: p.tooltipText },
     },
     legend: { bottom: 0, type: 'scroll', textStyle: { color: p.chartLabel } },
     color: chartColors.value,
-    series: [{
-      type: 'pie',
-      radius: ['38%', '65%'],
-      center: ['50%', '44%'],
-      data: (forecast.value.breakdown || []).map(d => ({ name: d.category, value: Math.round(d.amount) })),
-      emphasis: { itemStyle: { shadowBlur: 10, shadowColor: p.chartShadow } },
-      label: { color: p.chartLabel, formatter: '{b}\n{d}%' },
-      labelLine: { lineStyle: { color: p.chartLabel } },
-    }],
+    series: [
+      {
+        type: 'pie',
+        radius: ['38%', '65%'],
+        center: ['50%', '44%'],
+        data: (forecast.value.breakdown || []).map((d) => ({
+          name: d.category,
+          value: Math.round(d.amount),
+        })),
+        emphasis: { itemStyle: { shadowBlur: 10, shadowColor: p.chartShadow } },
+        label: { color: p.chartLabel, formatter: '{b}\n{d}%' },
+        labelLine: { lineStyle: { color: p.chartLabel } },
+      },
+    ],
   }
 })
 
@@ -1094,7 +1531,7 @@ onMounted(async () => {
   margin-top: 2px;
 }
 .meta-sep {
-  color: var(--n-text-color-3, rgba(255,255,255,0.3));
+  color: var(--n-text-color-3, rgba(255, 255, 255, 0.3));
   font-size: 12px;
 }
 .regular-row__amount {

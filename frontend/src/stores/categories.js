@@ -24,9 +24,17 @@ export const useCategoriesStore = defineStore('categories', () => {
   const loading = ref({ expense: false, income: false, wishlist: false })
   const usageBySection = ref(loadUsage())
 
-  watch(usageBySection, (v) => {
-    try { localStorage.setItem(USAGE_STORAGE_KEY, JSON.stringify(v)) } catch {}
-  }, { deep: true })
+  watch(
+    usageBySection,
+    (v) => {
+      try {
+        localStorage.setItem(USAGE_STORAGE_KEY, JSON.stringify(v))
+      } catch {
+        // Quota exceeded or storage unavailable — usage tracking is best-effort.
+      }
+    },
+    { deep: true },
+  )
 
   async function load(section) {
     if (loading.value[section]) return
@@ -42,7 +50,7 @@ export const useCategoriesStore = defineStore('categories', () => {
   async function add(section, name) {
     const trimmed = name.trim()
     if (!trimmed) return null
-    const existing = bySection.value[section].find(c => c.name === trimmed)
+    const existing = bySection.value[section].find((c) => c.name === trimmed)
     if (existing) return existing
     const { data } = await catApi.create({ section, name: trimmed })
     bySection.value[section].push(data)
@@ -51,7 +59,7 @@ export const useCategoriesStore = defineStore('categories', () => {
 
   async function remove(id, section) {
     await catApi.remove(id)
-    bySection.value[section] = bySection.value[section].filter(c => c.id !== id)
+    bySection.value[section] = bySection.value[section].filter((c) => c.id !== id)
   }
 
   function recordUse(section, name) {
@@ -73,7 +81,7 @@ export const useCategoriesStore = defineStore('categories', () => {
   }
 
   function options(section) {
-    return sortByRecentUse(section, bySection.value[section]).map(c => ({
+    return sortByRecentUse(section, bySection.value[section]).map((c) => ({
       label: c.name,
       value: c.name,
       id: c.id,

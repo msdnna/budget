@@ -146,6 +146,15 @@
 
 ## Web (frontend)
 
+### [1.16.3] — 2026-05-12
+
+#### Changed
+- **Линтеры web подняты до чистого состояния (CI-readiness, Phase 2 — линт).** Добавлен `frontend/eslint.config.js` (ESLint 9 flat config: `@eslint/js` recommended + `eslint-plugin-vue` flat/recommended + `eslint-config-prettier`), `.prettierrc.json` (singleQuote, no-semi, printWidth 100, trailing-comma all, arrow-parens always) и `.prettierignore`. `package.json` обзавёлся `"type": "module"` и скриптами `lint` / `lint:fix` / `format` / `format:check` (lint с `--max-warnings=0`).
+- Все исходники в `frontend/src/` (`+ index.html` + `vite.config.js`) переформатированы Prettier'ом — `npm run format:check` и `npm run lint` зелёные.
+- Удалены неиспользуемые импорты: `h, defineComponent` в `DetailRequestBell.vue`, `NThing` в `ForecastingView.vue`, `computed` в `stores/detailRequests.js`, неназначаемая `const props` в `LoginModal.vue`.
+- Убран дубликат `@brushselected` в `StatisticsView.vue` (parsing-error `duplicate-attribute`), пустые `catch {}` дополнены поясняющими комментариями.
+- `make lint-web` (`npm run lint` + `npm run format:check`); `make lint` теперь зовёт `lint-backend lint-web`.
+
 ### [1.16.2] — 2026-05-12
 
 #### Changed

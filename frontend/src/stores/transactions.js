@@ -15,7 +15,14 @@ export function useTransactionsStore(scope = 'default') {
       const loading = ref(false)
       const page = ref(1)
       const limit = ref(20)
-      const filters = ref({ type: '', category: '', categories: [], from: '', to: '', includeDetailed: false })
+      const filters = ref({
+        type: '',
+        category: '',
+        categories: [],
+        from: '',
+        to: '',
+        includeDetailed: false,
+      })
 
       async function fetch() {
         loading.value = true
@@ -70,12 +77,34 @@ export function useTransactionsStore(scope = 'default') {
         // Replace, don't merge: callers always pass the complete intended
         // filter spec, so unspecified fields must clear. Merging caused stale
         // category/date filters to persist across view remounts.
-        filters.value = { type: '', category: '', categories: [], from: '', to: '', includeDetailed: false, ...f }
+        filters.value = {
+          type: '',
+          category: '',
+          categories: [],
+          from: '',
+          to: '',
+          includeDetailed: false,
+          ...f,
+        }
         page.value = 1
         fetch()
       }
 
-      return { items, total, loading, page, limit, filters, fetch, create, update, remove, toggle, setPage, setFilters }
+      return {
+        items,
+        total,
+        loading,
+        page,
+        limit,
+        filters,
+        fetch,
+        create,
+        update,
+        remove,
+        toggle,
+        setPage,
+        setFilters,
+      }
     })
     stores.set(scope, factory)
   }

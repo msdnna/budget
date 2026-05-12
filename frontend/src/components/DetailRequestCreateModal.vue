@@ -4,14 +4,25 @@
     preset="card"
     title="Создать запрос на детализацию"
     style="max-width: 420px"
-    @update:show="v => !v && $emit('close')"
+    @update:show="(v) => !v && $emit('close')"
   >
-    <div v-if="transaction" style="margin-bottom: 12px; padding: 10px 12px; background: var(--surface-alt); border-radius: 6px; border: 1px solid var(--border)">
+    <div
+      v-if="transaction"
+      style="
+        margin-bottom: 12px;
+        padding: 10px 12px;
+        background: var(--surface-alt);
+        border-radius: 6px;
+        border: 1px solid var(--border);
+      "
+    >
       <div style="font-size: 12px; opacity: 0.7">Транзакция</div>
       <div style="font-weight: 600; margin-top: 2px">
         {{ transaction.category }} · {{ transaction.amount.toLocaleString('ru-RU') }} ₽
       </div>
-      <div v-if="transaction.purpose" style="font-size: 12px; opacity: 0.7">{{ transaction.purpose }}</div>
+      <div v-if="transaction.purpose" style="font-size: 12px; opacity: 0.7">
+        {{ transaction.purpose }}
+      </div>
     </div>
 
     <div style="font-size: 12px; opacity: 0.7; margin-bottom: 6px">Кому назначить</div>
@@ -83,5 +94,10 @@ async function pick(user) {
   }
 }
 
-watch(() => props.show, s => { if (s) loadUsers() })
+watch(
+  () => props.show,
+  (s) => {
+    if (s) loadUsers()
+  },
+)
 </script>

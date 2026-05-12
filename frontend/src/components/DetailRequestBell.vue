@@ -18,7 +18,13 @@
     <div class="dr-popover">
       <div class="dr-popover-title" :style="{ color: palette.text3 }">Запросы на детализацию</div>
 
-      <n-tabs v-model:value="tab" type="line" size="small" justify-content="space-evenly" pane-style="padding-top: 6px;">
+      <n-tabs
+        v-model:value="tab"
+        type="line"
+        size="small"
+        justify-content="space-evenly"
+        pane-style="padding-top: 6px;"
+      >
         <n-tab-pane name="open" :tab="`Открытые${openCount ? ' · ' + openCount : ''}`">
           <DrList :items="myOpen" :empty="'Нет открытых запросов'" @open="open" />
         </n-tab-pane>
@@ -35,10 +41,8 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch, h, defineComponent } from 'vue'
-import {
-  NPopover, NButton, NIcon, NBadge, NTooltip, NTabs, NTabPane,
-} from 'naive-ui'
+import { ref, computed, onMounted, watch } from 'vue'
+import { NPopover, NButton, NIcon, NBadge, NTooltip, NTabs, NTabPane } from 'naive-ui'
 import { AlertCircleOutline } from '@vicons/ionicons5'
 import { useDetailRequestsStore } from '@/stores/detailRequests'
 import { useAuthStore } from '@/stores/auth'
@@ -51,27 +55,42 @@ const auth = useAuthStore()
 const { palette } = storeToRefs(useThemeStore())
 const tab = ref('open')
 
-const myOpen = computed(() => store.items.filter(r =>
-  r.status === 'open' && r.assignee?.user_id === auth.user?.user_id,
-))
-const myClosed = computed(() => store.items.filter(r =>
-  r.status === 'closed' &&
-  (r.assignee?.user_id === auth.user?.user_id || r.creator?.user_id === auth.user?.user_id),
-))
+const myOpen = computed(() =>
+  store.items.filter((r) => r.status === 'open' && r.assignee?.user_id === auth.user?.user_id),
+)
+const myClosed = computed(() =>
+  store.items.filter(
+    (r) =>
+      r.status === 'closed' &&
+      (r.assignee?.user_id === auth.user?.user_id || r.creator?.user_id === auth.user?.user_id),
+  ),
+)
 const openCount = computed(() => myOpen.value.length)
 const badgeCount = computed(() => openCount.value)
 
-function open(id) { store.openRequest(id) }
+function open(id) {
+  store.openRequest(id)
+}
 
-watch(() => auth.isAuthenticated, v => {
-  if (v) store.fetchAll()
-}, { immediate: true })
+watch(
+  () => auth.isAuthenticated,
+  (v) => {
+    if (v) store.fetchAll()
+  },
+  { immediate: true },
+)
 
-onMounted(() => { if (auth.isAuthenticated) store.fetchAll() })
+onMounted(() => {
+  if (auth.isAuthenticated) store.fetchAll()
+})
 </script>
 
 <style scoped>
-.dr-popover { padding: 6px 2px; min-width: 280px; max-width: 360px; }
+.dr-popover {
+  padding: 6px 2px;
+  min-width: 280px;
+  max-width: 360px;
+}
 .dr-popover-title {
   font-size: 11px;
   text-transform: uppercase;
@@ -79,7 +98,8 @@ onMounted(() => { if (auth.isAuthenticated) store.fetchAll() })
   margin-bottom: 10px;
 }
 .dr-popover-footer {
-  display: flex; justify-content: flex-end;
+  display: flex;
+  justify-content: flex-end;
   margin-top: 6px;
 }
 </style>

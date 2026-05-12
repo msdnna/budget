@@ -1,12 +1,12 @@
 <template>
-  <div class="split-pane" ref="container">
+  <div ref="container" class="split-pane">
     <div class="split-left" :style="leftStyle">
       <slot name="left" />
     </div>
     <div
       class="split-divider"
-      @mousedown.prevent="startDrag"
       title="Потяните для изменения размера"
+      @mousedown.prevent="startDrag"
     >
       <div class="split-divider-dots" />
     </div>
@@ -89,7 +89,9 @@ onUnmounted(stopDrag)
   height: 32px;
   border-radius: 2px;
   background: var(--divider);
-  transition: background 0.2s, transform 0.15s;
+  transition:
+    background 0.2s,
+    transform 0.15s;
 }
 
 .split-divider:hover .split-divider-dots {
