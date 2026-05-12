@@ -85,6 +85,69 @@
       </n-grid-item>
 
       <n-grid-item span="2 m:1">
+        <n-card title="Добавить">
+          <n-form ref="formRef" :model="form" :rules="rules" label-placement="top">
+            <!-- Type segmented selector decides whether the entry goes into
+                 «Список желаний» (frequency=once) or «Регулярные расходы»
+                 (monthly/quarterly/yearly). The frequency picker only
+                 appears for the recurring branch. -->
+            <n-form-item label="Тип" :show-feedback="false">
+              <n-radio-group v-model:value="form.kind" name="kind">
+                <n-radio-button value="wishlist">Желаемая покупка</n-radio-button>
+                <n-radio-button value="regular">Регулярный расход</n-radio-button>
+              </n-radio-group>
+            </n-form-item>
+            <n-grid :cols="2" :x-gap="12" :item-responsive="true" style="margin-top: 12px">
+              <n-grid-item span="2">
+                <n-form-item label="Название" path="name">
+                  <n-input v-model:value="form.name" placeholder="Что хочу купить" />
+                </n-form-item>
+              </n-grid-item>
+              <n-grid-item span="2 s:1">
+                <n-form-item label="Оценочная стоимость (₽)" path="estimated_cost">
+                  <n-input-number
+                    v-model:value="form.estimated_cost"
+                    :min="1"
+                    style="width: 100%"
+                  />
+                </n-form-item>
+              </n-grid-item>
+              <n-grid-item span="2 s:1">
+                <n-form-item label="Категория" path="category">
+                  <n-select
+                    v-model:value="form.category"
+                    :options="categoryOptions"
+                    filterable
+                    tag
+                    :on-create="handleCategoryCreate"
+                    :render-option="renderCategoryOption"
+                    to="body"
+                    placeholder="Выберите или введите категорию"
+                  />
+                </n-form-item>
+              </n-grid-item>
+              <n-grid-item v-if="form.kind === 'regular'" span="2 s:1">
+                <n-form-item label="Частота">
+                  <n-select v-model:value="form.frequency" :options="recurringFrequencyOptions" />
+                </n-form-item>
+              </n-grid-item>
+              <n-grid-item span="2">
+                <n-form-item label="Заметки">
+                  <n-input v-model:value="form.notes" placeholder="Необязательно" />
+                </n-form-item>
+              </n-grid-item>
+            </n-grid>
+            <n-button type="primary" :loading="saving" block @click="submit">
+              {{ form.kind === 'regular' ? 'Добавить в регулярные' : 'Добавить в список' }}
+            </n-button>
+          </n-form>
+        </n-card>
+      </n-grid-item>
+    </n-grid>
+
+    <!-- Регулярные расходы + список желаний -->
+    <n-grid :cols="2" :x-gap="16" :y-gap="16" responsive="screen" :item-responsive="true">
+      <n-grid-item span="2 m:1">
         <!-- Outer card with section title + bulk-edit toggle in the header.
              Inner sub-cards render each item with consistent columns. -->
         <n-card>
@@ -373,69 +436,6 @@
               </n-card>
             </n-space>
           </n-spin>
-        </n-card>
-      </n-grid-item>
-    </n-grid>
-
-    <!-- Wishlist management -->
-    <n-grid :cols="2" :x-gap="16" :y-gap="16" responsive="screen" :item-responsive="true">
-      <n-grid-item span="2 m:1">
-        <n-card title="Добавить">
-          <n-form ref="formRef" :model="form" :rules="rules" label-placement="top">
-            <!-- Type segmented selector decides whether the entry goes into
-                 «Список желаний» (frequency=once) or «Регулярные расходы»
-                 (monthly/quarterly/yearly). The frequency picker only
-                 appears for the recurring branch. -->
-            <n-form-item label="Тип" :show-feedback="false">
-              <n-radio-group v-model:value="form.kind" name="kind">
-                <n-radio-button value="wishlist">Желаемая покупка</n-radio-button>
-                <n-radio-button value="regular">Регулярный расход</n-radio-button>
-              </n-radio-group>
-            </n-form-item>
-            <n-grid :cols="2" :x-gap="12" :item-responsive="true" style="margin-top: 12px">
-              <n-grid-item span="2">
-                <n-form-item label="Название" path="name">
-                  <n-input v-model:value="form.name" placeholder="Что хочу купить" />
-                </n-form-item>
-              </n-grid-item>
-              <n-grid-item span="2 s:1">
-                <n-form-item label="Оценочная стоимость (₽)" path="estimated_cost">
-                  <n-input-number
-                    v-model:value="form.estimated_cost"
-                    :min="1"
-                    style="width: 100%"
-                  />
-                </n-form-item>
-              </n-grid-item>
-              <n-grid-item span="2 s:1">
-                <n-form-item label="Категория" path="category">
-                  <n-select
-                    v-model:value="form.category"
-                    :options="categoryOptions"
-                    filterable
-                    tag
-                    :on-create="handleCategoryCreate"
-                    :render-option="renderCategoryOption"
-                    to="body"
-                    placeholder="Выберите или введите категорию"
-                  />
-                </n-form-item>
-              </n-grid-item>
-              <n-grid-item v-if="form.kind === 'regular'" span="2 s:1">
-                <n-form-item label="Частота">
-                  <n-select v-model:value="form.frequency" :options="recurringFrequencyOptions" />
-                </n-form-item>
-              </n-grid-item>
-              <n-grid-item span="2">
-                <n-form-item label="Заметки">
-                  <n-input v-model:value="form.notes" placeholder="Необязательно" />
-                </n-form-item>
-              </n-grid-item>
-            </n-grid>
-            <n-button type="primary" :loading="saving" block @click="submit">
-              {{ form.kind === 'regular' ? 'Добавить в регулярные' : 'Добавить в список' }}
-            </n-button>
-          </n-form>
         </n-card>
       </n-grid-item>
 
