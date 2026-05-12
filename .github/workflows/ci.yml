@@ -80,15 +80,17 @@ jobs:
             exit 1
           fi
 
-      - name: Upload coverage to Codecov
-        if: always()
-        uses: codecov/codecov-action@v5
+      - name: Generate coverage badge JSON
+        if: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
+        run: ./tools/coverage-badge.sh backend backend/coverage.out
+
+      - name: Upload coverage badge artifact
+        if: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
+        uses: actions/upload-artifact@v4
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./backend/coverage.out
-          flags: backend
-          disable_search: true
-          fail_ci_if_error: false
+          name: badge-backend
+          path: _badges/backend.json
+          retention-days: 1
 
   web:
     name: Web
@@ -124,14 +126,17 @@ jobs:
       - name: Test (Vitest with coverage)
         run: make test-web-cover
 
-      - name: Upload coverage to Codecov
-        if: always()
-        uses: codecov/codecov-action@v5
+      - name: Generate coverage badge JSON
+        if: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
+        run: ./tools/coverage-badge.sh web frontend/coverage/lcov.info
+
+      - name: Upload coverage badge artifact
+        if: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
+        uses: actions/upload-artifact@v4
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          directory: ./frontend/coverage
-          flags: web
-          fail_ci_if_error: false
+          name: badge-web
+          path: _badges/web.json
+          retention-days: 1
 
   android:
     name: Android
@@ -173,15 +178,17 @@ jobs:
       - name: Unit tests + JaCoCo coverage
         run: make test-android-cover
 
-      - name: Upload coverage to Codecov
-        if: always()
-        uses: codecov/codecov-action@v5
+      - name: Generate coverage badge JSON
+        if: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
+        run: ./tools/coverage-badge.sh android android/app/build/reports/jacoco/jacocoTestReport/jacocoTestReport.xml
+
+      - name: Upload coverage badge artifact
+        if: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
+        uses: actions/upload-artifact@v4
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./android/app/build/reports/jacoco/jacocoTestReport/jacocoTestReport.xml
-          flags: android
-          disable_search: true
-          fail_ci_if_error: false
+          name: badge-android
+          path: _badges/android.json
+          retention-days: 1
 
   # ─── Build verification (only on push to main/develop) ────────────────────
   # Validates that production Dockerfiles / Gradle release path still produce
@@ -256,3 +263,40 @@ jobs:
         run: touch android/local.env
       - name: Assemble debug APK
         run: cd android && ./gradlew --no-daemon :app:assembleDebug
+
+  # ─── Publish coverage badges to the `badges` orphan branch ────────────────
+  # Single consolidated job: avoids three component jobs racing for `git push`.
+  # README references SVGs rendered by shields.io from raw.githubusercontent.com
+  # — self-hosted, no Codecov / no external services beyond shields.io itself.
+
+  publish-coverage-badges:
+    name: Publish coverage badges
+    needs: [backend, web, android]
+    if: ${{ always() && github.event_name == 'push' && github.ref_name == 'main' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Collect badge artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: _badges
+          pattern: badge-*
+          merge-multiple: true
+
+      - name: Show collected badges
+        run: ls -la _badges/ 2>/dev/null || echo "no badge artifacts (path-filtered out)"
+
+      - name: Publish to `badges` orphan branch
+        if: hashFiles('_badges/*.json') != ''
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./_badges
+          publish_branch: badges
+          keep_files: true
+          commit_message: 'ci(badges): coverage update (${{ github.sha }})'
+          user_name: 'github-actions[bot]'
+          user_email: 'github-actions[bot]@users.noreply.github.com'
