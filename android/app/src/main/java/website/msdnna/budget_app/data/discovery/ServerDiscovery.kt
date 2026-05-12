@@ -111,7 +111,7 @@ object ServerDiscovery {
         jobs.joinAll()
     }.flowOn(Dispatchers.IO)
 
-    private fun probe(host: String, port: Int, ssl: Boolean): DiscoveredServer? {
+    internal fun probe(host: String, port: Int, ssl: Boolean): DiscoveredServer? {
         val baseUrl = "${if (ssl) "https" else "http"}://$host:$port"
         val healthReq = Request.Builder().url("$baseUrl/api/health").get().build()
         val health: HealthResponse = try {

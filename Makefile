@@ -133,6 +133,18 @@ format-android: ## Auto-format Kotlin sources via ktlint
 .PHONY: lint
 lint: lint-backend lint-web lint-android ## Run all linters (backend + web + android)
 
+.PHONY: test-android
+test-android: ## Run Android unit tests (JUnit 4 + Robolectric + MockWebServer)
+	@$(ANDROID_GRADLE) :app:testDebugUnitTest
+
+.PHONY: test-android-cover
+test-android-cover: ## Run Android unit tests with JaCoCo coverage (app/build/reports/jacoco/jacocoTestReport/html/index.html)
+	@$(ANDROID_GRADLE) :app:jacocoTestReport
+	@echo "Coverage report: $(ANDROID_DIR)/app/build/reports/jacoco/jacocoTestReport/html/index.html"
+
+.PHONY: test
+test: test-backend test-web test-android ## Run all unit test suites
+
 .PHONY: test-backend
 test-backend: ## Run Go unit tests (skips integration tests requiring Docker)
 	cd $(BACKEND_DIR) && $(GO) test -race -short ./...

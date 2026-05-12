@@ -122,7 +122,7 @@ object ReachabilityGate {
         }
     }
 
-    private fun probeOnce(url: String): State {
+    internal fun probeOnce(url: String): State {
         val addr = parseHostPort(url) ?: return State.Online // unparseable → optimistic
         return Socket().use { sock ->
             try {
@@ -147,7 +147,7 @@ object ReachabilityGate {
         }
     }
 
-    private fun parseHostPort(url: String): InetSocketAddress? = try {
+    internal fun parseHostPort(url: String): InetSocketAddress? = try {
         val u = URI(url)
         val host = u.host ?: return null
         val port = when {

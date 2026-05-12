@@ -296,6 +296,16 @@
 
 ## Android
 
+### [1.31.0] — 2026-05-12
+
+#### Added
+- **Unit-test-сьют с нуля (JUnit 4 + MockK + Robolectric + MockWebServer + Turbine).** 43 теста по приоритетам из memory: SyncEngine.resolveKeepServer (7 кейсов на in-memory Room — adopt-server-tx, tombstone, missing-payload-deleteHard, missing-row→Skipped, wishlist/category аналоги, blank-serverUrl→Skipped), AppLock (6 кейсов на тайм-аут под ShadowSystemClock — within/after timeout, hasPin=false идемпотентность, unlock сбрасывает backgroundedAt), PinSecurity (5 кейсов — детерминизм с reused salt, разные salt'ы при дефолтной соли, verify happy/wrong-pin/mismatched-salt), ReachabilityGate (8 кейсов — parseHostPort defaults http/https/explicit/garbage, probeOnce Online на live-сокете / Offline на refused/unknown, setServerUrl сбрасывает state), ServerDiscovery (7 кейсов через MockWebServer — health ok+version / health ok+version 500 / unknown app / ok=false / 404 / empty body / unreachable port), RetryUtils (4 кейса — immediate-success / retry-then-success / HttpException нет retry / last-error throw), Mappers (6 кейсов — Transaction/Wishlist/Category entity↔model + syncStatus/serverPayload пробрасываются + parseTransaction(toJson())).
+- **JaCoCo-coverage** (`enableUnitTestCoverage = true` + ручной `jacocoTestReport` task с runtime-jar в качестве class-source — иначе class-id не совпадают). `includeNoLocationClasses = true` обязателен, иначе Robolectric-тесты не учитываются. Итоговое покрытие: **19% line overall**, по таргетам: `data.security` 60%, `data.discovery` 36%, `data.model` 31%, `data.db` 25%, `data.sync` 15% — UI-пакеты (Compose-экраны, components, theme, notifications, MainActivity) исключены из репортинга.
+- **Make-таргеты:** `make test-android` (`:app:testDebugUnitTest`), `make test-android-cover` (`:app:jacocoTestReport` + путь к HTML); `make test` теперь `test-backend + test-web + test-android`.
+
+#### Changed
+- `ReachabilityGate.parseHostPort` и `ReachabilityGate.probeOnce` переведены из `private` в `internal` — нужны для unit-тестирования (только publish-точка тестов; общая API-поверхность не меняется). То же для `ServerDiscovery.probe`.
+
 ### [1.30.0] — 2026-05-12
 
 #### Changed
