@@ -16,6 +16,8 @@ backend/cover.html
 # ─── Frontend ────────────────────────────────────────────────────────────────
 frontend/node_modules/
 frontend/dist/
+# Coverage from `make test-web-cover`
+frontend/coverage/
 
 # ─── Android ─────────────────────────────────────────────────────────────────
 android/build/

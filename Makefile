@@ -134,8 +134,17 @@ test-backend-cover: ## Run Go tests with coverage profile (backend/coverage.out 
 test-backend-integration: ## Run Go integration tests (requires Docker for testcontainers)
 	cd $(BACKEND_DIR) && $(GO) test -race -tags=integration -run Integration ./...
 
+.PHONY: test-web
+test-web: ## Run Vitest unit tests on the Vue frontend
+	cd $(FRONTEND_DIR) && npm run test
+
+.PHONY: test-web-cover
+test-web-cover: ## Run Vitest with coverage (frontend/coverage/index.html)
+	cd $(FRONTEND_DIR) && npm run test:coverage
+	@echo "Coverage report: $(FRONTEND_DIR)/coverage/index.html"
+
 .PHONY: test
-test: test-backend ## Run all unit test suites
+test: test-backend test-web ## Run all unit test suites
 
 # ─── Install / Update ────────────────────────────────────────────────────────
 

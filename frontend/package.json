@@ -10,7 +10,10 @@
     "lint": "eslint . --max-warnings=0",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@vicons/ionicons5": "^0.13.0",
@@ -26,12 +29,17 @@
   "devDependencies": {
     "@eslint/js": "^9.39.4",
     "@vitejs/plugin-vue": "^6.0.6",
+    "@vitest/coverage-v8": "^4.1.6",
+    "@vue/test-utils": "^2.4.10",
+    "axios-mock-adapter": "^2.1.0",
     "eslint": "^9.39.4",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-vue": "^10.9.1",
     "globals": "^16.5.0",
+    "happy-dom": "^20.9.0",
     "prettier": "^3.8.3",
     "vite": "^8.0.10",
+    "vitest": "^4.1.6",
     "vue-eslint-parser": "^10.4.0"
   }
 }

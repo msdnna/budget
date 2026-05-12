@@ -146,6 +146,15 @@
 
 ## Web (frontend)
 
+### [1.17.0] — 2026-05-12
+
+#### Added
+- **Юнит-тесты с нуля (CI-readiness, Phase 2 — тесты).** Vitest 4 + `@vue/test-utils` + happy-dom + `@vitest/coverage-v8` + `axios-mock-adapter`. **60 тестов, ~62% line coverage** в покрываемой части (88% на stores, 85% на utility-компонентах, 76% на `api/index.js`):
+  - `api/index.js` — request interceptor (Bearer), response interceptor (401 → clear + `auth:expired` event, backend error message extraction), `downloadBlob` helper.
+  - Pinia stores: auth (login/logout/verify happy + 401), categories (load/add-dedup/remove/recordUse/sortByRecentUse/options), transactions factory (scope isolation, filter→params flattening, `setFilters` replace-semantics, CRUD refetch), wishlist, detailRequests, theme (palette generation, dark-mode overrides).
+  - Utility components: `ConfirmActionButton` (two-step confirm + auto-reset + disabled-reset), `TilePeriodPicker` (month/year cells, navigation, clear/setNow buttons).
+- **Make-таргеты:** `make test-web` (vitest run), `make test-web-cover` (HTML + lcov + text report). `make test` теперь зовёт `test-backend test-web`. `frontend/coverage/` добавлен в `.gitignore`.
+
 ### [1.16.3] — 2026-05-12
 
 #### Changed
