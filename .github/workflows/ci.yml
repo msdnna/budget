@@ -127,8 +127,24 @@ jobs:
 
       - uses: android-actions/setup-android@v3
 
-      - name: Install Android SDK 37 (preview channel — API 37 not yet in stable)
-        run: sdkmanager --channel=3 --install 'platforms;android-37'
+      - name: Install Android SDK 37 (preview channel)
+        run: |
+          set -euo pipefail
+          # Runner's pre-installed cmdline-tools may have a stale package
+          # index that doesn't yet list API 37 — install `cmdline-tools;latest`
+          # side-by-side and use that fresher sdkmanager.
+          sdkmanager --install 'cmdline-tools;latest' >/dev/null
+          SDKMGR="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          echo "::group::sdkmanager diagnostics"
+          "$SDKMGR" --version
+          echo "Platform packages visible in canary channel:"
+          "$SDKMGR" --list --channel=3 2>/dev/null \
+            | awk '/^Available Packages/{p=1} p && /^[[:space:]]*platforms;android-/{print $1}' \
+            | sort -u | head -40
+          echo "::endgroup::"
+          yes | "$SDKMGR" --licenses --channel=3 >/dev/null 2>&1 || true
+          "$SDKMGR" --channel=3 'platforms;android-37'
+          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
 
       - uses: gradle/actions/setup-gradle@v4
 
