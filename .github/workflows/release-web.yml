@@ -69,6 +69,7 @@ jobs:
           tags: |
             type=match,pattern=web/v(.*),group=1
             type=match,pattern=web/v(\d+\.\d+)\.\d+,group=1
+            type=raw,value=latest
           labels: |
             org.opencontainers.image.version=${{ env.WEB_VERSION }}
             org.opencontainers.image.revision=${{ github.sha }}
