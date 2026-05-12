@@ -202,7 +202,7 @@
                     </div>
                   </n-popover>
                   <!-- Detail-requests bell -->
-                  <DetailRequestBell />
+                  <DetailRequestBell v-if="auth.isAuthenticated" />
                   <!-- Hide/show values toggle -->
                   <n-tooltip trigger="hover" placement="bottom">
                     <template #trigger>
@@ -287,16 +287,8 @@
                     </div>
                   </n-tooltip>
                 </template>
-                <template v-else>
-                  <n-button size="small" type="primary" ghost @click="showLogin = true">
-                    <template #icon>
-                      <n-icon><LogInOutline /></n-icon>
-                    </template>
-                    Войти
-                  </n-button>
-                </template>
                 <!-- Mobile detail-requests bell -->
-                <DetailRequestBell />
+                <DetailRequestBell v-if="auth.isAuthenticated" />
                 <!-- Mobile theme picker -->
                 <n-popover trigger="click" placement="bottom-end" :show-arrow="false">
                   <template #trigger>
