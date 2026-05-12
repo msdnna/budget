@@ -51,7 +51,8 @@ jobs:
             | sort -u | head -40
           echo "::endgroup::"
           yes | "$SDKMGR" --licenses --channel=3 >/dev/null 2>&1 || true
-          "$SDKMGR" --channel=3 'platforms;android-37'
+          # See ci.yml: preview platforms use `android-37.0` not `android-37`.
+          "$SDKMGR" --channel=3 'platforms;android-37.0'
           echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
 
       - uses: gradle/actions/setup-gradle@v4
