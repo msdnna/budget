@@ -14,6 +14,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import website.msdnna.budget_app.data.repository.CategoryRepository
 import website.msdnna.budget_app.ui.components.*
+import website.msdnna.budget_app.ui.icons.parseCustomIconKey
 import website.msdnna.budget_app.ui.icons.resolveCategoryColor
 import website.msdnna.budget_app.ui.theme.LocalExpenseColor
 import website.msdnna.budget_app.ui.theme.LocalIncomeColor
@@ -170,6 +171,8 @@ fun StatisticsScreen(serverUrl: String, primaryColor: Color, valuesHidden: Boole
                                 value = stat.amount.toFloat(),
                                 color = resolveCategoryColor(stat.category, cat?.color),
                                 iconKey = cat?.icon,
+                                customIconUrl = customIconUrl(serverUrl, cat?.icon),
+                                iconScale = normalizeIconScale(cat?.iconScale),
                             )
                         }
                         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
@@ -194,6 +197,8 @@ fun StatisticsScreen(serverUrl: String, primaryColor: Color, valuesHidden: Boole
                                 value = stat.amount.toFloat(),
                                 color = resolveCategoryColor(stat.category, cat?.color),
                                 iconKey = cat?.icon,
+                                customIconUrl = customIconUrl(serverUrl, cat?.icon),
+                                iconScale = normalizeIconScale(cat?.iconScale),
                             )
                         }
                         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
@@ -242,6 +247,23 @@ fun StatisticsScreen(serverUrl: String, primaryColor: Color, valuesHidden: Boole
             }
         }
     }
+}
+
+// Server stores 0 as "default scale" (clients pick 1.0). Non-positive
+// values are also treated as default — guards against any stray negative
+// payload from a future schema change.
+private fun normalizeIconScale(raw: Double?): Float =
+    if (raw != null && raw > 0.0) raw.toFloat() else 1f
+
+// Builds the absolute URL to a custom-uploaded category icon when the
+// stored `Category.icon` field follows the `custom:<id>` convention. The
+// trailing slash + /api/ prefix mirrors `RetrofitClient.buildApiUrl`,
+// which guarantees the server URL we already pass into the screen ends
+// without a slash.
+private fun customIconUrl(serverUrl: String, iconKey: String?): String? {
+    val id = parseCustomIconKey(iconKey) ?: return null
+    val base = serverUrl.trimEnd('/')
+    return "$base/api/icons/$id"
 }
 
 /** "yyyy-MM-dd" → "dd.MM" for compact chip labels. */

@@ -68,3 +68,39 @@ func (r *UserRepository) FindAll(ctx context.Context) ([]models.User, error) {
 	}
 	return users, nil
 }
+
+// EnsureAdmin promotes the earliest-created user to admin if none exists.
+// Idempotent: subsequent calls are no-ops when an admin is already present.
+// Called once on backend boot so existing single-user installs gain an admin
+// without manual intervention.
+func (r *UserRepository) EnsureAdmin(ctx context.Context) error {
+	count, err := r.col.CountDocuments(ctx, bson.M{"is_admin": true})
+	if err != nil {
+		return err
+	}
+	if count > 0 {
+		return nil
+	}
+	// Earliest by _id — ObjectID embeds creation timestamp, so this works
+	// even for users seeded before `created_at` existed.
+	opts := options.FindOne().SetSort(bson.D{{Key: "_id", Value: 1}})
+	var u models.User
+	if err := r.col.FindOne(ctx, bson.M{}, opts).Decode(&u); err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil
+		}
+		return err
+	}
+	_, err = r.col.UpdateOne(ctx, bson.M{"_id": u.ID}, bson.M{"$set": bson.M{"is_admin": true}})
+	return err
+}
+
+// SetAdmin grants/revokes admin on a specific user.
+func (r *UserRepository) SetAdmin(ctx context.Context, id string, admin bool) error {
+	oid, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return err
+	}
+	_, err = r.col.UpdateOne(ctx, bson.M{"_id": oid}, bson.M{"$set": bson.M{"is_admin": admin}})
+	return err
+}

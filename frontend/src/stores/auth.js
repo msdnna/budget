@@ -7,6 +7,7 @@ export const useAuthStore = defineStore('auth', () => {
   const user = ref(JSON.parse(localStorage.getItem('auth_user') || 'null'))
 
   const isAuthenticated = computed(() => !!token.value)
+  const isAdmin = computed(() => !!user.value?.is_admin)
 
   function setAuth(loginResponse) {
     token.value = loginResponse.token
@@ -14,6 +15,7 @@ export const useAuthStore = defineStore('auth', () => {
       user_id: loginResponse.user_id,
       display_name: loginResponse.display_name,
       avatar_url: loginResponse.avatar_url || '',
+      is_admin: !!loginResponse.is_admin,
       expires_at: loginResponse.expires_at,
     }
     localStorage.setItem('auth_token', token.value)
@@ -33,14 +35,20 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   // Called on app start to verify the stored token is still valid.
+  // Also refreshes is_admin from /auth/me — handy when an existing client
+  // had a pre-1.17 token cached without the new flag.
   async function verify() {
     if (!token.value) return
     try {
-      await api.get('/auth/me')
+      const res = await api.get('/auth/me')
+      if (user.value && res.data) {
+        user.value = { ...user.value, is_admin: !!res.data.is_admin }
+        localStorage.setItem('auth_user', JSON.stringify(user.value))
+      }
     } catch {
       logout()
     }
   }
 
-  return { token, user, isAuthenticated, login, logout, verify }
+  return { token, user, isAuthenticated, isAdmin, login, logout, verify }
 })

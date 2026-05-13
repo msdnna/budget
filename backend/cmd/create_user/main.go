@@ -25,6 +25,7 @@ func main() {
 	password := flag.String("password", "", "User password (required)")
 	name := flag.String("name", "", "Display name, e.g. 'Ivan Petrov' (required)")
 	avatar := flag.String("avatar", "", "Avatar URL (optional)")
+	admin := flag.Bool("admin", false, "Grant admin rights (manages categories/icons)")
 	flag.Parse()
 
 	if *login == "" || *password == "" || *name == "" {
@@ -70,6 +71,9 @@ func main() {
 	}
 	if *avatar != "" {
 		user["avatar_url"] = *avatar
+	}
+	if *admin {
+		user["is_admin"] = true
 	}
 
 	if _, err := col.InsertOne(ctx, user); err != nil {

@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
 
 const routes = [
   { path: '/', redirect: '/statistics' },
@@ -23,11 +24,28 @@ const routes = [
     component: () => import('@/views/ExportView.vue'),
     meta: { title: 'Экспорт' },
   },
+  {
+    path: '/settings/categories',
+    component: () => import('@/views/AdminCategoriesView.vue'),
+    meta: { title: 'Категории', adminOnly: true },
+  },
+  // Backwards-compat redirect — earlier Phase 2 build used `/admin`.
+  { path: '/admin', redirect: '/settings/categories' },
 ]
 
 const router = createRouter({
   history: createWebHistory(),
   routes,
+})
+
+// Non-admins typing /admin into the URL get bounced to /statistics. The
+// sidebar link is already gated by isAdmin, so this is just defence in
+// depth — the backend rejects the underlying PATCH/POST anyway.
+router.beforeEach((to) => {
+  if (to.meta?.adminOnly) {
+    const auth = useAuthStore()
+    if (!auth.isAdmin) return { path: '/statistics' }
+  }
 })
 
 router.afterEach((to) => {

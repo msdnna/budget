@@ -55,7 +55,25 @@ export const categories = {
   list: (section) => api.get('/categories', { params: { section } }),
   all: () => api.get('/categories/all'),
   create: (data) => api.post('/categories', data),
+  update: (id, data) => api.patch(`/categories/${id}`, data),
   remove: (id) => api.delete(`/categories/${id}`),
+}
+
+export const icons = {
+  list: () => api.get('/icons'),
+  upload: (file) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    return api.post('/icons', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+  },
+  remove: (id) => api.delete(`/icons/${id}`),
+  // URL for use in <img src="..."> — auth header is attached by axios on
+  // .get(), but <img> doesn't go through axios. The endpoint is auth-only
+  // by gin middleware, so we surface the URL through the same axios baseURL
+  // and rely on cookie/session... no — we don't use cookies. So callers
+  // must fetch as blob via this client OR we need to pass the token in a
+  // way <img> can authenticate. For now, fetch+blob via `image()`.
+  image: (id) => api.get(`/icons/${id}`, { responseType: 'blob' }),
 }
 
 export const versionApi = {

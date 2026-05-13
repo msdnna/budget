@@ -1,6 +1,7 @@
 package repository_test
 
 import (
+	"bytes"
 	"context"
 	"testing"
 	"time"
@@ -486,6 +487,68 @@ func TestCategoryRepo_EnsureDefaultsBackfillsColorIcon(t *testing.T) {
 	}
 }
 
+func TestCategoryRepo_UpdateAppliesPartialFields(t *testing.T) {
+	db := mongotest.Start(t)
+	repo := repository.NewCategoryRepository(db)
+	ctx := testCtx(t)
+
+	c, err := repo.Create(ctx, "expense", "Origin", "#000000", "tag", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Version != 1 {
+		t.Fatalf("initial version = %d, want 1", c.Version)
+	}
+
+	newName := "Renamed"
+	newColor := "#FF00FF"
+	updated, err := repo.Update(ctx, c.ID, models.UpdateCategoryRequest{
+		Name:  &newName,
+		Color: &newColor,
+		// Icon left as nil — must remain "tag".
+	}, nil)
+	if err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	if updated.Name != "Renamed" || updated.Color != "#FF00FF" {
+		t.Errorf("partial update lost fields: %+v", updated)
+	}
+	if updated.Icon != "tag" {
+		t.Errorf("Icon must remain unchanged when not in patch: got %q", updated.Icon)
+	}
+	if updated.Version != 2 {
+		t.Errorf("Update should bump version: got %d", updated.Version)
+	}
+
+	// Clearing icon via empty-string pointer.
+	empty := ""
+	cleared, err := repo.Update(ctx, c.ID, models.UpdateCategoryRequest{Icon: &empty}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cleared.Icon != "" {
+		t.Errorf("empty-string icon patch must clear: got %q", cleared.Icon)
+	}
+
+	// icon_scale: write 1.5, then reset to 0 (= use default).
+	scaled := 1.5
+	got, err := repo.Update(ctx, c.ID, models.UpdateCategoryRequest{IconScale: &scaled}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.IconScale != 1.5 {
+		t.Errorf("IconScale = %v, want 1.5", got.IconScale)
+	}
+	zero := 0.0
+	reset, err := repo.Update(ctx, c.ID, models.UpdateCategoryRequest{IconScale: &zero}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reset.IconScale != 0 {
+		t.Errorf("IconScale reset = %v, want 0 (default)", reset.IconScale)
+	}
+}
+
 func TestCategoryRepo_CreateDeleteAndProtectDefault(t *testing.T) {
 	db := mongotest.Start(t)
 	repo := repository.NewCategoryRepository(db)
@@ -533,6 +596,123 @@ func TestCategoryRepo_CreateDeleteAndProtectDefault(t *testing.T) {
 }
 
 // ─── User ──────────────────────────────────────────────────────────────────
+
+func TestUserRepo_EnsureAdminPromotesEarliestAndIsIdempotent(t *testing.T) {
+	db := mongotest.Start(t)
+	repo := repository.NewUserRepository(db)
+	ctx := testCtx(t)
+
+	// EnsureAdmin on empty collection is a no-op.
+	if err := repo.EnsureAdmin(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	first := &models.User{Login: "first", DisplayName: "First", PasswordHash: "x"}
+	if err := repo.Create(ctx, first); err != nil {
+		t.Fatal(err)
+	}
+	// Brief pause + second user so their ObjectIDs differ in timestamp order.
+	time.Sleep(20 * time.Millisecond)
+	second := &models.User{Login: "second", DisplayName: "Second", PasswordHash: "x"}
+	if err := repo.Create(ctx, second); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := repo.EnsureAdmin(ctx); err != nil {
+		t.Fatal(err)
+	}
+	got, err := repo.FindByID(ctx, first.ID.Hex())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.IsAdmin {
+		t.Error("earliest user should be promoted to admin")
+	}
+	other, _ := repo.FindByID(ctx, second.ID.Hex())
+	if other.IsAdmin {
+		t.Error("second user should NOT be admin")
+	}
+
+	// Idempotent: a second call doesn't shift admin to a different user.
+	if err := repo.EnsureAdmin(ctx); err != nil {
+		t.Fatal(err)
+	}
+	other, _ = repo.FindByID(ctx, second.ID.Hex())
+	if other.IsAdmin {
+		t.Error("EnsureAdmin must not grant admin when one already exists")
+	}
+}
+
+func TestUserRepo_SetAdminToggles(t *testing.T) {
+	db := mongotest.Start(t)
+	repo := repository.NewUserRepository(db)
+	ctx := testCtx(t)
+
+	u := &models.User{Login: "x", DisplayName: "X", PasswordHash: "y"}
+	if err := repo.Create(ctx, u); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.SetAdmin(ctx, u.ID.Hex(), true); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := repo.FindByID(ctx, u.ID.Hex())
+	if !got.IsAdmin {
+		t.Fatal("SetAdmin(true) did not stick")
+	}
+	if err := repo.SetAdmin(ctx, u.ID.Hex(), false); err != nil {
+		t.Fatal(err)
+	}
+	got, _ = repo.FindByID(ctx, u.ID.Hex())
+	if got.IsAdmin {
+		t.Fatal("SetAdmin(false) did not stick")
+	}
+}
+
+// ─── CategoryIcon ──────────────────────────────────────────────────────────
+
+func TestCategoryIconRepo_RoundTrip(t *testing.T) {
+	db := mongotest.Start(t)
+	repo := repository.NewCategoryIconRepository(db)
+	ctx := testCtx(t)
+
+	payload := []byte("<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>")
+	icon, err := repo.Create(ctx, "image/svg+xml", payload, &models.UserInfo{UserID: "u1", DisplayName: "Alice"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if icon.ID == "" {
+		t.Fatal("ID not assigned")
+	}
+	if icon.SizeBytes != len(payload) {
+		t.Errorf("SizeBytes = %d, want %d", icon.SizeBytes, len(payload))
+	}
+
+	fetched, err := repo.FindByID(ctx, icon.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(fetched.Data, payload) {
+		t.Error("FindByID: bytes mismatch")
+	}
+
+	list, err := repo.List(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 1 || list[0].ID != icon.ID {
+		t.Errorf("List: unexpected = %+v", list)
+	}
+	if list[0].Data != nil {
+		t.Error("List must omit binary payload")
+	}
+
+	if err := repo.Delete(ctx, icon.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.Delete(ctx, icon.ID); err == nil {
+		t.Error("second Delete must return mongo.ErrNoDocuments")
+	}
+}
 
 func TestUserRepo_CreateFindByLoginAndID(t *testing.T) {
 	db := mongotest.Start(t)

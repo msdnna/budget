@@ -70,6 +70,10 @@
                     "icon": {
                         "type": "string"
                     },
+                    "icon_scale": {
+                        "description": "IconScale lets the admin enlarge a category icon inside its colored\nbadge (legend/lists). 0 (omitempty) = client uses default; 1.0 =\ndefault size; \u003e1 = upscaled and clipped to badge shape; \u003c1 = shrunk.\nPie chart slice icons ignore this — they're sized for arc readability.",
+                        "type": "number"
+                    },
                     "id": {
                         "type": "string"
                     },
@@ -107,6 +111,46 @@
                     },
                     "percentage": {
                         "type": "number"
+                    }
+                },
+                "type": "object"
+            },
+            "models.CategoryIcon": {
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "mime_type": {
+                        "type": "string"
+                    },
+                    "size_bytes": {
+                        "type": "integer"
+                    },
+                    "uploaded_at": {
+                        "type": "string"
+                    },
+                    "uploaded_by": {
+                        "$ref": "#/components/schemas/models.UserInfo"
+                    }
+                },
+                "type": "object"
+            },
+            "models.CategoryIconRef": {
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "mime_type": {
+                        "type": "string"
+                    },
+                    "size_bytes": {
+                        "type": "integer"
+                    },
+                    "uploaded_at": {
+                        "type": "string"
+                    },
+                    "uploaded_by": {
+                        "$ref": "#/components/schemas/models.UserInfo"
                     }
                 },
                 "type": "object"
@@ -354,6 +398,9 @@
                     },
                     "expires_at": {
                         "type": "string"
+                    },
+                    "is_admin": {
+                        "type": "boolean"
                     },
                     "token": {
                         "type": "string"
@@ -686,6 +733,23 @@
                     "Expense",
                     "InitialBalance"
                 ]
+            },
+            "models.UpdateCategoryRequest": {
+                "properties": {
+                    "color": {
+                        "type": "string"
+                    },
+                    "icon": {
+                        "type": "string"
+                    },
+                    "icon_scale": {
+                        "type": "number"
+                    },
+                    "name": {
+                        "type": "string"
+                    }
+                },
+                "type": "object"
             },
             "models.UpdateTransactionRequest": {
                 "properties": {
@@ -1194,6 +1258,113 @@
                     }
                 ],
                 "summary": "Удалить пользовательскую категорию",
+                "tags": [
+                    "categories"
+                ]
+            },
+            "patch": {
+                "description": "Только для администратора. Все три поля опциональны — обновляется то, что прислали. Можно править и дефолтные категории.",
+                "parameters": [
+                    {
+                        "description": "Category ID",
+                        "in": "path",
+                        "name": "id",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "oneOf": [
+                                    {
+                                        "type": "object"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/models.UpdateCategoryRequest",
+                                        "summary": "body",
+                                        "description": "Тело"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "description": "Тело",
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.Category"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Bad Request"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized"
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Forbidden"
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Not Found"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Изменить категорию (color/icon/name)",
                 "tags": [
                     "categories"
                 ]
@@ -1940,6 +2111,228 @@
                 "summary": "Health-check",
                 "tags": [
                     "meta"
+                ]
+            }
+        },
+        "/icons": {
+            "get": {
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "items": {
+                                        "$ref": "#/components/schemas/models.CategoryIconRef"
+                                    },
+                                    "type": "array"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Список загруженных иконок (admin)",
+                "tags": [
+                    "icons"
+                ]
+            },
+            "post": {
+                "description": "Принимает PNG (с альфа-каналом, до 512×512, ≤512KB) или SVG. multipart/form-data, поле `file`. Возвращает метаданные иконки; ссылается на неё `Category.icon = \"custom:\u003cid\u003e\"`.",
+                "requestBody": {
+                    "content": {
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "title": "file",
+                                "type": "file"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "type": "object"
+                            }
+                        }
+                    },
+                    "description": "PNG или SVG файл",
+                    "required": true
+                },
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.CategoryIcon"
+                                }
+                            }
+                        },
+                        "description": "Created"
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Bad Request"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized"
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Forbidden"
+                    },
+                    "413": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Request Entity Too Large"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Загрузить пользовательскую иконку категории (admin)",
+                "tags": [
+                    "icons"
+                ]
+            }
+        },
+        "/icons/{id}": {
+            "delete": {
+                "description": "Категории, ссылающиеся на удалённую иконку, ничего не сломают — клиент откатится к colored-badge режиму.",
+                "parameters": [
+                    {
+                        "description": "Icon ID",
+                        "in": "path",
+                        "name": "id",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "boolean"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Not Found"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Удалить пользовательскую иконку (admin)",
+                "tags": [
+                    "icons"
+                ]
+            },
+            "get": {
+                "description": "Возвращает байты PNG/SVG с правильным Content-Type. Открыт всем авторизованным — иконка не несёт чувствительных данных, нужна на каждом графике.",
+                "parameters": [
+                    {
+                        "description": "Icon ID",
+                        "in": "path",
+                        "name": "id",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "image/png": {
+                                "schema": {
+                                    "type": "file"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    },
+                    "404": {
+                        "content": {
+                            "image/png": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Not Found"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Отдать пользовательскую иконку (raw bytes)",
+                "tags": [
+                    "icons"
                 ]
             }
         },
