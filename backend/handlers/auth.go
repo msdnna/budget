@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -22,9 +23,61 @@ func NewAuthHandler(repo *repository.UserRepository, cfg *config.Config) *AuthHa
 	return &AuthHandler{repo: repo, cfg: cfg}
 }
 
+const (
+	accessTokenTTL  = 24 * time.Hour
+	refreshTokenTTL = 30 * 24 * time.Hour // 30 days — covers a month of inactivity
+)
+
+// issueTokens mints fresh access + refresh JWTs for the user. Refresh
+// tokens carry only the identity claims needed to re-mint the next access
+// pair on `/auth/refresh`; we still embed the display/admin fields so the
+// refresh response can be a drop-in replacement during the rotate.
+func (h *AuthHandler) issueTokens(user *models.User) (accessStr, refreshStr string, accessExp time.Time, err error) {
+	now := time.Now()
+	accessExp = now.Add(accessTokenTTL)
+	// Each token carries a fresh `jti` (JWT ID) so successive refreshes
+	// — which often happen within the same wall-clock second — produce
+	// distinct signed strings. Lets clients diff old/new tokens reliably.
+	access := &models.Claims{
+		UserID:      user.ID.Hex(),
+		Login:       user.Login,
+		DisplayName: user.DisplayName,
+		AvatarURL:   user.AvatarURL,
+		IsAdmin:     user.IsAdmin,
+		TokenType:   models.TokenTypeAccess,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        uuid.NewString(),
+			ExpiresAt: jwt.NewNumericDate(accessExp),
+			IssuedAt:  jwt.NewNumericDate(now),
+		},
+	}
+	refresh := &models.Claims{
+		UserID:      user.ID.Hex(),
+		Login:       user.Login,
+		DisplayName: user.DisplayName,
+		AvatarURL:   user.AvatarURL,
+		IsAdmin:     user.IsAdmin,
+		TokenType:   models.TokenTypeRefresh,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        uuid.NewString(),
+			ExpiresAt: jwt.NewNumericDate(now.Add(refreshTokenTTL)),
+			IssuedAt:  jwt.NewNumericDate(now),
+		},
+	}
+	accessStr, err = jwt.NewWithClaims(jwt.SigningMethodHS256, access).SignedString([]byte(h.cfg.JWTSecret))
+	if err != nil {
+		return "", "", time.Time{}, err
+	}
+	refreshStr, err = jwt.NewWithClaims(jwt.SigningMethodHS256, refresh).SignedString([]byte(h.cfg.JWTSecret))
+	if err != nil {
+		return "", "", time.Time{}, err
+	}
+	return accessStr, refreshStr, accessExp, nil
+}
+
 // Login godoc
-// @Summary      Логин и выдача JWT
-// @Description  Возвращает 24-часовой JWT. Тот же текст ошибки для несуществующего логина и неверного пароля (anti-enumeration).
+// @Summary      Логин и выдача access + refresh JWT
+// @Description  Возвращает access (24ч) + refresh (30д). Refresh обменивается на новую пару через `/auth/refresh` пока он сам жив. Тот же текст ошибки для несуществующего логина и неверного пароля (anti-enumeration).
 // @Tags         auth
 // @Accept       json
 // @Produce      json
@@ -52,33 +105,75 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	expiresAt := time.Now().Add(24 * time.Hour)
-	claims := &models.Claims{
-		UserID:      user.ID.Hex(),
-		Login:       user.Login,
-		DisplayName: user.DisplayName,
-		AvatarURL:   user.AvatarURL,
-		IsAdmin:     user.IsAdmin,
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(expiresAt),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-		},
-	}
-
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenStr, err := token.SignedString([]byte(h.cfg.JWTSecret))
+	accessStr, refreshStr, accessExp, err := h.issueTokens(user)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка генерации токена"})
 		return
 	}
 
 	c.JSON(http.StatusOK, models.LoginResponse{
-		Token:       tokenStr,
-		UserID:      user.ID.Hex(),
-		DisplayName: user.DisplayName,
-		AvatarURL:   user.AvatarURL,
-		IsAdmin:     user.IsAdmin,
-		ExpiresAt:   expiresAt,
+		Token:        accessStr,
+		RefreshToken: refreshStr,
+		UserID:       user.ID.Hex(),
+		DisplayName:  user.DisplayName,
+		AvatarURL:    user.AvatarURL,
+		IsAdmin:      user.IsAdmin,
+		ExpiresAt:    accessExp,
+	})
+}
+
+// Refresh godoc
+// @Summary      Обмен refresh-токена на новую пару access + refresh
+// @Description  Принимает refresh-JWT в теле, возвращает свежий access + новый refresh (rotation). Refresh должен быть валиден и иметь `token_type=refresh`.
+// @Tags         auth
+// @Accept       json
+// @Produce      json
+// @Param        body  body      models.RefreshRequest   true  "refresh_token"
+// @Success      200   {object}  models.RefreshResponse
+// @Failure      400   {object}  map[string]string
+// @Failure      401   {object}  map[string]string
+// @Router       /auth/refresh [post]
+func (h *AuthHandler) Refresh(c *gin.Context) {
+	var req models.RefreshRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	claims := &models.Claims{}
+	token, err := jwt.ParseWithClaims(req.RefreshToken, claims, func(t *jwt.Token) (interface{}, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, jwt.ErrSignatureInvalid
+		}
+		return []byte(h.cfg.JWTSecret), nil
+	})
+	if err != nil || !token.Valid {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Неверный или устаревший refresh-токен"})
+		return
+	}
+	if claims.TokenType != models.TokenTypeRefresh {
+		// Refuse access tokens here so a stolen access token (which is
+		// shorter-lived but more frequently transmitted) can't be used
+		// to indefinitely refresh sessions.
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Не refresh-токен"})
+		return
+	}
+
+	user, err := h.repo.FindByID(c.Request.Context(), claims.UserID)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Пользователь не найден"})
+		return
+	}
+
+	accessStr, refreshStr, accessExp, err := h.issueTokens(user)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка генерации токена"})
+		return
+	}
+	c.JSON(http.StatusOK, models.RefreshResponse{
+		Token:        accessStr,
+		RefreshToken: refreshStr,
+		ExpiresAt:    accessExp,
 	})
 }
 

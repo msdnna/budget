@@ -338,7 +338,14 @@ func (h *StatisticsHandler) Forecast(c *gin.Context) {
 		s := byItem[item.ID]
 		var nextDue time.Time
 		if s == nil || s.latest.IsZero() {
-			nextDue = now // never paid → due now (Approach A)
+			// Never paid: pin the next due date to the item's creation
+			// timestamp so the UI shows when the user actually planned the
+			// recurrence, not today's date (which was the previous default
+			// and confused users who'd added an item earlier in the month).
+			nextDue = item.CreatedAt
+			if nextDue.IsZero() {
+				nextDue = now
+			}
 		} else {
 			switch item.Frequency {
 			case models.FrequencyMonthly:
