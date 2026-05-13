@@ -16,6 +16,14 @@
 
 ## API (backend)
 
+### [1.18.0] — 2026-05-13
+
+#### Added
+- **Refresh-токены**. Login теперь возвращает access (24ч) + refresh (30д) JWT. Новый эндпоинт `POST /auth/refresh` принимает `{refresh_token}` и выдаёт свежую пару (rotation). Refresh-токен помечен `token_type:"refresh"` в claims; `middleware.Auth` явно отвергает их на защищённых эндпоинтах (только `/auth/refresh` их принимает). Каждый токен карьерит уникальный `jti` (uuid) — последовательные refresh-вызовы в одну секунду производят разные подписи. Тест `TestAuth_Refresh` проверяет login→refresh→retry, отказ access-as-refresh, отказ refresh-as-access на `/auth/me`, и отказ garbage-токенов.
+
+#### Fixed
+- **`next_due_date` для never-paid регулярных расходов** теперь считается от `created_at` записи, а не от `time.Now()`. Раньше пользователь, добавивший месячный регулярник 7-го числа, видел в Прогнозе «след. оплата: 13.05» вместо ожидаемого «07.05» — теперь дата привязана к моменту создания записи. Запись с пустым `created_at` (теоретически возможный legacy случай) фоллбэчит на `now`, чтобы не было zero-time.
+
 ### [1.17.1] — 2026-05-13
 
 #### Fixed
@@ -177,6 +185,11 @@
 ---
 
 ## Web (frontend)
+
+### [1.23.0] — 2026-05-13
+
+#### Added
+- **Поддержка refresh-токенов** (api 1.18.0). `auth_refresh_token` хранится в localStorage рядом с `auth_token`. Axios response-interceptor ловит 401 на любом protected-запросе, вызывает `/auth/refresh` с сохранённым refresh-токеном, на успехе обновляет оба токена в localStorage + ретраит исходный запрос. Inflight-дедупликация — параллельные 401 шарят один refresh-вызов через `refreshInflight` promise, чтобы не дёргать `/auth/refresh` несколько раз для одного event'а истечения. На неудаче refresh'а (включая истёкший refresh-токен) — wipe localStorage + dispatch `auth:expired` (App перенаправляет на логин). Auth store сохраняет/чистит `refresh_token` в setAuth/logout.
 
 ### [1.22.0] — 2026-05-13
 
@@ -414,6 +427,11 @@
 ---
 
 ## Android
+
+### [1.34.0] — 2026-05-13
+
+#### Added
+- **Поддержка refresh-токенов** (api 1.18.0). `LoginResponse.refresh_token` парсится и сохраняется в `AppPreferences` рядом с access-токеном (`REFRESH_TOKEN` ключ DataStore). OkHttp-интерсептор `RetrofitClient` ловит 401 на любом protected-запросе, синхронно вызывает `tryRefresh()` (отдельный OkHttp-клиент без auth-interceptor чтобы не было рекурсии), на успехе сохраняет новую пару в `RetrofitClient.authToken`/`refreshToken` + вызывает `onTokensRefreshed` callback (MainActivity пишет в DataStore через `AppPreferences.setTokens`). Concurrent 401-ы шарят один refresh-вызов через `synchronized(refreshLock)`. На неудаче — чистит токены и вызывает `onUnauthorized` (как раньше). Кнопка logout + clearAuth также чистят оба токена. `ConnectScreen.onAuthenticated` сигнатура расширена `refreshToken: String`.
 
 ### [1.33.0] — 2026-05-13
 

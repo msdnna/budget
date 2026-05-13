@@ -32,6 +32,14 @@ func Auth(cfg *config.Config) gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Неверный или устаревший токен"})
 			return
 		}
+		// Refresh tokens are short-circuited here — they're only valid at
+		// `/auth/refresh`. Empty TokenType is treated as access for
+		// backwards compatibility with pre-refresh-rollout tokens still
+		// living in clients' localStorage.
+		if claims.TokenType == models.TokenTypeRefresh {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Используйте access-токен"})
+			return
+		}
 
 		c.Set("claims", claims)
 		c.Set("user_id", claims.UserID)

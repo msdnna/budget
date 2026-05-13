@@ -85,6 +85,7 @@ func newFixture(t *testing.T) *fixture {
 	{
 		api.GET("/version", verH.Get)
 		api.POST("/auth/login", authH.Login)
+		api.POST("/auth/refresh", authH.Refresh)
 
 		auth := api.Group("/")
 		auth.Use(middleware.Auth(cfg))
@@ -231,9 +232,66 @@ func TestAuth_LoginAndMe(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("/me status = %d, body=%s", w.Code, w.Body.String())
 	}
-	me := decodeBody[map[string]string](t, w)
+	// /me returns a mixed-type map (is_admin is bool), so decode as any.
+	me := decodeBody[map[string]any](t, w)
 	if me["login"] != "alice" {
-		t.Errorf("login = %q", me["login"])
+		t.Errorf("login = %v", me["login"])
+	}
+}
+
+func TestAuth_Refresh(t *testing.T) {
+	f := newFixture(t)
+
+	// Login returns both access + refresh.
+	w := f.do(t, http.MethodPost, "/api/auth/login",
+		models.LoginRequest{Login: "alice", Password: "hunter2"}, false)
+	if w.Code != http.StatusOK {
+		t.Fatalf("login: status=%d body=%s", w.Code, w.Body.String())
+	}
+	login := decodeBody[models.LoginResponse](t, w)
+	if login.Token == "" || login.RefreshToken == "" {
+		t.Fatalf("login must return both tokens: %+v", login)
+	}
+	if login.Token == login.RefreshToken {
+		t.Error("access and refresh tokens must differ")
+	}
+
+	// Refresh with valid refresh token → fresh pair.
+	w = f.do(t, http.MethodPost, "/api/auth/refresh",
+		models.RefreshRequest{RefreshToken: login.RefreshToken}, false)
+	if w.Code != http.StatusOK {
+		t.Fatalf("refresh: status=%d body=%s", w.Code, w.Body.String())
+	}
+	refreshed := decodeBody[models.RefreshResponse](t, w)
+	if refreshed.Token == "" || refreshed.RefreshToken == "" {
+		t.Fatalf("refresh must return both tokens: %+v", refreshed)
+	}
+	if refreshed.Token == login.Token {
+		t.Error("refresh should mint a new access token (got same)")
+	}
+
+	// Refresh with the *access* token must fail — wrong token_type.
+	w = f.do(t, http.MethodPost, "/api/auth/refresh",
+		models.RefreshRequest{RefreshToken: login.Token}, false)
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("access-as-refresh: status=%d, want 401", w.Code)
+	}
+
+	// Refresh with garbage must fail.
+	w = f.do(t, http.MethodPost, "/api/auth/refresh",
+		models.RefreshRequest{RefreshToken: "not.a.jwt"}, false)
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("garbage refresh: status=%d, want 401", w.Code)
+	}
+
+	// And the *refresh* token must NOT be accepted at protected endpoints
+	// — middleware rejects token_type=refresh on `/auth/me`.
+	req := httptest.NewRequest(http.MethodGet, "/api/auth/me", nil)
+	req.Header.Set("Authorization", "Bearer "+login.RefreshToken)
+	rec := httptest.NewRecorder()
+	f.router.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("refresh-as-access: status=%d, want 401", rec.Code)
 	}
 }
 

@@ -402,6 +402,9 @@
                     "is_admin": {
                         "type": "boolean"
                     },
+                    "refresh_token": {
+                        "type": "string"
+                    },
                     "token": {
                         "type": "string"
                     },
@@ -430,6 +433,31 @@
                     },
                     "year": {
                         "type": "integer"
+                    }
+                },
+                "type": "object"
+            },
+            "models.RefreshRequest": {
+                "properties": {
+                    "refresh_token": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "refresh_token"
+                ],
+                "type": "object"
+            },
+            "models.RefreshResponse": {
+                "properties": {
+                    "expires_at": {
+                        "type": "string"
+                    },
+                    "refresh_token": {
+                        "type": "string"
+                    },
+                    "token": {
+                        "type": "string"
                     }
                 },
                 "type": "object"
@@ -904,7 +932,7 @@
     "paths": {
         "/auth/login": {
             "post": {
-                "description": "Возвращает 24-часовой JWT. Тот же текст ошибки для несуществующего логина и неверного пароля (anti-enumeration).",
+                "description": "Возвращает access (24ч) + refresh (30д). Refresh обменивается на новую пару через `/auth/refresh` пока он сам жив. Тот же текст ошибки для несуществующего логина и неверного пароля (anti-enumeration).",
                 "requestBody": {
                     "content": {
                         "application/json": {
@@ -963,7 +991,7 @@
                         "description": "Unauthorized"
                     }
                 },
-                "summary": "Логин и выдача JWT",
+                "summary": "Логин и выдача access + refresh JWT",
                 "tags": [
                     "auth"
                 ]
@@ -1006,6 +1034,73 @@
                     }
                 ],
                 "summary": "Текущий пользователь",
+                "tags": [
+                    "auth"
+                ]
+            }
+        },
+        "/auth/refresh": {
+            "post": {
+                "description": "Принимает refresh-JWT в теле, возвращает свежий access + новый refresh (rotation). Refresh должен быть валиден и иметь `token_type=refresh`.",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "oneOf": [
+                                    {
+                                        "type": "object"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/models.RefreshRequest",
+                                        "summary": "body",
+                                        "description": "refresh_token"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "description": "refresh_token",
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.RefreshResponse"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Bad Request"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized"
+                    }
+                },
+                "summary": "Обмен refresh-токена на новую пару access + refresh",
                 "tags": [
                     "auth"
                 ]

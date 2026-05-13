@@ -104,6 +104,7 @@ func main() {
 		api.GET("/health", healthHandler)
 		api.GET("/version", versionHandler.Get)
 		api.POST("/auth/login", authHandler.Login)
+		api.POST("/auth/refresh", authHandler.Refresh)
 
 		// Protected routes
 		protected := api.Group("/")
