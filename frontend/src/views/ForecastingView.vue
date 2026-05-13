@@ -247,14 +247,14 @@
                           style="padding: 0 5px; min-width: 24px"
                           @click="confirmEdit(item)"
                         >
-                          ✓
+                          <template #icon><n-icon :component="CheckmarkOutline" /></template>
                         </n-button>
                         <n-button
                           size="tiny"
                           style="padding: 0 5px; min-width: 24px"
                           @click="cancelEdit"
                         >
-                          ✗
+                          <template #icon><n-icon :component="CloseOutline" /></template>
                         </n-button>
                       </template>
                       <template v-else>
@@ -300,14 +300,14 @@
                           style="padding: 0 5px; min-width: 24px"
                           @click="confirmEdit(item)"
                         >
-                          ✓
+                          <template #icon><n-icon :component="CheckmarkOutline" /></template>
                         </n-button>
                         <n-button
                           size="tiny"
                           style="padding: 0 5px; min-width: 24px"
                           @click="cancelEdit"
                         >
-                          ✗
+                          <template #icon><n-icon :component="CloseOutline" /></template>
                         </n-button>
                       </template>
                       <template v-else>
@@ -335,14 +335,14 @@
                           style="padding: 0 5px; min-width: 24px"
                           @click="confirmEdit(item)"
                         >
-                          ✓
+                          <template #icon><n-icon :component="CheckmarkOutline" /></template>
                         </n-button>
                         <n-button
                           size="tiny"
                           style="padding: 0 5px; min-width: 24px"
                           @click="cancelEdit"
                         >
-                          ✗
+                          <template #icon><n-icon :component="CloseOutline" /></template>
                         </n-button>
                       </template>
                       <template v-else>
@@ -382,14 +382,14 @@
                           style="padding: 0 5px; min-width: 24px"
                           @click="confirmEdit(item)"
                         >
-                          ✓
+                          <template #icon><n-icon :component="CheckmarkOutline" /></template>
                         </n-button>
                         <n-button
                           size="tiny"
                           style="padding: 0 5px; min-width: 24px"
                           @click="cancelEdit"
                         >
-                          ✗
+                          <template #icon><n-icon :component="CloseOutline" /></template>
                         </n-button>
                       </n-space>
                     </template>
@@ -428,7 +428,9 @@
                     />
                     <n-popconfirm @positive-click="wlStore.remove(item.id).then(loadForecast)">
                       <template #trigger>
-                        <n-button size="small" type="error" quaternary title="Удалить">✕</n-button>
+                        <n-button size="small" type="error" quaternary title="Удалить">
+                          <template #icon><n-icon :component="TrashOutline" /></template>
+                        </n-button>
                       </template>
                       Удалить эту позицию?
                     </n-popconfirm>
@@ -567,14 +569,14 @@
                           style="padding: 0 5px; min-width: 24px"
                           @click="confirmEdit(item)"
                         >
-                          ✓
+                          <template #icon><n-icon :component="CheckmarkOutline" /></template>
                         </n-button>
                         <n-button
                           size="tiny"
                           style="padding: 0 5px; min-width: 24px"
                           @click="cancelEdit"
                         >
-                          ✗
+                          <template #icon><n-icon :component="CloseOutline" /></template>
                         </n-button>
                       </template>
                       <template v-else>
@@ -617,14 +619,14 @@
                           style="padding: 0 5px; min-width: 24px"
                           @click="confirmEdit(item)"
                         >
-                          ✓
+                          <template #icon><n-icon :component="CheckmarkOutline" /></template>
                         </n-button>
                         <n-button
                           size="tiny"
                           style="padding: 0 5px; min-width: 24px"
                           @click="cancelEdit"
                         >
-                          ✗
+                          <template #icon><n-icon :component="CloseOutline" /></template>
                         </n-button>
                       </template>
                       <template v-else>
@@ -652,14 +654,14 @@
                           style="padding: 0 5px; min-width: 24px"
                           @click="confirmEdit(item)"
                         >
-                          ✓
+                          <template #icon><n-icon :component="CheckmarkOutline" /></template>
                         </n-button>
                         <n-button
                           size="tiny"
                           style="padding: 0 5px; min-width: 24px"
                           @click="cancelEdit"
                         >
-                          ✗
+                          <template #icon><n-icon :component="CloseOutline" /></template>
                         </n-button>
                       </template>
                       <template v-else>
@@ -693,14 +695,14 @@
                           style="padding: 0 5px; min-width: 24px"
                           @click="confirmEdit(item)"
                         >
-                          ✓
+                          <template #icon><n-icon :component="CheckmarkOutline" /></template>
                         </n-button>
                         <n-button
                           size="tiny"
                           style="padding: 0 5px; min-width: 24px"
                           @click="cancelEdit"
                         >
-                          ✗
+                          <template #icon><n-icon :component="CloseOutline" /></template>
                         </n-button>
                       </n-space>
                     </template>
@@ -734,7 +736,9 @@
                     </n-button>
                     <n-popconfirm @positive-click="wlStore.remove(item.id)">
                       <template #trigger>
-                        <n-button size="small" type="error" quaternary title="Удалить">✕</n-button>
+                        <n-button size="small" type="error" quaternary title="Удалить">
+                          <template #icon><n-icon :component="TrashOutline" /></template>
+                        </n-button>
                       </template>
                       Удалить позицию?
                     </n-popconfirm>
@@ -853,7 +857,9 @@ import {
   NDatePicker,
   NRadioGroup,
   NRadioButton,
+  NIcon,
 } from 'naive-ui'
+import { CheckmarkOutline, CloseOutline, TrashOutline } from '@vicons/ionicons5'
 import { useWishlistStore } from '@/stores/wishlist'
 import { useCategoriesStore } from '@/stores/categories'
 import { statistics, users as usersApi, wishlist as wlApi, transactions as txApi } from '@/api'

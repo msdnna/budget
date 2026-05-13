@@ -26,7 +26,7 @@
             <n-text v-else type="tertiary">Не задан</n-text>
             <n-space>
               <n-button v-if="ibRecord" size="small" quaternary type="error" @click="deleteIb">
-                ✕
+                <template #icon><n-icon :component="TrashOutline" /></template>
               </n-button>
               <n-button size="small" type="primary" @click="showIbForm = true">
                 {{ ibRecord ? 'Изменить' : 'Задать' }}
@@ -234,7 +234,16 @@ import {
   NSpin,
   NList,
   NListItem,
+  NIcon,
 } from 'naive-ui'
+import {
+  CheckmarkOutline,
+  CloseOutline,
+  CopyOutline,
+  EyeOffOutline,
+  EyeOutline,
+  TrashOutline,
+} from '@vicons/ionicons5'
 import { useTransactionsStore } from '@/stores/transactions'
 import { useThemeStore } from '@/stores/theme'
 import { useCategoriesStore } from '@/stores/categories'
@@ -567,7 +576,7 @@ const okBtn = (onClick) =>
       style: 'padding:0 4px;min-width:22px;height:22px',
       onClick,
     },
-    { default: () => '✓' },
+    { icon: () => h(NIcon, null, { default: () => h(CheckmarkOutline) }) },
   )
 
 const cancelBtn = (onClick) =>
@@ -578,7 +587,7 @@ const cancelBtn = (onClick) =>
       style: 'padding:0 4px;min-width:22px;height:22px',
       onClick,
     },
-    { default: () => '✗' },
+    { icon: () => h(NIcon, null, { default: () => h(CloseOutline) }) },
   )
 
 const userPlaceholder = (onClick) =>
@@ -942,7 +951,12 @@ const columns = computed(() => [
                     type: row.hidden ? 'warning' : 'default',
                     onClick: () => store.toggle(row.id, !row.hidden),
                   },
-                  { default: () => (row.hidden ? '●' : '○') },
+                  {
+                    icon: () =>
+                      h(NIcon, null, {
+                        default: () => h(row.hidden ? EyeOffOutline : EyeOutline),
+                      }),
+                  },
                 ),
               default: () => (row.hidden ? 'Показать' : 'Скрыть'),
             }),
@@ -956,7 +970,7 @@ const columns = computed(() => [
                     type: 'info',
                     onClick: () => fillFromTemplate(row),
                   },
-                  { default: () => '+' },
+                  { icon: () => h(NIcon, null, { default: () => h(CopyOutline) }) },
                 ),
               default: () => 'Добавить как шаблон',
             }),
@@ -968,7 +982,9 @@ const columns = computed(() => [
                   h(
                     NButton,
                     { size: 'small', type: 'error', quaternary: true },
-                    { default: () => '✕' },
+                    {
+                      icon: () => h(NIcon, null, { default: () => h(TrashOutline) }),
+                    },
                   ),
                 default: () => 'Удалить запись?',
               },

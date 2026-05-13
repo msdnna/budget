@@ -173,6 +173,19 @@
 
 ## Web (frontend)
 
+### [1.21.0] — 2026-05-13
+
+#### Changed
+- **Unicode-маркеры на кнопках заменены на ionicons5** (Phase 3 — иконки на кнопках):
+  - **Кнопки удаления** (`✕`) → `TrashOutline` через `<template #icon>` слот NButton. Точки правки: `IncomeView` (delete initial-balance + delete-row), `ExpensesView` (delete-row), `ForecastingView` (две кнопки удаления регулярных/wishlist), `DetailRequestModal` (remove-child).
+  - **Inline-edit confirm/cancel** (`✓` / `✗`) → `CheckmarkOutline` / `CloseOutline`. `okBtn` / `cancelBtn` helpers в `IncomeView` и `ExpensesView` (render-функция через `h(NIcon, ...)`), 8 пар inline-edit кнопок в `ForecastingView` (template `replace_all`).
+  - **Trend-prefix статистики** (`↑` / `↓`) перед суммами Доходы/Расходы в `StatisticsView` → `TrendingUpOutline` / `TrendingDownOutline` (`:color` от primary / palette.expense, size=20).
+  - **Row-actions в таблицах Доходов/Расходов**:
+    - «Скрыть/Показать» (`●` / `○`) → `EyeOutline` / `EyeOffOutline`;
+    - «Добавить как шаблон» (`+`) → `CopyOutline` (семантика «дублировать запись из шаблона»);
+    - «Запрос на детализацию» (`⇲`, только в Расходах) → `ListOutline` (раскладка lump-sum в список детальных трат).
+- Сохранены: мат-знаки `+` / `−` (баланс — формат значения, не UI-маркер) и `%` / `₽` в pie-unit-toggle (семантика единиц измерения).
+
 ### [1.20.0] — 2026-05-13
 
 #### Added
