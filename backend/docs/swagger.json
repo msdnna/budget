@@ -58,10 +58,16 @@
             },
             "models.Category": {
                 "properties": {
+                    "color": {
+                        "type": "string"
+                    },
                     "created_at": {
                         "type": "string"
                     },
                     "deleted_at": {
+                        "type": "string"
+                    },
+                    "icon": {
                         "type": "string"
                     },
                     "id": {
@@ -107,6 +113,12 @@
             },
             "models.CreateCategoryRequest": {
                 "properties": {
+                    "color": {
+                        "type": "string"
+                    },
+                    "icon": {
+                        "type": "string"
+                    },
                     "name": {
                         "type": "string"
                     },

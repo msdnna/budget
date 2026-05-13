@@ -195,6 +195,8 @@ data class Category(
     val id: String = "",
     val section: String = "",
     val name: String = "",
+    val color: String? = null,
+    val icon: String? = null,
     @SerializedName("is_default") val isDefault: Boolean = true,
     @SerializedName("created_at") val createdAt: String = "",
     val version: Int = 0,
@@ -205,7 +207,9 @@ data class Category(
 
 data class CreateCategoryRequest(
     val section: String,
-    val name: String
+    val name: String,
+    val color: String? = null,
+    val icon: String? = null,
 )
 
 data class StatisticsOverviewResponse(

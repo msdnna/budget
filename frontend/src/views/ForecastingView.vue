@@ -69,11 +69,12 @@
       <n-grid-item span="2 m:1">
         <n-card title="Прогноз по категориям">
           <n-spin :show="loadingForecast">
-            <v-chart
+            <CategoryDonutChart
               v-if="forecast.breakdown?.length"
-              :option="forecastPieOption"
-              style="height: 300px"
-              autoresize
+              :data="forecast.breakdown.map((d) => ({ category: d.category, amount: d.amount }))"
+              :category-meta="forecastCategoryMeta"
+              :palette="palette"
+              unit="percent"
             />
             <n-empty
               v-else
@@ -828,11 +829,6 @@
 <script setup>
 import { ref, computed, onMounted, h } from 'vue'
 import { useMessage } from 'naive-ui'
-import { use } from 'echarts/core'
-import { PieChart } from 'echarts/charts'
-import { TooltipComponent, LegendComponent } from 'echarts/components'
-import { CanvasRenderer } from 'echarts/renderers'
-import VChart from 'vue-echarts'
 import {
   NCard,
   NGrid,
@@ -863,13 +859,12 @@ import { useCategoriesStore } from '@/stores/categories'
 import { statistics, users as usersApi, wishlist as wlApi, transactions as txApi } from '@/api'
 import { storeToRefs } from 'pinia'
 import { useThemeStore } from '@/stores/theme'
+import CategoryDonutChart from '@/components/CategoryDonutChart.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
 import ConfirmActionButton from '@/components/ConfirmActionButton.vue'
 
-use([PieChart, TooltipComponent, LegendComponent, CanvasRenderer])
-
 const themeStore = useThemeStore()
-const { chartColors, primaryColor, palette } = storeToRefs(themeStore)
+const { primaryColor, palette } = storeToRefs(themeStore)
 
 const wlStore = useWishlistStore()
 const message = useMessage()
@@ -1422,33 +1417,10 @@ async function loadForecast() {
   }
 }
 
-const forecastPieOption = computed(() => {
-  const p = palette.value
-  return {
-    tooltip: {
-      trigger: 'item',
-      formatter: '{b}: {c} ₽/мес ({d}%)',
-      backgroundColor: p.tooltipBg,
-      borderColor: p.tooltipBorder,
-      textStyle: { color: p.tooltipText },
-    },
-    legend: { bottom: 0, type: 'scroll', textStyle: { color: p.chartLabel } },
-    color: chartColors.value,
-    series: [
-      {
-        type: 'pie',
-        radius: ['38%', '65%'],
-        center: ['50%', '44%'],
-        data: (forecast.value.breakdown || []).map((d) => ({
-          name: d.category,
-          value: Math.round(d.amount),
-        })),
-        emphasis: { itemStyle: { shadowBlur: 10, shadowColor: p.chartShadow } },
-        label: { color: p.chartLabel, formatter: '{b}\n{d}%' },
-        labelLine: { lineStyle: { color: p.chartLabel } },
-      },
-    ],
-  }
+const forecastCategoryMeta = computed(() => {
+  const out = {}
+  for (const c of catStore.bySection.expense) out[c.name] = { color: c.color, icon: c.icon }
+  return out
 })
 
 onMounted(async () => {

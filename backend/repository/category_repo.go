@@ -12,17 +12,51 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-var defaultCategories = map[string][]string{
+// defaultCategoryPreset is the seed metadata for a single default category.
+// Color is a hex string. Icon is a key from the shared icon dictionary
+// (see frontend/src/utils/icons.js and android/.../ui/icons/CategoryIcons.kt).
+type defaultCategoryPreset struct {
+	Name  string
+	Color string
+	Icon  string
+}
+
+// defaultCategories defines the seed set per section. The order is preserved
+// for the legacy "expense > Прочее last" ordering some screens rely on.
+var defaultCategories = map[string][]defaultCategoryPreset{
 	"expense": {
-		"Продукты", "Транспорт", "Жильё/ЖКХ", "Рестораны", "Развлечения",
-		"Здоровье", "Образование", "Одежда", "Электроника", "Путешествия",
-		"Связь", "Красота", "Спорт", "Прочее",
+		{"Продукты", "#22C55E", "cart"},
+		{"Транспорт", "#3B82F6", "car"},
+		{"Жильё/ЖКХ", "#10B981", "home"},
+		{"Рестораны", "#F59E0B", "restaurant"},
+		{"Развлечения", "#8B5CF6", "game-controller"},
+		{"Здоровье", "#EF4444", "medkit"},
+		{"Образование", "#0EA5E9", "school"},
+		{"Одежда", "#EC4899", "shirt"},
+		{"Электроника", "#6366F1", "phone-portrait"},
+		{"Путешествия", "#14B8A6", "airplane"},
+		{"Связь", "#A855F7", "call"},
+		{"Красота", "#F472B6", "rose"},
+		{"Спорт", "#F97316", "barbell"},
+		{"Прочее", "#64748B", "ellipsis-horizontal"},
 	},
 	"income": {
-		"Зарплата", "Фриланс", "Инвестиции", "Бонус", "Подарок", "Аренда", "Прочее",
+		{"Зарплата", "#22C55E", "cash"},
+		{"Фриланс", "#3B82F6", "briefcase"},
+		{"Инвестиции", "#10B981", "trending-up"},
+		{"Бонус", "#F59E0B", "gift"},
+		{"Подарок", "#EC4899", "gift"},
+		{"Аренда", "#6366F1", "key"},
+		{"Прочее", "#64748B", "ellipsis-horizontal"},
 	},
 	"wishlist": {
-		"Техника", "Одежда", "Путешествия", "Дом", "Здоровье", "Развлечения", "Прочее",
+		{"Техника", "#6366F1", "desktop"},
+		{"Одежда", "#EC4899", "shirt"},
+		{"Путешествия", "#14B8A6", "airplane"},
+		{"Дом", "#10B981", "home"},
+		{"Здоровье", "#EF4444", "medkit"},
+		{"Развлечения", "#8B5CF6", "game-controller"},
+		{"Прочее", "#64748B", "ellipsis-horizontal"},
 	},
 }
 
@@ -48,19 +82,21 @@ func NewCategoryRepository(db *mongo.Database) *CategoryRepository {
 }
 
 func (r *CategoryRepository) EnsureDefaults(ctx context.Context) error {
-	for section, names := range defaultCategories {
-		for _, name := range names {
-			filter := bson.M{"section": section, "name": name, "deleted_at": nil}
+	for section, presets := range defaultCategories {
+		for _, p := range presets {
+			filter := bson.M{"section": section, "name": p.Name, "deleted_at": nil}
+			now := time.Now()
 			count, err := r.col.CountDocuments(ctx, filter)
 			if err != nil {
 				return err
 			}
 			if count == 0 {
-				now := time.Now()
 				_, err = r.col.InsertOne(ctx, models.Category{
 					ID:        uuid.NewString(),
 					Section:   section,
-					Name:      name,
+					Name:      p.Name,
+					Color:     p.Color,
+					Icon:      p.Icon,
 					IsDefault: true,
 					CreatedAt: now,
 					Version:   1,
@@ -69,7 +105,30 @@ func (r *CategoryRepository) EnsureDefaults(ctx context.Context) error {
 				if err != nil && !mongo.IsDuplicateKeyError(err) {
 					return err
 				}
+				continue
 			}
+			// Backfill color/icon onto pre-existing default rows that were
+			// seeded before these fields were introduced. Bumps `version` and
+			// `updated_at` so sync clients pick up the metadata.
+			backfill := bson.M{"$or": bson.A{
+				bson.M{"color": bson.M{"$in": bson.A{nil, ""}}},
+				bson.M{"icon": bson.M{"$in": bson.A{nil, ""}}},
+			}}
+			res, err := r.col.UpdateOne(ctx,
+				bson.M{"$and": bson.A{filter, backfill}},
+				bson.M{
+					"$set": bson.M{
+						"color":      p.Color,
+						"icon":       p.Icon,
+						"updated_at": now,
+					},
+					"$inc": bson.M{"version": 1},
+				},
+			)
+			if err != nil {
+				return err
+			}
+			_ = res
 		}
 	}
 	return nil
@@ -92,12 +151,14 @@ func (r *CategoryRepository) List(ctx context.Context, section string) ([]models
 	return cats, nil
 }
 
-func (r *CategoryRepository) Create(ctx context.Context, section, name string, modifiedBy *models.UserInfo) (models.Category, error) {
+func (r *CategoryRepository) Create(ctx context.Context, section, name, color, icon string, modifiedBy *models.UserInfo) (models.Category, error) {
 	now := time.Now()
 	cat := models.Category{
 		ID:             uuid.NewString(),
 		Section:        section,
 		Name:           name,
+		Color:          color,
+		Icon:           icon,
 		IsDefault:      false,
 		CreatedAt:      now,
 		Version:        1,

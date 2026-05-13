@@ -124,11 +124,13 @@
       <n-grid-item span="2 m:1">
         <n-card title="Расходы по категориям">
           <n-spin :show="loadingCharts">
-            <v-chart
+            <CategoryDonutChart
               v-if="expensePieData.length"
-              :option="expensePieOption"
-              style="height: 320px"
-              autoresize
+              :data="expensePieData.map((d) => ({ category: d.category, amount: d.amount }))"
+              :category-meta="categoryMetaByName"
+              :palette="palette"
+              :unit="pieChartUnit"
+              :values-hidden="valuesHidden"
             />
             <n-empty v-else description="Нет данных" style="padding: 60px 0" />
           </n-spin>
@@ -137,11 +139,13 @@
       <n-grid-item span="2 m:1">
         <n-card title="Доходы по источникам">
           <n-spin :show="loadingCharts">
-            <v-chart
+            <CategoryDonutChart
               v-if="incomePieData.length"
-              :option="incomePieOption"
-              style="height: 320px"
-              autoresize
+              :data="incomePieData.map((d) => ({ category: d.category, amount: d.amount }))"
+              :category-meta="categoryMetaByName"
+              :palette="palette"
+              :unit="pieChartUnit"
+              :values-hidden="valuesHidden"
             />
             <n-empty v-else description="Нет данных" style="padding: 60px 0" />
           </n-spin>
@@ -167,7 +171,7 @@
 <script setup>
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { use } from 'echarts/core'
-import { PieChart, BarChart } from 'echarts/charts'
+import { BarChart } from 'echarts/charts'
 import {
   TitleComponent,
   TooltipComponent,
@@ -178,6 +182,7 @@ import {
 } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import VChart from 'vue-echarts'
+import CategoryDonutChart from '@/components/CategoryDonutChart.vue'
 import {
   NCard,
   NGrid,
@@ -191,15 +196,15 @@ import {
   NButtonGroup,
   NDatePicker,
 } from 'naive-ui'
-import { statistics } from '@/api'
+import { statistics, categories as catApi } from '@/api'
 import { storeToRefs } from 'pinia'
 import { useThemeStore } from '@/stores/theme'
 import TilePeriodPicker from '@/components/TilePeriodPicker.vue'
 
 // ToolboxComponent is registered (without UI) because the Brush component
 // depends on it internally; we hide the buttons via `toolbox.show: false`.
+// PieChart is registered transitively by CategoryDonutChart's own VChart usage.
 use([
-  PieChart,
   BarChart,
   TitleComponent,
   TooltipComponent,
@@ -210,8 +215,7 @@ use([
   CanvasRenderer,
 ])
 
-const { chartColors, primaryColor, palette, valuesHidden, pieChartUnit } =
-  storeToRefs(useThemeStore())
+const { primaryColor, palette, valuesHidden, pieChartUnit } = storeToRefs(useThemeStore())
 
 const period = ref('month')
 const selectedMonth = ref(Date.now())
@@ -221,6 +225,11 @@ const dateRange = ref(null)
 const summary = ref({ total_income: 0, total_expense: 0, balance: 0 })
 const expensePieData = ref([])
 const incomePieData = ref([])
+// Name → Category map used to resolve per-category color/icon for pie slices.
+// Both expense + income sections are merged; collisions are vanishingly rare
+// (income and expense rarely share names) and a single lookup keeps slice
+// colors stable regardless of which chart they appear in.
+const categoryMetaByName = ref({})
 const monthlyData = ref([])
 const loadingCharts = ref(false)
 const loadingMonthly = ref(false)
@@ -244,6 +253,22 @@ function buildParams() {
   return p
 }
 
+async function loadCategoryMetadata() {
+  // Fetch once per screen mount. Category color/icon only change on admin
+  // edits, so a stale cache between pie reloads is fine.
+  if (Object.keys(categoryMetaByName.value).length > 0) return
+  try {
+    const { data } = await catApi.all()
+    const merged = {}
+    for (const list of [data?.expense || [], data?.income || [], data?.wishlist || []]) {
+      for (const c of list) merged[c.name] = { color: c.color, icon: c.icon }
+    }
+    categoryMetaByName.value = merged
+  } catch {
+    // Best-effort — pie chart falls back to name-hashed palette colors.
+  }
+}
+
 async function loadData() {
   const params = buildParams()
   loadingCharts.value = true
@@ -252,6 +277,7 @@ async function loadData() {
       statistics.summary(params),
       statistics.byCategory({ ...params, type: 'expense' }),
       statistics.byCategory({ ...params, type: 'income' }),
+      loadCategoryMetadata(),
     ])
     summary.value = s.data
     expensePieData.value = exp.data || []
@@ -311,33 +337,6 @@ function tooltipStyle() {
     textStyle: { color: palette.value.tooltipText },
   }
 }
-
-function makePieOption(data) {
-  const p = palette.value
-  const isRuble = pieChartUnit.value === 'ruble'
-  const hideValues = isRuble && valuesHidden.value
-  const labelFmt = isRuble ? (hideValues ? '{b}' : '{b}\n{c} ₽') : '{b}\n{d}%'
-  const tooltipFmt = isRuble ? (hideValues ? '{b}' : '{b}: {c} ₽') : '{b}: {d}%'
-  return {
-    tooltip: { trigger: 'item', formatter: tooltipFmt, ...tooltipStyle() },
-    legend: { bottom: 0, type: 'scroll', textStyle: { color: p.chartLabel } },
-    color: chartColors.value,
-    series: [
-      {
-        type: 'pie',
-        radius: ['38%', '65%'],
-        center: ['50%', '44%'],
-        data: data.map((d) => ({ name: d.category, value: Math.round(d.amount) })),
-        emphasis: { itemStyle: { shadowBlur: 10, shadowColor: p.chartShadow } },
-        label: { color: p.chartLabel, formatter: labelFmt },
-        labelLine: { lineStyle: { color: p.chartLabel } },
-      },
-    ],
-  }
-}
-
-const expensePieOption = computed(() => makePieOption(expensePieData.value))
-const incomePieOption = computed(() => makePieOption(incomePieData.value))
 
 const MONTH_NAMES = [
   'Янв',

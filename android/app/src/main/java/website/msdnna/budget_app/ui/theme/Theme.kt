@@ -107,23 +107,3 @@ fun BudgetTheme(
         )
     }
 }
-
-fun generateChartColors(primary: Color, count: Int): List<Color> {
-    if (count == 0) return emptyList()
-    val hsv = FloatArray(3)
-    android.graphics.Color.colorToHSV(
-        android.graphics.Color.argb(
-            (primary.alpha * 255).toInt(),
-            (primary.red * 255).toInt(),
-            (primary.green * 255).toInt(),
-            (primary.blue * 255).toInt()
-        ),
-        hsv
-    )
-    return List(count) { i ->
-        val t = if (count == 1) 0.5f else i.toFloat() / (count - 1)
-        val sat = 0.75f - t * 0.25f
-        val value = 0.95f - t * 0.30f
-        Color(android.graphics.Color.HSVToColor(floatArrayOf(hsv[0], sat, value)))
-    }
-}

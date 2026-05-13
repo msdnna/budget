@@ -157,7 +157,7 @@ func (h *CategoryHandler) Create(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	cat, err := h.repo.Create(ctx, req.Section, req.Name, userInfoFromCtx(c))
+	cat, err := h.repo.Create(ctx, req.Section, req.Name, req.Color, req.Icon, userInfoFromCtx(c))
 	if err != nil {
 		if mongo.IsDuplicateKeyError(err) {
 			c.JSON(http.StatusConflict, gin.H{"error": "category already exists"})

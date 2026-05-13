@@ -431,6 +431,58 @@ func TestCategoryRepo_EnsureDefaultsIdempotent(t *testing.T) {
 		if !c.IsDefault {
 			t.Errorf("seed category %q is_default=false", c.Name)
 		}
+		if c.Color == "" || c.Icon == "" {
+			t.Errorf("seed category %q missing color/icon (color=%q icon=%q)", c.Name, c.Color, c.Icon)
+		}
+	}
+}
+
+// Verifies that EnsureDefaults backfills color/icon on default rows that
+// were seeded by an older version of the app (before these fields existed).
+func TestCategoryRepo_EnsureDefaultsBackfillsColorIcon(t *testing.T) {
+	db := mongotest.Start(t)
+	repo := repository.NewCategoryRepository(db)
+	ctx := testCtx(t)
+
+	now := time.Now()
+	col := db.Collection("categories")
+	if _, err := col.InsertOne(ctx, bson.M{
+		"_id":        "legacy-prods",
+		"section":    "expense",
+		"name":       "Продукты",
+		"is_default": true,
+		"created_at": now,
+		"version":    1,
+		"updated_at": now,
+		"deleted_at": nil,
+		// Note: no color/icon fields — simulates pre-migration row.
+	}); err != nil {
+		t.Fatalf("insert legacy: %v", err)
+	}
+
+	if err := repo.EnsureDefaults(ctx); err != nil {
+		t.Fatalf("EnsureDefaults: %v", err)
+	}
+
+	expense, err := repo.List(ctx, "expense")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found *models.Category
+	for i := range expense {
+		if expense[i].ID == "legacy-prods" {
+			found = &expense[i]
+			break
+		}
+	}
+	if found == nil {
+		t.Fatal("legacy row missing after EnsureDefaults")
+	}
+	if found.Color == "" || found.Icon == "" {
+		t.Errorf("legacy row not backfilled: color=%q icon=%q", found.Color, found.Icon)
+	}
+	if found.Version < 2 {
+		t.Errorf("legacy row version should bump on backfill: got %d", found.Version)
 	}
 }
 
@@ -443,15 +495,18 @@ func TestCategoryRepo_CreateDeleteAndProtectDefault(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c, err := repo.Create(ctx, "expense", "MyCategory", nil)
+	c, err := repo.Create(ctx, "expense", "MyCategory", "#FF0000", "tag", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if c.IsDefault {
 		t.Error("user-created category should not be is_default")
 	}
+	if c.Color != "#FF0000" || c.Icon != "tag" {
+		t.Errorf("Create did not persist color/icon: got color=%q icon=%q", c.Color, c.Icon)
+	}
 	// Cannot recreate same name in same section (unique index on non-deleted)
-	if _, err := repo.Create(ctx, "expense", "MyCategory", nil); err == nil {
+	if _, err := repo.Create(ctx, "expense", "MyCategory", "", "", nil); err == nil {
 		t.Error("duplicate Create should fail")
 	}
 

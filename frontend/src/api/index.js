@@ -53,6 +53,7 @@ export const users = {
 
 export const categories = {
   list: (section) => api.get('/categories', { params: { section } }),
+  all: () => api.get('/categories/all'),
   create: (data) => api.post('/categories', data),
   remove: (id) => api.delete(`/categories/${id}`),
 }

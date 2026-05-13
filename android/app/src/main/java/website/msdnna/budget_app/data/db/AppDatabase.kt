@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [TransactionEntity::class, WishlistEntity::class, CategoryEntity::class],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -37,12 +37,23 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        // v3 → v4: category color/icon (filled from server on next sync pull).
+        // Columns are nullable to match the Room schema generated from the
+        // `String?` fields on CategoryEntity — using `NOT NULL` here causes
+        // Room.validateMigration() to refuse the open with a hash mismatch.
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE categories ADD COLUMN color TEXT DEFAULT ''")
+                db.execSQL("ALTER TABLE categories ADD COLUMN icon TEXT DEFAULT ''")
+            }
+        }
+
         fun get(context: Context): AppDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
                 AppDatabase::class.java,
                 "msdnna_budget.db",
-            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .build().also { instance = it }
         }
     }
