@@ -20,6 +20,7 @@ class AppPreferences(private val context: Context) {
         val SERVER_URL = stringPreferencesKey("server_url")
         val THEME_KEY = stringPreferencesKey("theme_key")
         val AUTH_TOKEN = stringPreferencesKey("auth_token")
+        val REFRESH_TOKEN = stringPreferencesKey("refresh_token")
         val DISPLAY_NAME = stringPreferencesKey("display_name")
         val AVATAR_URL = stringPreferencesKey("avatar_url")
         val USER_ID = stringPreferencesKey("user_id")
@@ -78,6 +79,9 @@ class AppPreferences(private val context: Context) {
 
     val authToken: Flow<String?> = context.dataStore.data
         .map { prefs -> prefs[AUTH_TOKEN]?.takeIf { it.isNotBlank() } }
+
+    val refreshToken: Flow<String?> = context.dataStore.data
+        .map { prefs -> prefs[REFRESH_TOKEN]?.takeIf { it.isNotBlank() } }
 
     val displayName: Flow<String> = context.dataStore.data
         .map { prefs -> prefs[DISPLAY_NAME] ?: "" }
@@ -138,18 +142,37 @@ class AppPreferences(private val context: Context) {
         context.dataStore.edit { it[PIE_UNIT_RUBLE] = ruble }
     }
 
-    suspend fun setAuth(token: String, userId: String, displayName: String, avatarUrl: String?) {
+    suspend fun setAuth(
+        token: String,
+        refreshToken: String,
+        userId: String,
+        displayName: String,
+        avatarUrl: String?,
+    ) {
         context.dataStore.edit { prefs ->
             prefs[AUTH_TOKEN] = token
+            if (refreshToken.isNotBlank()) prefs[REFRESH_TOKEN] = refreshToken
+            else prefs.remove(REFRESH_TOKEN)
             prefs[USER_ID] = userId
             prefs[DISPLAY_NAME] = displayName
             if (avatarUrl != null) prefs[AVATAR_URL] = avatarUrl else prefs.remove(AVATAR_URL)
         }
     }
 
+    // Persists a refreshed token pair without touching user identity —
+    // called from `RetrofitClient.onTokensRefreshed` after the silent
+    // refresh interceptor mints a new pair.
+    suspend fun setTokens(token: String, refreshToken: String) {
+        context.dataStore.edit { prefs ->
+            prefs[AUTH_TOKEN] = token
+            if (refreshToken.isNotBlank()) prefs[REFRESH_TOKEN] = refreshToken
+        }
+    }
+
     suspend fun clearAuth() {
         context.dataStore.edit { prefs ->
             prefs.remove(AUTH_TOKEN)
+            prefs.remove(REFRESH_TOKEN)
             prefs.remove(USER_ID)
             prefs.remove(DISPLAY_NAME)
             prefs.remove(AVATAR_URL)
@@ -160,6 +183,7 @@ class AppPreferences(private val context: Context) {
     suspend fun clearAuthAndSecurity() {
         context.dataStore.edit { prefs ->
             prefs.remove(AUTH_TOKEN)
+            prefs.remove(REFRESH_TOKEN)
             prefs.remove(USER_ID)
             prefs.remove(DISPLAY_NAME)
             prefs.remove(AVATAR_URL)

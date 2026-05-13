@@ -23,9 +23,20 @@ data class LoginRequest(
 
 data class LoginResponse(
     val token: String = "",
+    @SerializedName("refresh_token") val refreshToken: String = "",
     @SerializedName("user_id") val userId: String = "",
     @SerializedName("display_name") val displayName: String = "",
     @SerializedName("avatar_url") val avatarUrl: String? = null,
+    @SerializedName("expires_at") val expiresAt: String = ""
+)
+
+data class RefreshRequest(
+    @SerializedName("refresh_token") val refreshToken: String
+)
+
+data class RefreshResponse(
+    val token: String = "",
+    @SerializedName("refresh_token") val refreshToken: String = "",
     @SerializedName("expires_at") val expiresAt: String = ""
 )
 
