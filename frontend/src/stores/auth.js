@@ -4,6 +4,7 @@ import api from '@/api/index'
 
 export const useAuthStore = defineStore('auth', () => {
   const token = ref(localStorage.getItem('auth_token') || '')
+  const refreshToken = ref(localStorage.getItem('auth_refresh_token') || '')
   const user = ref(JSON.parse(localStorage.getItem('auth_user') || 'null'))
 
   const isAuthenticated = computed(() => !!token.value)
@@ -11,6 +12,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   function setAuth(loginResponse) {
     token.value = loginResponse.token
+    refreshToken.value = loginResponse.refresh_token || ''
     user.value = {
       user_id: loginResponse.user_id,
       display_name: loginResponse.display_name,
@@ -19,13 +21,20 @@ export const useAuthStore = defineStore('auth', () => {
       expires_at: loginResponse.expires_at,
     }
     localStorage.setItem('auth_token', token.value)
+    if (refreshToken.value) {
+      localStorage.setItem('auth_refresh_token', refreshToken.value)
+    } else {
+      localStorage.removeItem('auth_refresh_token')
+    }
     localStorage.setItem('auth_user', JSON.stringify(user.value))
   }
 
   function logout() {
     token.value = ''
+    refreshToken.value = ''
     user.value = null
     localStorage.removeItem('auth_token')
+    localStorage.removeItem('auth_refresh_token')
     localStorage.removeItem('auth_user')
   }
 
