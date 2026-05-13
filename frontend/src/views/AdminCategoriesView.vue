@@ -401,8 +401,13 @@ function switchSection(key) {
 }
 
 // ── Recently-used icons picker ──────────────────────────────────────
+// Grid is locked to 16 columns × 2 rows = 32 cells: «—» + N recent + M
+// custom + «+» = 32, so recent fills `30 - M` slots. The localStorage
+// reserve keeps the full history (capped at 30) for the case where a
+// custom icon is later removed and a recent slot opens up again.
 const RECENT_STORAGE_KEY = 'category-icons-recent-v1'
-const RECENT_CAP = 30
+const RECENT_STORAGE_CAP = 30
+const GRID_VISIBLE_TOTAL = 30 // excluding «—» and «+» tiles
 const MAX_SEARCH = 96
 
 function loadRecent() {
@@ -418,13 +423,21 @@ function loadRecent() {
   }
 }
 
-const recentIcons = ref(loadRecent())
+const recentStorage = ref(loadRecent())
+
+// Trim builtin recents so the picker stays within 32 tiles total. Custom
+// icons always show — they're hand-uploaded admin assets that mustn't be
+// displaced by builtin recent churn.
+const recentIcons = computed(() => {
+  const maxBuiltin = Math.max(0, GRID_VISIBLE_TOTAL - uploadedIcons.value.length)
+  return recentStorage.value.slice(0, maxBuiltin)
+})
 
 function bumpRecent(rawKey) {
   if (!rawKey) return
   const key = normalizeIconKey(rawKey)
-  const next = [key, ...recentIcons.value.filter((k) => k !== key)].slice(0, RECENT_CAP)
-  recentIcons.value = next
+  const next = [key, ...recentStorage.value.filter((k) => k !== key)].slice(0, RECENT_STORAGE_CAP)
+  recentStorage.value = next
   try {
     localStorage.setItem(RECENT_STORAGE_KEY, JSON.stringify(next))
   } catch {
@@ -661,6 +674,15 @@ async function handleUpload(e) {
   min-height: 0;
 }
 
+/* Mobile: header (64px) + content padding (16 top + 80 bottom for the
+   fixed bottom tab bar). Tab bar itself is `position: fixed`, so it's
+   covered by padding-bottom in the layout, not subtracted here. */
+@media (max-width: 720px) {
+  .admin-shell {
+    height: calc(100vh - var(--app-header-h, 64px) - 96px);
+  }
+}
+
 .admin-sections,
 .admin-list,
 .admin-editor {
@@ -835,7 +857,11 @@ async function handleUpload(e) {
 }
 .icon-picker {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
+  /* Fixed 16 columns × 2 rows = 32 cells total. Tiles squish if the
+     container is narrower; on cramped layouts the grid wraps to extra
+     rows which is acceptable. The cell count budget (1 «—» + recent +
+     customs + 1 «+» ≤ 32) is enforced JS-side via GRID_VISIBLE_TOTAL. */
+  grid-template-columns: repeat(16, 1fr);
   gap: 6px;
   padding: 4px;
   width: 100%;
