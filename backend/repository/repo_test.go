@@ -487,6 +487,65 @@ func TestCategoryRepo_EnsureDefaultsBackfillsColorIcon(t *testing.T) {
 	}
 }
 
+// Legacy seeds had wishlist "Дом" + "Техника"; current seeds use
+// "Жильё/ЖКХ" + "Электроника" (matching expense names so wishlist→expense
+// promotion doesn't fork into duplicate category rows). EnsureDefaults
+// must rename existing default rows in place, not double-seed.
+func TestCategoryRepo_EnsureDefaultsRenamesLegacyWishlistNames(t *testing.T) {
+	db := mongotest.Start(t)
+	repo := repository.NewCategoryRepository(db)
+	ctx := testCtx(t)
+
+	now := time.Now()
+	col := db.Collection("categories")
+	if _, err := col.InsertOne(ctx, bson.M{
+		"_id":        "legacy-dom",
+		"section":    "wishlist",
+		"name":       "Дом",
+		"is_default": true,
+		"created_at": now,
+		"version":    1,
+		"updated_at": now,
+		"deleted_at": nil,
+	}); err != nil {
+		t.Fatalf("insert legacy: %v", err)
+	}
+
+	if err := repo.EnsureDefaults(ctx); err != nil {
+		t.Fatalf("EnsureDefaults: %v", err)
+	}
+
+	wishlist, err := repo.List(ctx, "wishlist")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Legacy row should have been renamed (same ID), and no separate
+	// "Дом" row should remain.
+	var renamed *models.Category
+	for i := range wishlist {
+		if wishlist[i].ID == "legacy-dom" {
+			renamed = &wishlist[i]
+		}
+		if wishlist[i].Name == "Дом" {
+			t.Errorf("legacy name 'Дом' still present in wishlist after rename")
+		}
+	}
+	if renamed == nil {
+		t.Fatal("legacy row vanished")
+	}
+	if renamed.Name != "Жильё/ЖКХ" {
+		t.Errorf("rename target = %q, want 'Жильё/ЖКХ'", renamed.Name)
+	}
+	if renamed.Version < 2 {
+		t.Errorf("rename should bump version, got %d", renamed.Version)
+	}
+
+	// Idempotent — second pass is a no-op.
+	if err := repo.EnsureDefaults(ctx); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestCategoryRepo_UpdateAppliesPartialFields(t *testing.T) {
 	db := mongotest.Start(t)
 	repo := repository.NewCategoryRepository(db)

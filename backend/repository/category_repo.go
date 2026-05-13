@@ -49,15 +49,32 @@ var defaultCategories = map[string][]defaultCategoryPreset{
 		{"Аренда", "#6366F1", "key"},
 		{"Прочее", "#64748B", "ellipsis-horizontal"},
 	},
+	// Wishlist defaults share names + visuals with expense defaults wherever
+	// the concept overlaps. When a wishlist item is marked "Куплено" the
+	// linked expense gets the wishlist's category name verbatim — name drift
+	// (e.g. "Дом" vs "Жильё/ЖКХ") creates duplicate category rows and shows
+	// the same logical group as two separate pie wedges.
 	"wishlist": {
-		{"Техника", "#6366F1", "desktop"},
+		{"Электроника", "#6366F1", "phone-portrait"},
 		{"Одежда", "#EC4899", "shirt"},
 		{"Путешествия", "#14B8A6", "airplane"},
-		{"Дом", "#10B981", "home"},
+		{"Жильё/ЖКХ", "#10B981", "home"},
 		{"Здоровье", "#EF4444", "medkit"},
 		{"Развлечения", "#8B5CF6", "game-controller"},
 		{"Прочее", "#64748B", "ellipsis-horizontal"},
 	},
+}
+
+// One-shot renames applied by `EnsureDefaults` to bring legacy seeded
+// defaults in line with the current naming. Each entry renames a single
+// `section:oldName` row IFF (a) it still exists, (b) it's marked
+// `is_default`, and (c) no row with the new name exists yet. Bumps
+// `version` + `updated_at` so sync clients propagate the change.
+var defaultCategoryRenames = []struct {
+	Section, OldName, NewName string
+}{
+	{"wishlist", "Дом", "Жильё/ЖКХ"},
+	{"wishlist", "Техника", "Электроника"},
 }
 
 type CategoryRepository struct {
@@ -82,6 +99,37 @@ func NewCategoryRepository(db *mongo.Database) *CategoryRepository {
 }
 
 func (r *CategoryRepository) EnsureDefaults(ctx context.Context) error {
+	// Step 1 — apply one-shot default renames before the upsert pass below
+	// runs. Otherwise the upsert would also create the *new* name as a
+	// fresh row (because the old-name row still has `name = oldName`), and
+	// admins would end up with both rows visible until manual cleanup.
+	for _, rename := range defaultCategoryRenames {
+		oldFilter := bson.M{
+			"section":    rename.Section,
+			"name":       rename.OldName,
+			"is_default": true,
+			"deleted_at": nil,
+		}
+		newExists, err := r.col.CountDocuments(ctx, bson.M{
+			"section":    rename.Section,
+			"name":       rename.NewName,
+			"deleted_at": nil,
+		})
+		if err != nil {
+			return err
+		}
+		if newExists > 0 {
+			continue
+		}
+		_, err = r.col.UpdateOne(ctx, oldFilter, bson.M{
+			"$set": bson.M{"name": rename.NewName, "updated_at": time.Now()},
+			"$inc": bson.M{"version": 1},
+		})
+		if err != nil {
+			return err
+		}
+	}
+
 	for section, presets := range defaultCategories {
 		for _, p := range presets {
 			filter := bson.M{"section": section, "name": p.Name, "deleted_at": nil}
