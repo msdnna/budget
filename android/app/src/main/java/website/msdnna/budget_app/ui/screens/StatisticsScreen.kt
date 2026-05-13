@@ -12,10 +12,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import website.msdnna.budget_app.data.repository.CategoryRepository
 import website.msdnna.budget_app.ui.components.*
+import website.msdnna.budget_app.ui.icons.resolveCategoryColor
 import website.msdnna.budget_app.ui.theme.LocalExpenseColor
 import website.msdnna.budget_app.ui.theme.LocalIncomeColor
-import website.msdnna.budget_app.ui.theme.generateChartColors
 import website.msdnna.budget_app.ui.viewmodels.StatisticsViewModel
 import website.msdnna.budget_app.ui.viewmodels.StatsPeriod
 
@@ -31,6 +32,8 @@ fun StatisticsScreen(serverUrl: String, primaryColor: Color, valuesHidden: Boole
 
     val incomeColor = LocalIncomeColor.current
     val expenseColor = LocalExpenseColor.current
+    val expenseCats by CategoryRepository.expense.collectAsState()
+    val incomeCats by CategoryRepository.income.collectAsState()
 
     PullToRefreshBox(
         // isRefreshing stays false so the spinner only flashes during the
@@ -160,35 +163,49 @@ fun StatisticsScreen(serverUrl: String, primaryColor: Color, valuesHidden: Boole
                     )
 
                     if (state.expenseByCategory.isNotEmpty()) {
-                        val expColors = generateChartColors(expenseColor, state.expenseByCategory.size)
-                        val expSlices = state.expenseByCategory.mapIndexed { i, it ->
-                            PieSlice(it.category, it.amount.toFloat(), expColors[i])
+                        val expSlices = state.expenseByCategory.map { stat ->
+                            val cat = expenseCats.firstOrNull { it.name == stat.category }
+                            PieSlice(
+                                label = stat.category,
+                                value = stat.amount.toFloat(),
+                                color = resolveCategoryColor(stat.category, cat?.color),
+                                iconKey = cat?.icon,
+                            )
                         }
                         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                             Column(Modifier.padding(16.dp)) {
                                 Text("Расходы по категориям", style = MaterialTheme.typography.titleMedium)
                                 Spacer(Modifier.height(12.dp))
-                                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                                    DonutChart(slices = expSlices, modifier = Modifier.size(130.dp), centerText = "Расходы")
-                                    ChartLegend(expSlices, Modifier.weight(1f), pieUnitRuble, valuesHidden)
-                                }
+                                CategoryDonut(
+                                    allSlices = expSlices,
+                                    centerText = "Расходы",
+                                    pieUnitRuble = pieUnitRuble,
+                                    valuesHidden = valuesHidden,
+                                )
                             }
                         }
                     }
 
                     if (state.incomeByCategory.isNotEmpty()) {
-                        val incColors = generateChartColors(primaryColor, state.incomeByCategory.size)
-                        val incSlices = state.incomeByCategory.mapIndexed { i, it ->
-                            PieSlice(it.category, it.amount.toFloat(), incColors[i])
+                        val incSlices = state.incomeByCategory.map { stat ->
+                            val cat = incomeCats.firstOrNull { it.name == stat.category }
+                            PieSlice(
+                                label = stat.category,
+                                value = stat.amount.toFloat(),
+                                color = resolveCategoryColor(stat.category, cat?.color),
+                                iconKey = cat?.icon,
+                            )
                         }
                         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                             Column(Modifier.padding(16.dp)) {
                                 Text("Доходы по источникам", style = MaterialTheme.typography.titleMedium)
                                 Spacer(Modifier.height(12.dp))
-                                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                                    DonutChart(slices = incSlices, modifier = Modifier.size(130.dp), centerText = "Доходы")
-                                    ChartLegend(incSlices, Modifier.weight(1f), pieUnitRuble, valuesHidden)
-                                }
+                                CategoryDonut(
+                                    allSlices = incSlices,
+                                    centerText = "Доходы",
+                                    pieUnitRuble = pieUnitRuble,
+                                    valuesHidden = valuesHidden,
+                                )
                             }
                         }
                     }

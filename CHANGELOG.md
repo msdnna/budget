@@ -16,6 +16,12 @@
 
 ## API (backend)
 
+### [1.16.0] — 2026-05-12
+
+#### Added
+- **Color & icon на категориях (Phase 1 нового визуала pie charts).** `models.Category` получил необязательные поля `color` (hex `#RRGGBB`) и `icon` (строковый ключ из общего словаря, мирится с web `frontend/src/utils/categoryIcons.js` и android `ui/icons/CategoryIcons.kt`). 14 дефолтных expense + 7 income + 7 wishlist категорий теперь засеваются с заранее подобранным цветом и иконкой. `EnsureDefaults` идемпотентно бэкфилит цвет/иконку на дефолтных строках, засеянных до этого релиза (бампит `version` + `updated_at` → sync-клиенты заберут).
+- `CreateCategoryRequest` и `CategoryRepository.Create` принимают optional `color`/`icon` (handler пробрасывает).
+
 ### [1.15.0] — 2026-05-12
 
 #### Added
@@ -145,6 +151,22 @@
 ---
 
 ## Web (frontend)
+
+### [1.19.0] — 2026-05-13
+
+#### Added
+- **`CategoryDonutChart.vue` — донат с многоцветными слайсами, иконками поверх Canvas и кастомной правой легендой (Phase 1 нового визуала pie charts).** Слайс окрашивается в `Category.color` из бэкенда; категория без цвета получает стабильный fallback по хешу имени. Подключено на `StatisticsView` (Расходы/Доходы) и `ForecastingView`.
+- **Иконки на слайсах**: 16px белая иконка позиционируется абсолютно поверх ECharts по cumulative-углам, слайсы < 4% бейдж пропускают. Анимируются вместе со sweep-чартом — CSS-keyframe `cdc-icon-in` (700ms, 40% невидимы, 40→100% fade+scale из 0.4) ретриггерится через bump `animKey` в `:key` на каждое изменение `pieSlices`.
+- **Кастомная правая легенда**: прокручиваемый `<div>` высотой 320px с темо-зависимым скроллбаром (`scrollbar-color` + `::-webkit-scrollbar-*` через CSS-переменные на `palette.border` / `palette.text3`). Каждая строка — три колонки `[цветной бейдж 36×36 с иконкой] [название] [сумма + % правым столбцом]`, амаунт 14px medium, % мельче и сероват (12px @ 0.6). На <600px layout сворачивается вертикально.
+- **Кликабельный фильтр в легенде**: клик по строке скрывает/показывает категорию на pie (opacity 0.4 + strikethrough), поддержаны Enter/Space + `role=button`.
+- **Группировка мелких слайсов в «Прочее»**: всё что < 3% видимой суммы сливается в одну псевдо-долю серого цвета. Если объединяется только один слайс — оставляем как есть. Tooltip показывает «Прочее: N₽».
+- `src/utils/categoryIcons.js` — общий словарь из 27 ионикон-ключей под банковский/семейный бюджет (cart, car, home, restaurant, fast-food, cafe, game-controller, medkit, school, shirt, phone-portrait, airplane, call, rose, barbell, cash, briefcase, trending-up, gift, key, desktop, flame, swap-horizontal, wallet, bag-handle, tag, ellipsis-horizontal), синхронизирован с android `ui/icons/CategoryIcons.kt`. Стабильная fallback-палитра из 14 цветов с hash-based выбором по имени категории.
+- `categories.all()` в api клиенте — `StatisticsView` прогревает name → color/icon карту в один запрос.
+
+#### Changed
+- ECharts pie-серии: убран глобальный `chartColors` (раньше монохром-палитра от primary) — цвет задаётся per-slice через `itemStyle.color`. `legend.show=false`, label на слайсах тоже скрыт — вся метаданность в кастомной правой легенде. Радиус доната раздвинут с `['38%', '65%']` до `['52%', '78%']`. `chartColors` в theme store оставлен для bar-чартов.
+- `itemStyle.borderColor: palette.surface` + `borderWidth: 2` + `borderRadius: 6` — зазор между слайсами окрашен в цвет карточки (theme-aware), углы скруглены.
+- Hover: `emphasis.scale: true, scaleSize: 8` (слайс выезжает наружу), без drop-shadow — на светлой теме тень просвечивала через `palette.surface` border соседей и читалась как halo.
 
 ### [1.18.1] — 2026-05-12
 
@@ -314,6 +336,20 @@
 ---
 
 ## Android
+
+### [1.32.0] — 2026-05-13
+
+#### Added
+- **Многоцветный DonutChart с иконками на слайсах + кастомная правая прокручиваемая легенда с иконками (Phase 1 нового визуала pie charts).** Слайс окрашивается в `Category.color` из синхронизованных данных; fallback — стабильная палитра по хешу имени категории. Размер доната увеличен 130 → 160dp.
+- **Слайсы как настоящий Compose `Path`** с скруглёнными углами через `quadraticTo`: внутренняя дуга clockwise → угол → радиальное ребро → угол → внешняя дуга counter-clockwise → угол → ребро → угол → close. Эквивалент web `borderRadius: 6`. Зазор 1.5° между соседями оставляет видимым `MaterialTheme.colorScheme.surface` под Canvas — сепарация theme-aware без явного бордера. Спец-кейс для donut с одним слайсом (например, доход с одной категорией): рисуется как чистое замкнутое кольцо (`Path.fillType = EvenOdd` + два `addOval`), без углов и зазоров — иначе start/end рёбра встречались у 12 часов и создавали зарубку-«хвост».
+- **Иконки на слайсах**: белая 16dp иконка позиционируется через `Modifier.offset` от центра `BoxWithConstraints` — `(cos/sin)(midAngle) * ((1 − strokeFraction/2) * radius)`. Слайсы < 4% иконку пропускают. Появляются вместе со sweep-анимацией. Фоллбэк-иконка `Label` для пользовательских категорий без `iconKey` — раньше иконки рисовались только у дефолтных, и в смешанных списках получалось «через одну».
+- **Кастомная правая легенда** — новый wrapper `CategoryDonut` владеет фильтр-состоянием. Цветной чип-иконка 28dp слева, `verticalScroll` с `heightIn(max=200dp)` — длинный список категорий не разрывает карточку Statistics. Тап по строке скрывает/показывает категорию на pie (opacity 0.4 + strikethrough). Состояние фильтра сбрасывается при смене периода (key = joined-label-list).
+- **Группировка мелких слайсов в «Прочее»**: всё что < 3% видимой суммы сливается в одну псевдо-долю slate-цвета (`#64748B`, иконка `ellipsis-horizontal`). Если объединять нечего (один слайс) — оставляем как есть.
+- `ui/icons/CategoryIcons.kt` — общий словарь иконок (`material-icons-extended`) и палитра, синхронизирован с web `utils/categoryIcons.js`. 27 ключей под банковский/семейный бюджет.
+- Room v4 + migration 3→4 (`ALTER TABLE categories ADD COLUMN color`, `ADD COLUMN icon` — оба `TEXT DEFAULT ''` nullable, иначе identityHash не сходится с `CategoryEntity.String?` и валидатор миграции бросает на первом обращении к таблице); `CategoryEntity` ↔ `Category` маппинг сохраняет/возвращает поля.
+
+#### Changed
+- Убрана однотонная `generateChartColors(primary, n)` для слайсов pie — функция удалена из `theme/Theme.kt` за ненадобностью.
 
 ### [1.31.0] — 2026-05-12
 

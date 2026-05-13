@@ -8,6 +8,8 @@ type Category struct {
 	ID             string     `bson:"_id" json:"id"`
 	Section        string     `bson:"section" json:"section"`
 	Name           string     `bson:"name" json:"name"`
+	Color          string     `bson:"color,omitempty" json:"color,omitempty"`
+	Icon           string     `bson:"icon,omitempty" json:"icon,omitempty"`
 	IsDefault      bool       `bson:"is_default" json:"is_default"`
 	CreatedAt      time.Time  `bson:"created_at" json:"created_at"`
 	Version        int        `bson:"version" json:"version"`
@@ -19,4 +21,6 @@ type Category struct {
 type CreateCategoryRequest struct {
 	Section string `json:"section" binding:"required"`
 	Name    string `json:"name" binding:"required"`
+	Color   string `json:"color,omitempty"`
+	Icon    string `json:"icon,omitempty"`
 }

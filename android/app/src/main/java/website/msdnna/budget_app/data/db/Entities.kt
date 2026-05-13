@@ -91,6 +91,9 @@ data class CategoryEntity(
     val name: String,
     @ColumnInfo(name = "is_default") val isDefault: Boolean,
 
+    @ColumnInfo(name = "color", defaultValue = "''") val color: String? = null,
+    @ColumnInfo(name = "icon", defaultValue = "''") val icon: String? = null,
+
     @ColumnInfo(name = "created_at") val createdAt: String,
     val version: Int,
     @ColumnInfo(name = "updated_at") val updatedAt: String,
