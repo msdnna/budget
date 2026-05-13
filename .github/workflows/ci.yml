@@ -5,6 +5,12 @@ on:
     branches: [main, develop]
   push:
     branches: [main, develop]
+  # Manual override for the path-filter gating below — when fired from
+  # the Actions tab («Run workflow») all three component jobs run
+  # regardless of which files changed. Mirrors GitLab's behaviour where
+  # web-UI runs ignore `rules:changes`. Useful for flaky-test re-runs or
+  # forcing a clean re-execution on the current ref.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -17,10 +23,14 @@ jobs:
   changes:
     name: Detect changed components
     runs-on: ubuntu-latest
+    # `workflow_dispatch` short-circuits each output to `true` so the
+    # downstream `if: needs.changes.outputs.<x> == 'true'` gates open
+    # regardless of which paths changed. Push/PR events still go through
+    # `dorny/paths-filter` so unrelated changes don't burn all three legs.
     outputs:
-      backend: ${{ steps.filter.outputs.backend }}
-      web:     ${{ steps.filter.outputs.web }}
-      android: ${{ steps.filter.outputs.android }}
+      backend: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.backend == 'true' }}
+      web:     ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.web == 'true' }}
+      android: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.android == 'true' }}
     steps:
       - uses: actions/checkout@v4
       - id: filter
