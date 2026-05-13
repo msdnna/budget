@@ -11,12 +11,51 @@ api.interceptors.request.use((config) => {
   return config
 })
 
+// Refresh-on-401: when an access-token call fails with 401, try exchanging
+// the stored refresh token for a fresh pair and retry the original request.
+// Coalesced — multiple concurrent 401s share a single in-flight refresh
+// promise so we never hit /auth/refresh twice for the same expiry event.
+let refreshInflight = null
+
+async function refreshAccessToken() {
+  if (refreshInflight) return refreshInflight
+  const refreshToken = localStorage.getItem('auth_refresh_token')
+  if (!refreshToken) return null
+  refreshInflight = axios
+    .post('/api/auth/refresh', { refresh_token: refreshToken })
+    .then((res) => {
+      const data = res.data || {}
+      if (data.token) localStorage.setItem('auth_token', data.token)
+      if (data.refresh_token) localStorage.setItem('auth_refresh_token', data.refresh_token)
+      return data.token || null
+    })
+    .catch(() => null)
+    .finally(() => {
+      refreshInflight = null
+    })
+  return refreshInflight
+}
+
 api.interceptors.response.use(
   (res) => res,
-  (err) => {
-    if (err.response?.status === 401) {
-      // Clear stale credentials and emit a custom event so App.vue can react.
+  async (err) => {
+    const original = err.config
+    const isUnauthorized = err.response?.status === 401
+    // Don't loop: /auth/refresh failures and already-retried requests bail.
+    const isRefreshCall = original?.url?.includes('/auth/refresh')
+    if (isUnauthorized && original && !original._retry && !isRefreshCall) {
+      original._retry = true
+      const newToken = await refreshAccessToken()
+      if (newToken) {
+        original.headers = original.headers || {}
+        original.headers.Authorization = `Bearer ${newToken}`
+        return api(original)
+      }
+    }
+    if (isUnauthorized) {
+      // Refresh failed or refresh token itself rejected — clear and notify.
       localStorage.removeItem('auth_token')
+      localStorage.removeItem('auth_refresh_token')
       localStorage.removeItem('auth_user')
       window.dispatchEvent(new CustomEvent('auth:expired'))
     }
