@@ -37,6 +37,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.sin
@@ -49,10 +50,14 @@ data class PieSlice(
     val value: Float,
     val color: Color,
     val iconKey: String? = null,
+    val customIconUrl: String? = null,
+    // Multiplier for the custom icon size inside the legend badge — pie
+    // slice icons stay fixed for arc readability. <= 0 means "use default".
+    val iconScale: Float = 1f,
 )
 
-private const val MIN_ICON_PCT = 4f // skip on-slice icon below this
-private const val MIN_VISIBLE_PCT = 3f // fold into "Прочее" below this
+private const val MIN_ICON_PCT = 5f // skip on-slice icon below this
+private const val MIN_VISIBLE_PCT = 5f // fold into "Прочее" below this
 private const val OTHER_LABEL = "Прочее"
 private val OTHER_COLOR = Color(0xFF64748B) // slate — neutral grey for grouping
 
@@ -300,27 +305,39 @@ fun DonutChart(
             }
         }
 
-        // On-slice icons. No background chip — just the icon tinted white,
-        // anchored at the slice arc midline. Rendered alongside the sweep so
-        // they fade in as the donut draws (cheaper than gating on progress).
+        // On-slice icons. No background chip — just the icon (white tinted
+        // for builtin vectors, natural colours for user-uploaded customs)
+        // anchored at the arc midline. Rendered alongside the sweep so they
+        // fade in as the donut draws.
         if (total > 0f) {
             var cum = 0f
             for (slice in slices) {
                 val pct = slice.value / total * 100f
-                if (pct >= MIN_ICON_PCT) {
+                val builtin = categoryIcon(slice.iconKey)
+                val hasIcon = builtin != null || slice.customIconUrl != null
+                if (pct >= MIN_ICON_PCT && hasIcon) {
                     val midRad = ((cum + slice.value / 2f) / total * 2f * Math.PI - Math.PI / 2f).toFloat()
                     val xPx = cos(midRad) * midRadiusPx
                     val yPx = sin(midRad) * midRadiusPx
                     val xDp = with(density) { xPx.toDp() }
                     val yDp = with(density) { yPx.toDp() }
-                    Icon(
-                        imageVector = categoryIcon(slice.iconKey),
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier
-                            .offset(x = xDp, y = yDp)
-                            .size(16.dp),
-                    )
+                    val iconMod = Modifier
+                        .offset(x = xDp, y = yDp)
+                        .size(16.dp)
+                    if (builtin != null) {
+                        Icon(
+                            imageVector = builtin,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = iconMod,
+                        )
+                    } else {
+                        AsyncImage(
+                            model = slice.customIconUrl,
+                            contentDescription = null,
+                            modifier = iconMod,
+                        )
+                    }
                 }
                 cum += slice.value
             }
@@ -370,21 +387,35 @@ fun ChartLegend(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                // Colored icon chip — falls back to a generic Label vector
-                // when the category has no icon key (e.g. user-created
-                // categories that haven't been customised in admin yet).
+                // Colored badge — glyph layered when the category has an
+                // icon (builtin or user-uploaded), bare colored square when
+                // it doesn't (no icon set yet from admin). `clip()` lets a
+                // scaled-up custom icon bleed against the badge silhouette
+                // without escaping the rounded corners.
                 Box(
                     modifier = Modifier
                         .size(28.dp)
-                        .background(slice.color, RoundedCornerShape(8.dp)),
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(slice.color),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(
-                        imageVector = categoryIcon(slice.iconKey),
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(16.dp),
-                    )
+                    val builtin = categoryIcon(slice.iconKey)
+                    when {
+                        builtin != null -> Icon(
+                            imageVector = builtin,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        slice.customIconUrl != null -> {
+                            val s = if (slice.iconScale > 0f) slice.iconScale else 1f
+                            AsyncImage(
+                                model = slice.customIconUrl,
+                                contentDescription = null,
+                                modifier = Modifier.size((18f * s).dp),
+                            )
+                        }
+                    }
                 }
                 Text(
                     text = slice.label,

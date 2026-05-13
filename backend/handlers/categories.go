@@ -170,6 +170,44 @@ func (h *CategoryHandler) Create(c *gin.Context) {
 	c.JSON(http.StatusCreated, cat)
 }
 
+// Update godoc
+// @Summary      Изменить категорию (color/icon/name)
+// @Description  Только для администратора. Все три поля опциональны — обновляется то, что прислали. Можно править и дефолтные категории.
+// @Tags         categories
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id    path      string                        true  "Category ID"
+// @Param        body  body      models.UpdateCategoryRequest  true  "Тело"
+// @Success      200   {object}  models.Category
+// @Failure      400   {object}  map[string]string
+// @Failure      401   {object}  map[string]string
+// @Failure      403   {object}  map[string]string
+// @Failure      404   {object}  map[string]string
+// @Router       /categories/{id} [patch]
+func (h *CategoryHandler) Update(c *gin.Context) {
+	id := c.Param("id")
+	var req models.UpdateCategoryRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	cat, err := h.repo.Update(ctx, id, req, userInfoFromCtx(c))
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, cat)
+}
+
 // Delete godoc
 // @Summary      Удалить пользовательскую категорию
 // @Description  Дефолтные категории удалить нельзя — handler вернёт 404.

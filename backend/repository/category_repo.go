@@ -173,6 +173,42 @@ func (r *CategoryRepository) Create(ctx context.Context, section, name, color, i
 	return cat, nil
 }
 
+// Update applies an admin edit to name/color/icon. Each pointer that is
+// non-nil is written; nils are ignored so a partial PATCH leaves other
+// fields alone. Bumps `version` + `updated_at` so sync clients propagate.
+func (r *CategoryRepository) Update(ctx context.Context, id string, req models.UpdateCategoryRequest, modifiedBy *models.UserInfo) (*models.Category, error) {
+	set := bson.M{
+		"updated_at":       time.Now(),
+		"last_modified_by": modifiedBy,
+	}
+	if req.Name != nil {
+		set["name"] = *req.Name
+	}
+	if req.Color != nil {
+		set["color"] = *req.Color
+	}
+	if req.Icon != nil {
+		set["icon"] = *req.Icon
+	}
+	if req.IconScale != nil {
+		set["icon_scale"] = *req.IconScale
+	}
+	update := bson.M{"$set": set, "$inc": bson.M{"version": 1}}
+	res := r.col.FindOneAndUpdate(ctx,
+		bson.M{"_id": id, "deleted_at": nil},
+		update,
+		options.FindOneAndUpdate().SetReturnDocument(options.After),
+	)
+	if err := res.Err(); err != nil {
+		return nil, err
+	}
+	var out models.Category
+	if err := res.Decode(&out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // Delete is a soft delete. Default categories may not be deleted.
 func (r *CategoryRepository) Delete(ctx context.Context, id string, baseVersion int, modifiedBy *models.UserInfo) (*models.Category, error) {
 	now := time.Now()

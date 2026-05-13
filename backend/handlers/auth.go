@@ -58,6 +58,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		Login:       user.Login,
 		DisplayName: user.DisplayName,
 		AvatarURL:   user.AvatarURL,
+		IsAdmin:     user.IsAdmin,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expiresAt),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -76,6 +77,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		UserID:      user.ID.Hex(),
 		DisplayName: user.DisplayName,
 		AvatarURL:   user.AvatarURL,
+		IsAdmin:     user.IsAdmin,
 		ExpiresAt:   expiresAt,
 	})
 }
@@ -96,6 +98,7 @@ func (h *AuthHandler) Me(c *gin.Context) {
 		"login":        claims.Login,
 		"display_name": claims.DisplayName,
 		"avatar_url":   claims.AvatarURL,
+		"is_admin":     claims.IsAdmin,
 	})
 }
 

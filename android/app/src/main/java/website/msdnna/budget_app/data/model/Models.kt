@@ -197,6 +197,7 @@ data class Category(
     val name: String = "",
     val color: String? = null,
     val icon: String? = null,
+    @SerializedName("icon_scale") val iconScale: Double = 0.0,
     @SerializedName("is_default") val isDefault: Boolean = true,
     @SerializedName("created_at") val createdAt: String = "",
     val version: Int = 0,

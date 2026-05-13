@@ -27,6 +27,7 @@
 
                 <!-- Navigation -->
                 <n-menu
+                  v-model:expanded-keys="expandedMenuKeys"
                   :collapsed="collapsed"
                   :collapsed-width="64"
                   :collapsed-icon-size="22"
@@ -431,7 +432,7 @@
 </template>
 
 <script setup>
-import { computed, ref, h, onMounted, onUnmounted } from 'vue'
+import { computed, ref, h, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import {
@@ -457,6 +458,7 @@ import {
   BulbOutline,
   CloudDownloadOutline,
   ColorPaletteOutline,
+  SettingsOutline,
   LogInOutline,
   LogOutOutline,
   SunnyOutline,
@@ -551,7 +553,28 @@ const today = computed(() =>
   new Date().toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }),
 )
 
-const activeKey = computed(() => route.path.replace('/', '') || 'statistics')
+// Menu keys mirror full paths so nested entries (e.g. `settings/categories`)
+// resolve naturally — drop the leading slash and use the rest as-is.
+const activeKey = computed(() => route.path.replace(/^\//, '') || 'statistics')
+
+// Mutable so the user can click the parent to expand/collapse — bound via
+// `v-model:expanded-keys` on NMenu. We seed it from the route on mount and
+// auto-expand the parent whenever the active route changes to a child, so
+// deep links / back-button land on an already-open submenu without
+// overriding user intent on subsequent clicks.
+const expandedMenuKeys = ref([])
+watch(
+  activeKey,
+  (k) => {
+    if (k.includes('/')) {
+      const parent = k.split('/')[0]
+      if (!expandedMenuKeys.value.includes(parent)) {
+        expandedMenuKeys.value = [...expandedMenuKeys.value, parent]
+      }
+    }
+  },
+  { immediate: true },
+)
 const currentTitle = computed(() => {
   const map = {
     income: 'Доходы',
@@ -559,6 +582,8 @@ const currentTitle = computed(() => {
     statistics: 'Статистика',
     forecast: 'Прогноз',
     export: 'Экспорт',
+    settings: 'Настройки',
+    'settings/categories': 'Настройки · Категории',
   }
   return map[activeKey.value] ?? 'Статистика'
 })
@@ -570,14 +595,30 @@ function icon(comp) {
   return () => h(NIcon, null, { default: () => h(comp) })
 }
 
-const menuOptions = [
-  { label: 'Статистика', key: 'statistics', icon: icon(BarChartOutline) },
-  { label: 'Доходы', key: 'income', icon: icon(TrendingUpOutline) },
-  { label: 'Расходы', key: 'expenses', icon: icon(TrendingDownOutline) },
-  { label: 'Прогноз', key: 'forecast', icon: icon(BulbOutline) },
-  { label: 'Экспорт', key: 'export', icon: icon(CloudDownloadOutline) },
-]
+// Tree-structured options: top-level items use single-key, the Настройки
+// group gets `children` so NMenu renders it as an expandable submenu.
+// Children keys must mirror the route path so `activeKey` highlights
+// them automatically.
+const menuOptions = computed(() => {
+  const items = [
+    { label: 'Статистика', key: 'statistics', icon: icon(BarChartOutline) },
+    { label: 'Доходы', key: 'income', icon: icon(TrendingUpOutline) },
+    { label: 'Расходы', key: 'expenses', icon: icon(TrendingDownOutline) },
+    { label: 'Прогноз', key: 'forecast', icon: icon(BulbOutline) },
+    { label: 'Экспорт', key: 'export', icon: icon(CloudDownloadOutline) },
+  ]
+  if (auth.isAdmin) {
+    items.push({
+      label: 'Настройки',
+      key: 'settings',
+      icon: icon(SettingsOutline),
+      children: [{ label: 'Категории', key: 'settings/categories' }],
+    })
+  }
+  return items
+})
 
+// Mobile nav stays compact — admin lives only in the desktop sidebar.
 const mobileNavItems = [
   { label: 'Статистика', key: 'statistics', icon: BarChartOutline },
   { label: 'Доходы', key: 'income', icon: TrendingUpOutline },

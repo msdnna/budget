@@ -8,7 +8,8 @@
         class="cdc-slice-icon"
         :style="{ left: b.x + 'px', top: b.y + 'px' }"
       >
-        <n-icon :component="b.icon" :size="16" color="#fff" />
+        <n-icon v-if="b.iconComp" :component="b.iconComp" :size="16" color="#fff" />
+        <img v-else-if="b.customUrl" :src="b.customUrl" class="cdc-slice-img" alt="" />
       </div>
     </div>
     <div class="cdc-legend" :style="scrollbarVars">
@@ -24,7 +25,14 @@
         @keydown.space.prevent="toggleHidden(row.name)"
       >
         <div class="cdc-row-badge" :style="{ backgroundColor: row.color }">
-          <n-icon :component="row.icon" :size="18" color="#fff" />
+          <n-icon v-if="row.iconComp" :component="row.iconComp" :size="18" color="#fff" />
+          <img
+            v-else-if="row.customUrl"
+            :src="row.customUrl"
+            class="cdc-row-img"
+            :style="rowImgStyle(row.iconScale)"
+            alt=""
+          />
         </div>
         <div class="cdc-row-text">
           <div class="cdc-row-name">{{ row.name }}</div>
@@ -49,6 +57,7 @@ import { CanvasRenderer } from 'echarts/renderers'
 import VChart from 'vue-echarts'
 import { NIcon } from 'naive-ui'
 import { categoryIcon, resolveCategoryColor } from '@/utils/categoryIcons'
+import { useIconCacheStore, parseCustomIconKey } from '@/stores/iconCache'
 
 use([PieChart, TooltipComponent, CanvasRenderer])
 
@@ -66,10 +75,10 @@ const chartRef = ref(null)
 // Below this %, the slice is collapsed into a single synthetic "Прочее"
 // pie wedge so the donut stays readable. Legend still shows the small
 // categories individually so you can drill down by hiding the big ones.
-const MIN_VISIBLE_PCT = 3
-// Below this %, even the on-slice icon overlay is skipped — fits visually
-// inside a thin arc would be unreadable.
-const MIN_ICON_PCT = 4
+// Threshold matches MIN_ICON_PCT — anything that wouldn't fit an on-slice
+// icon overlay also doesn't deserve its own wedge.
+const MIN_VISIBLE_PCT = 5
+const MIN_ICON_PCT = 5
 const OTHER_KEY = '__other__'
 const OTHER_LABEL = 'Прочее'
 
@@ -84,17 +93,45 @@ function toggleHidden(name) {
 
 const hideMoney = computed(() => props.unit === 'ruble' && props.valuesHidden)
 
-// Full enrichment for every input category — used for the legend.
+const iconCache = useIconCacheStore()
+
+// Full enrichment for every input category — used for the legend. Each
+// slice surfaces `iconComp` (Vue component for built-in keys) OR
+// `customUrl` (cached blob URL for `custom:<id>` keys). Neither set means
+// "no icon" — the badge renders as a colored square without a glyph.
 const enrichedAll = computed(() =>
   props.data.map((d) => {
     const meta = props.categoryMeta[d.category] || {}
+    const customId = parseCustomIconKey(meta.icon)
+    const rawScale = meta.icon_scale
     return {
       name: d.category,
       amount: Math.round(d.amount),
       color: resolveCategoryColor({ name: d.category, color: meta.color }),
-      icon: categoryIcon(meta.icon),
+      iconComp: customId ? null : categoryIcon(meta.icon),
+      customUrl: customId ? (iconCache.cache.get(customId) ?? null) : null,
+      customId,
+      // Only used in legend/list badges; on-slice icons stay fixed-size
+      // for arc readability.
+      iconScale: rawScale && rawScale > 0 ? rawScale : 1,
     }
   }),
+)
+
+// Kick off blob fetches for custom icons; resolved URLs land in
+// `iconCache.cache`, which triggers re-render via the Map reactivity.
+watch(
+  enrichedAll,
+  (rows) => {
+    for (const r of rows) {
+      if (r.customId && !iconCache.cache.get(r.customId)) {
+        iconCache.resolve(r.customId).catch(() => {
+          // Best-effort — missing/deleted icons fall back to plain badge.
+        })
+      }
+    }
+  },
+  { immediate: true },
 )
 
 const totalAll = computed(() => enrichedAll.value.reduce((s, x) => s + x.amount, 0))
@@ -124,7 +161,8 @@ const pieSlices = computed(() => {
       label: OTHER_LABEL,
       amount: sum,
       color: props.palette.text3,
-      icon: categoryIcon('ellipsis-horizontal'),
+      iconComp: categoryIcon('ellipsis-horizontal'),
+      customUrl: null,
       grouped: small.map((x) => x.name),
     },
   ]
@@ -251,11 +289,14 @@ const iconOverlays = computed(() => {
   let cum = 0
   for (const slice of slices) {
     const pct = (slice.amount / tot) * 100
-    if (pct >= MIN_ICON_PCT) {
+    // Skip slices below the icon-readability threshold AND slices that have
+    // no icon at all (empty/unknown key — admin hasn't picked one yet).
+    if (pct >= MIN_ICON_PCT && (slice.iconComp || slice.customUrl)) {
       const midRad = ((cum + slice.amount / 2) / tot) * Math.PI * 2 - Math.PI / 2
       overlays.push({
         name: slice.name,
-        icon: slice.icon,
+        iconComp: slice.iconComp,
+        customUrl: slice.customUrl,
         // Icon is 16px; subtract half so its centre lands on the arc midline.
         x: cx + Math.cos(midRad) * midR - 8,
         y: cy + Math.sin(midRad) * midR - 8,
@@ -270,6 +311,16 @@ const scrollbarVars = computed(() => ({
   '--cdc-scroll-thumb': props.palette.border,
   '--cdc-scroll-thumb-hover': props.palette.text3,
 }))
+
+// Legend badge is 36×36; the default custom-icon inside it is 22px. Scale
+// > 1 enlarges and the parent .cdc-row-badge clips to its rounded shape
+// (overflow: hidden) so the icon "fills" the badge without bleeding out.
+function rowImgStyle(scale) {
+  const base = 22
+  const s = scale && scale > 0 ? scale : 1
+  const size = base * s
+  return { width: size + 'px', height: size + 'px' }
+}
 </script>
 
 <style scoped>
@@ -300,6 +351,18 @@ const scrollbarVars = computed(() => ({
      animKey remount this element on data/filter change to retrigger. */
   animation: cdc-icon-in 700ms cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
+}
+.cdc-slice-img {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  display: block;
+}
+.cdc-row-img {
+  object-fit: contain;
+  display: block;
+  /* width/height set inline from rowImgStyle() so the icon can scale
+     beyond the badge and the parent's `overflow: hidden` clips it. */
 }
 @keyframes cdc-icon-in {
   0% {
@@ -369,6 +432,7 @@ const scrollbarVars = computed(() => ({
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  overflow: hidden;
 }
 .cdc-row-text {
   flex: 1 1 auto;

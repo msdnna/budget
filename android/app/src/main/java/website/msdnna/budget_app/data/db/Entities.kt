@@ -93,6 +93,7 @@ data class CategoryEntity(
 
     @ColumnInfo(name = "color", defaultValue = "''") val color: String? = null,
     @ColumnInfo(name = "icon", defaultValue = "''") val icon: String? = null,
+    @ColumnInfo(name = "icon_scale", defaultValue = "0") val iconScale: Double = 0.0,
 
     @ColumnInfo(name = "created_at") val createdAt: String,
     val version: Int,

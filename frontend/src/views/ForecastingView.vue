@@ -1419,7 +1419,9 @@ async function loadForecast() {
 
 const forecastCategoryMeta = computed(() => {
   const out = {}
-  for (const c of catStore.bySection.expense) out[c.name] = { color: c.color, icon: c.icon }
+  for (const c of catStore.bySection.expense) {
+    out[c.name] = { color: c.color, icon: c.icon, icon_scale: c.icon_scale }
+  }
   return out
 })
 

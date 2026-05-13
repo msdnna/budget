@@ -261,7 +261,9 @@ async function loadCategoryMetadata() {
     const { data } = await catApi.all()
     const merged = {}
     for (const list of [data?.expense || [], data?.income || [], data?.wishlist || []]) {
-      for (const c of list) merged[c.name] = { color: c.color, icon: c.icon }
+      for (const c of list) {
+        merged[c.name] = { color: c.color, icon: c.icon, icon_scale: c.icon_scale }
+      }
     }
     categoryMetaByName.value = merged
   } catch {

@@ -13,6 +13,7 @@ type User struct {
 	PasswordHash string             `bson:"password_hash" json:"-"`
 	DisplayName  string             `bson:"display_name" json:"display_name"`
 	AvatarURL    string             `bson:"avatar_url,omitempty" json:"avatar_url,omitempty"`
+	IsAdmin      bool               `bson:"is_admin,omitempty" json:"is_admin"`
 	CreatedAt    time.Time          `bson:"created_at" json:"created_at"`
 }
 
@@ -33,6 +34,7 @@ type LoginResponse struct {
 	UserID      string    `json:"user_id"`
 	DisplayName string    `json:"display_name"`
 	AvatarURL   string    `json:"avatar_url,omitempty"`
+	IsAdmin     bool      `json:"is_admin"`
 	ExpiresAt   time.Time `json:"expires_at"`
 }
 
@@ -41,5 +43,6 @@ type Claims struct {
 	Login       string `json:"login"`
 	DisplayName string `json:"display_name"`
 	AvatarURL   string `json:"avatar_url,omitempty"`
+	IsAdmin     bool   `json:"is_admin,omitempty"`
 	jwt.RegisteredClaims
 }

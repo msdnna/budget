@@ -55,12 +55,16 @@ func main() {
 	wlRepo := repository.NewWishlistRepository(db)
 	userRepo := repository.NewUserRepository(db)
 	catRepo := repository.NewCategoryRepository(db)
+	iconRepo := repository.NewCategoryIconRepository(db)
 	drRepo := repository.NewDetailRequestRepository(db)
 
 	seedCtx, seedCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer seedCancel()
 	if err := catRepo.EnsureDefaults(seedCtx); err != nil {
 		log.Printf("Warning: failed to seed default categories: %v", err)
+	}
+	if err := userRepo.EnsureAdmin(seedCtx); err != nil {
+		log.Printf("Warning: failed to bootstrap admin user: %v", err)
 	}
 
 	txHandler := handlers.NewTransactionHandler(txRepo)
@@ -69,6 +73,7 @@ func main() {
 	exportHandler := handlers.NewExportHandler(txRepo, wlRepo, cfg.FontPath)
 	authHandler := handlers.NewAuthHandler(userRepo, cfg)
 	catHandler := handlers.NewCategoryHandler(catRepo)
+	iconHandler := handlers.NewIconHandler(iconRepo)
 	syncHandler := handlers.NewSyncHandler(txRepo, wlRepo, catRepo)
 	versionHandler := handlers.NewVersionHandler(appVersion)
 	drHandler := handlers.NewDetailRequestHandler(drRepo, txRepo, userRepo)
@@ -128,6 +133,20 @@ func main() {
 			protected.GET("/categories/all", catHandler.ListAll)
 			protected.POST("/categories", catHandler.Create)
 			protected.DELETE("/categories/:id", catHandler.Delete)
+
+			// Icon storage. GET /icons/:id is auth-only but not admin-gated —
+			// every authed client renders icons in their charts. Mutating
+			// endpoints sit behind admin.
+			protected.GET("/icons/:id", iconHandler.Serve)
+
+			admin := protected.Group("/")
+			admin.Use(middleware.AdminRequired())
+			{
+				admin.PATCH("/categories/:id", catHandler.Update)
+				admin.POST("/icons", iconHandler.Upload)
+				admin.GET("/icons", iconHandler.List)
+				admin.DELETE("/icons/:id", iconHandler.Delete)
+			}
 
 			protected.GET("/export/excel", exportHandler.Excel)
 			protected.GET("/export/pdf", exportHandler.PDF)

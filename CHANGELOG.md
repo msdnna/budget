@@ -16,6 +16,27 @@
 
 ## API (backend)
 
+### [1.17.0] — 2026-05-13
+
+#### Added
+- **`User.IsAdmin` + bootstrap-promоушн**: новое поле `is_admin` в коллекции `users`. `UserRepository.EnsureAdmin` идемпотентно даёт права самому раннему юзеру по `_id` ObjectID (timestamp), вызывается на старте бэкенда — single-user инсталляции автоматически получают админа. JWT claims + login response + `/auth/me` несут `is_admin`. `create_user` CLI получил флаг `-admin`.
+- **`AdminRequired` middleware** (403 если `!claims.IsAdmin`), пристёгивается к admin-подгруппе protected-роутов.
+- **`PATCH /api/categories/:id`** (admin-only) — частичное обновление `name`/`color`/`icon`/`icon_scale`. Pointer-семантика: nil = не трогать, "" / 0 = очистить (или ресет в client-default). Бампает `version` + `updated_at` → sync-клиенты подхватят. Дефолтные категории можно редактировать (удалять нельзя как раньше). `UpdateCategoryRequest` модель.
+- **`Category.icon_scale` (float, optional)** — админ масштабирует иконку относительно бейджа в легенде/списках (pie-слайс игнорирует, там фикс под читаемость арки). 0 / отсутствует = client-default 1.0; >1 — увеличить + обрезать по форме бейджа; <1 — уменьшить.
+- **Хранилище пользовательских иконок** — коллекция `category_icons` (`_id` UUID, `mime_type`, `size_bytes`, `data` binary inline, `uploaded_by`, `uploaded_at`). Inline вместо GridFS — иконки маленькие (PNG ≤512KB, SVG ≤64KB), одно чтение на рендер. Ссылка из категории через `Category.icon = "custom:<id>"`.
+- **Эндпоинты иконок**:
+  - `POST /api/icons` (admin, multipart `file`) — валидация magic-bytes (PNG `\x89PNG...` или `<svg` в первой 1KB), лимит 512KB.
+  - `GET /api/icons/:id` (auth) — отдаёт байты с правильным `Content-Type` + `Cache-Control: public, max-age=86400, immutable`.
+  - `GET /api/icons` (admin) — список метаданных без payload.
+  - `DELETE /api/icons/:id` (admin) — hard delete; категории, ссылающиеся на удалённую иконку, остаются валидными (клиент откатывается в colored-badge режим).
+
+#### Tests
+- `TestCategoryRepo_UpdateAppliesPartialFields` — pointer-семантика PATCH (nil не трогает, "" / 0 ресетят); бамп `version`; round-trip `icon_scale` 1.5 + reset в 0.
+- `TestUserRepo_EnsureAdminPromotesEarliestAndIsIdempotent` — пустая коллекция no-op; промоут самого раннего по `_id`; повторный вызов не двигает админа.
+- `TestUserRepo_SetAdminToggles` — grant/revoke.
+- `TestCategoryIconRepo_RoundTrip` — Create/FindByID/List/Delete; `List` не возвращает payload; повторный Delete → `ErrNoDocuments`.
+- `TestSniffIconMime` — 7 кейсов: PNG magic, SVG (с/без xml declaration / DOCTYPE), пустой файл, JPEG, HTML.
+
 ### [1.16.0] — 2026-05-12
 
 #### Added
@@ -151,6 +172,33 @@
 ---
 
 ## Web (frontend)
+
+### [1.20.0] — 2026-05-13
+
+#### Added
+- **Настройки `/settings/categories`** — админ-страница управления категориями. Sidebar получил новый узел «Настройки» с раскрывающимся подменю «Категории» (структура готова к будущим разделам); `n-menu` `v-model:expanded-keys` + auto-expand при заходе на child-роут / deep link. Видимость — только админам (`auth.isAdmin`); `router.beforeEach` редиректит остальных на `/statistics`. Маршрут `/admin` редиректит на `/settings/categories` (бэк-совместимость). `currentTitle` в header резолвит составные ключи (`settings/categories` → «Настройки · Категории»).
+- **3-колоночный split layout** в редакторе категорий: `[разделы] [список + «Добавить»] [in-place редактор]`. Создание через `POST /api/categories` + (если `icon_scale ≠ 1`) follow-up PATCH. На <1100px схлопывается в 2 ряда, на <720px — в 1.
+- **Icon picker** в редакторе:
+  - грид auto-fill, тайлы окрашены в выбранный цвет категории (live preview), встроенные иконки белые, кастомные на цветном фоне;
+  - кнопка «+» открывает `n-popover` (trigger=click) с autofocus-инпутом поиска по **всему каталогу `@vicons/ionicons5`** (~1300 глифов, фильтр по подстроке, до 96 результатов) + кнопкой «Загрузить свою иконку» (PNG/SVG до 512KB);
+  - recently-used сетка: дефолтный seed = `CATEGORY_ICON_ORDER` (27 курируемых), `localStorage['category-icons-recent-v1']` cap 30, любой пик продвигает ключ наверх. Custom (`custom:<id>`) иконки всегда видны и не вытесняют builtin'ы.
+- **Слайдер «Масштаб иконки в бейдже»** (виден только для custom-ключа): 0.6×–2.2× с шагом 0.05 + preview-бейдж рядом с WIP-параметрами. Применяется в легенде/списках; pie-слайс остаётся фикс 16px.
+- **Аплоад кастомных иконок** через grid тайл «+»: `accept="image/png,image/svg+xml"`, 512KB лимит на клиенте; после успеха иконка попадает в blob-кеш и автоматически выбирается.
+- **`useIconCacheStore`** (Pinia): фетчит `/api/icons/:id` как blob через axios (Bearer auth) → `URL.createObjectURL()` для шаблонов. `<img>` нельзя авторизовать напрямую, поэтому через blob URL. Inflight-дедупликация, утилита `parseCustomIconKey('custom:<id>')`.
+- `auth.isAdmin` computed + `is_admin` в сохранённом user; `auth.verify()` обновляет флаг из `/auth/me`. API: `categories.update()`, `icons.list/upload/remove/image`.
+- `utils/categoryIcons.js` теперь экспортирует `ICON_NAMES` (отсортированный список всех PascalCase имён для поиска) + `normalizeIconKey()` (PascalCase → curated kebab, чтобы «Cart» и «cart» дедуплились). `categoryIcon()` падает на `Ionicons5[key]` для PascalCase ключей — `Category.icon` может хранить и kebab-case, и PascalCase, и `custom:<id>`.
+
+#### Changed
+- **CategoryDonutChart**: тройное состояние иконок (`builtin` / `custom` / `none`). Пустой `iconKey` → только цветной бейдж без глифа (на слайсе и в легенде); `custom:<id>` → `<img>` из `useIconCacheStore` (16px на слайсе, scale × 22px в легенде с `overflow: hidden` на бейдже — переразмеренная иконка клиппится по `border-radius`).
+- Порог группировки мелких слайсов в «Прочее» поднят 3% → 5%; `MIN_ICON_PCT` тоже 5%. Слайсы 3–4% больше не выживают в pie chart без иконки — уходят в «Прочее» автоматически.
+- `categoryIcon(key)` возвращает `null` для unknown/empty/`custom:` ключей (раньше fallback'ил к `PricetagOutline`); новый `iconKind(key)` возвращает `'builtin' | 'custom' | 'none'`.
+
+#### Theming
+- `/settings/categories` адаптирован к тёмной теме: обёрточные `div`-ы пробрасывают токены `palette` (surface / surfaceAlt / border / hover / text1-3) и primary через CSS-переменные `--admin-*` на root-узле и потребляют их из `<style scoped>`. Hover/active-состояния, скроллбар, picker-tile рамка, picker-popover текст — всё на токенах.
+- Кастомный thin scrollbar на `.list-rows` + `.editor-body` (translucent gray 25/45% thumb, прозрачный track, `width: 6px`).
+- `.admin-shell` высота `calc(100vh - var(--app-header-h, 64px) - 48px)` — точно по периметру `n-layout-content`, без внешнего scrollbar справа.
+
+### [1.19.0] — 2026-05-13
 
 ### [1.19.0] — 2026-05-13
 
@@ -336,6 +384,19 @@
 ---
 
 ## Android
+
+### [1.33.0] — 2026-05-13
+
+#### Added
+- **Поддержка пользовательских иконок категорий** (Phase 2). `PieSlice` получил поля `customIconUrl: String?` + `iconScale: Float` (default 1.0). `StatisticsScreen.customIconUrl()` собирает `<serverUrl>/api/icons/<id>` для категорий с `icon = "custom:<id>"`; `normalizeIconScale()` нормализует серверный 0 (= default) в клиентский 1f. DonutChart on-slice оверлей и `ChartLegend` бейдж рендерят: `Icon` для built-in, `AsyncImage` (Coil) для custom, пустой цветной квадрат — если иконки нет. Бейдж легенды теперь `.clip(RoundedCornerShape(8.dp))` + AsyncImage скейлится `.size((18 × scale).dp)` — переразмеренная иконка клиппится формой бейджа (эквивалент web `overflow: hidden` + scaled `<img>`).
+- **Room migration v4 → v5** (`ALTER TABLE categories ADD COLUMN icon_scale REAL NOT NULL DEFAULT 0` — 0 = клиентский default). `CategoryEntity ↔ Category` маппинг сохраняет/возвращает `iconScale`.
+- **Coil ImageLoader через `BudgetApplication.newImageLoader()`** — общий OkHttp клиент с интерсептором, который берёт `RetrofitClient.authToken` и пробрасывает `Authorization: Bearer <token>` для `/api/icons/<id>` (без этого `AsyncImage` ловил бы 401). Включён `SvgDecoder.Factory` для пользовательских SVG, disk-cache 8MB. Зависимость `io.coil-kt:coil-svg:2.7.0`.
+- **Alias-map ionicons5 (PascalCase) → material-icons** в `ui/icons/CategoryIcons.kt`. 864 из 1332 имён сопоставлены с ближайшим material-эквивалентом — Android рендерит узнаваемую иконку для всего, что админ выбрал через free-text поиск во фронте. Стратегия: прямое имя → strip `Outline`/`Sharp` → курируемый алиас (~80 правил: Cart→ShoppingCart, Airplane→Flight, Call→Phone, GameController→SportsEsports и т.д.). Где material имеет `AutoMirrored.Filled.*` (Label, TrendingUp, DirectionsBike etc.) — используется он без deprecation warning'ов. Резолвер: курируемый kebab-словарь → alias-map → null (бейдж без глифа). Оставшиеся 468 имён (Albums, Aperture, Balloon, `*Circle`-варианты, логотипы соцсетей) фоллбэчат на пустой бейдж.
+- `utils.parseCustomIconKey` для парсинга `custom:<id>`.
+
+#### Changed
+- `categoryIcon(key)` возвращает `null` для неизвестных/пустых/custom-ключей (раньше fallback'ил к `Label`).
+- `MIN_VISIBLE_PCT` / `MIN_ICON_PCT` 3% / 4% → 5% / 5% (синхрон с web). Тонкие слайсы 3–4% уходят в «Прочее» автоматически.
 
 ### [1.32.0] — 2026-05-13
 
