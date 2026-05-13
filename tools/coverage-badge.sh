@@ -20,7 +20,15 @@ fi
 
 case "$COMPONENT" in
   backend)
-    PCT=$(go tool cover -func="$SOURCE" | awk '/^total:/ {sub(/%/,"",$NF); print $NF}')
+    # `go tool cover -func` resolves package paths in the profile
+    # (`budget-go/cmd/create_user` etc.) against the nearest go.mod —
+    # from the repo root that's nothing and Go falls back to GOROOT/src,
+    # producing "package … is not in std". Run from the profile's own
+    # directory so it picks up backend/go.mod.
+    ABS_SOURCE=$(realpath "$SOURCE")
+    MOD_DIR=$(dirname "$ABS_SOURCE")
+    PCT=$(cd "$MOD_DIR" && go tool cover -func="$(basename "$ABS_SOURCE")" \
+      | awk '/^total:/ {sub(/%/,"",$NF); print $NF}')
     ;;
   web)
     # LCov totals: LH = lines hit, LF = lines found (across all files)
