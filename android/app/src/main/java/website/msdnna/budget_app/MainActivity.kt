@@ -42,12 +42,18 @@ import website.msdnna.budget_app.ui.screens.PinSetupScreen
 import website.msdnna.budget_app.ui.theme.BudgetTheme
 import website.msdnna.budget_app.ui.theme.themeByKey
 
-private data class AuthSnapshot(val url: String?, val token: String?, val name: String, val avatar: String?)
+private data class AuthSnapshot(
+    val url: String?,
+    val token: String?,
+    val refreshToken: String?,
+    val name: String,
+    val avatar: String?,
+)
 
 class MainActivity : FragmentActivity() {
     private val mainHandler = Handler(Looper.getMainLooper())
 
-    @Suppress("detekt:CyclomaticComplexMethod")
+    @Suppress("detekt:CyclomaticComplexMethod", "detekt:LongMethod")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -91,10 +97,14 @@ class MainActivity : FragmentActivity() {
                 val snap = combine(
                     prefs.serverUrl,
                     prefs.authToken,
+                    prefs.refreshToken,
                     prefs.displayName,
                     prefs.avatarUrl,
-                ) { url, token, name, avatar -> AuthSnapshot(url, token, name, avatar) }.first()
+                ) { url, token, refresh, name, avatar ->
+                    AuthSnapshot(url, token, refresh, name, avatar)
+                }.first()
                 val token = snap.token ?: ""
+                val refresh = snap.refreshToken ?: ""
                 // Materialise PIN values synchronously *before* flipping prefsReady so
                 // the lock-gate sees a consistent snapshot. A separate reactive
                 // collection used to race here and briefly report hasPin=false.
@@ -104,6 +114,7 @@ class MainActivity : FragmentActivity() {
                 // whose init coroutines (Dispatchers.Main.immediate) enqueue OkHttp requests
                 // synchronously. The token must be visible to OkHttp threads before that.
                 RetrofitClient.authToken = token
+                RetrofitClient.refreshToken = refresh
                 serverUrl = snap.url ?: ""
                 authToken = token
                 displayName = snap.name
@@ -132,9 +143,9 @@ class MainActivity : FragmentActivity() {
                 if (token.isNotBlank() && !url.isNullOrBlank() && prefs.userId.first().isBlank()) {
                     runCatching {
                         val me = RetrofitClient.getService(url).getMe()
-                        val uid = me["user_id"].orEmpty()
+                        val uid = (me["user_id"] as? String).orEmpty()
                         if (uid.isNotBlank()) {
-                            prefs.setAuth(token, uid, snap.name, snap.avatar)
+                            prefs.setAuth(token, refresh, uid, snap.name, snap.avatar)
                         }
                     }
                 }
@@ -145,11 +156,23 @@ class MainActivity : FragmentActivity() {
                 RetrofitClient.onUnauthorized = {
                     mainHandler.post {
                         RetrofitClient.authToken = ""
+                        RetrofitClient.refreshToken = ""
                         authToken = ""
                         scope.launch { prefs.clearAuth() }
                     }
                 }
-                onDispose { RetrofitClient.onUnauthorized = null }
+                // Persist the rotated pair after a silent refresh — fires on
+                // an OkHttp background thread, so dispatch the DataStore
+                // write onto the application coroutine scope.
+                RetrofitClient.onTokensRefreshed = { newAccess, newRefresh ->
+                    scope.launch {
+                        prefs.setTokens(newAccess, newRefresh)
+                    }
+                }
+                onDispose {
+                    RetrofitClient.onUnauthorized = null
+                    RetrofitClient.onTokensRefreshed = null
+                }
             }
 
             // Safety-net: keep RetrofitClient in sync if authToken changes for any other reason.
@@ -268,10 +291,11 @@ class MainActivity : FragmentActivity() {
                                     primaryColor = primaryColor,
                                     savedServerUrl = serverUrl.takeIf { !it.isNullOrBlank() },
                                     serverHistory = serverHistory,
-                                    onAuthenticated = { url, token, userId, name, avatar ->
+                                    onAuthenticated = { url, token, refreshToken, userId, name, avatar ->
                                         // Set token BEFORE state update so it's visible to ViewModel
                                         // init coroutines that start synchronously on recomposition.
                                         RetrofitClient.authToken = token
+                                        RetrofitClient.refreshToken = refreshToken
                                         serverUrl = url
                                         authToken = token
                                         displayName = name
@@ -279,7 +303,7 @@ class MainActivity : FragmentActivity() {
                                         AppLock.unlock()
                                         scope.launch {
                                             prefs.setServerUrl(url)
-                                            prefs.setAuth(token, userId, name, avatar)
+                                            prefs.setAuth(token, refreshToken, userId, name, avatar)
                                             prefs.addToServerHistory(url)
                                         }
                                     }
@@ -338,6 +362,7 @@ class MainActivity : FragmentActivity() {
                                 },
                                 onLogout = {
                                     RetrofitClient.authToken = ""
+                                    RetrofitClient.refreshToken = ""
                                     authToken = ""
                                     AppLock.lock()
                                     scope.launch { prefs.clearAuthAndSecurity() }

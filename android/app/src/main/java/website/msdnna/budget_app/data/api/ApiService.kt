@@ -16,8 +16,11 @@ interface ApiService {
     @POST("auth/login")
     suspend fun login(@Body body: website.msdnna.budget_app.data.model.LoginRequest): website.msdnna.budget_app.data.model.LoginResponse
 
+    @POST("auth/refresh")
+    suspend fun refresh(@Body body: website.msdnna.budget_app.data.model.RefreshRequest): website.msdnna.budget_app.data.model.RefreshResponse
+
     @GET("auth/me")
-    suspend fun getMe(): Map<String, String>
+    suspend fun getMe(): Map<String, @JvmSuppressWildcards Any>
 
     @GET("transactions")
     suspend fun getTransactions(

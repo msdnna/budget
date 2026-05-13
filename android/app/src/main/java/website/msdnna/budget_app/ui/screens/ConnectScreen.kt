@@ -45,7 +45,14 @@ fun ConnectScreen(
     primaryColor: Color,
     savedServerUrl: String?,
     serverHistory: List<String> = emptyList(),
-    onAuthenticated: (serverUrl: String, token: String, userId: String, displayName: String, avatarUrl: String?) -> Unit
+    onAuthenticated: (
+        serverUrl: String,
+        token: String,
+        refreshToken: String,
+        userId: String,
+        displayName: String,
+        avatarUrl: String?,
+    ) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -162,7 +169,14 @@ fun ConnectScreen(
                 val service = RetrofitClient.getService(fullServerUrl)
                 val resp = service.login(LoginRequest(login.trim(), password))
                 loading = false
-                onAuthenticated(fullServerUrl, resp.token, resp.userId, resp.displayName, resp.avatarUrl)
+                onAuthenticated(
+                    fullServerUrl,
+                    resp.token,
+                    resp.refreshToken,
+                    resp.userId,
+                    resp.displayName,
+                    resp.avatarUrl,
+                )
             } catch (e: Exception) {
                 loading = false
                 error = when {
