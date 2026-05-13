@@ -133,7 +133,9 @@
                     </n-text>
                     <n-popconfirm v-if="canEdit" @positive-click="removeChild(c.id)">
                       <template #trigger>
-                        <n-button size="tiny" quaternary type="error">✕</n-button>
+                        <n-button size="tiny" quaternary type="error">
+                          <template #icon><n-icon :component="TrashOutline" /></template>
+                        </n-button>
                       </template>
                       Удалить расход?
                     </n-popconfirm>
@@ -200,8 +202,10 @@ import {
   NDatePicker,
   NSelect,
   NInput,
+  NIcon,
   useMessage,
 } from 'naive-ui'
+import { TrashOutline } from '@vicons/ionicons5'
 import { detailRequests as api, transactions as txApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'

@@ -52,7 +52,9 @@
       <n-grid-item span="3 m:1">
         <n-card>
           <n-statistic label="Доходы">
-            <template #prefix><span :style="{ color: primaryColor }">↑</span></template>
+            <template #prefix>
+              <n-icon :component="TrendingUpOutline" :color="primaryColor" :size="20" />
+            </template>
             <template #default>
               <span
                 :style="
@@ -71,7 +73,9 @@
       <n-grid-item span="3 m:1">
         <n-card>
           <n-statistic label="Расходы">
-            <template #prefix><span :style="{ color: palette.expense }">↓</span></template>
+            <template #prefix>
+              <n-icon :component="TrendingDownOutline" :color="palette.expense" :size="20" />
+            </template>
             <template #default>
               <span
                 :style="
@@ -195,7 +199,9 @@ import {
   NButton,
   NButtonGroup,
   NDatePicker,
+  NIcon,
 } from 'naive-ui'
+import { TrendingUpOutline, TrendingDownOutline } from '@vicons/ionicons5'
 import { statistics, categories as catApi } from '@/api'
 import { storeToRefs } from 'pinia'
 import { useThemeStore } from '@/stores/theme'
