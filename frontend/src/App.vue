@@ -618,14 +618,26 @@ const menuOptions = computed(() => {
   return items
 })
 
-// Mobile nav stays compact — admin lives only in the desktop sidebar.
-const mobileNavItems = [
-  { label: 'Статистика', key: 'statistics', icon: BarChartOutline },
-  { label: 'Доходы', key: 'income', icon: TrendingUpOutline },
-  { label: 'Расходы', key: 'expenses', icon: TrendingDownOutline },
-  { label: 'Прогноз', key: 'forecast', icon: BulbOutline },
-  { label: 'Экспорт', key: 'export', icon: CloudDownloadOutline },
-]
+// Bottom tab bar. Admins get a 6th tab "Настройки" — flat-rendered with
+// the categories key (rather than the parent group) so a single tap
+// navigates straight to the only subscreen we currently have.
+const mobileNavItems = computed(() => {
+  const items = [
+    { label: 'Статистика', key: 'statistics', icon: BarChartOutline },
+    { label: 'Доходы', key: 'income', icon: TrendingUpOutline },
+    { label: 'Расходы', key: 'expenses', icon: TrendingDownOutline },
+    { label: 'Прогноз', key: 'forecast', icon: BulbOutline },
+    { label: 'Экспорт', key: 'export', icon: CloudDownloadOutline },
+  ]
+  if (auth.isAdmin) {
+    items.push({
+      label: 'Настройки',
+      key: 'settings/categories',
+      icon: SettingsOutline,
+    })
+  }
+  return items
+})
 </script>
 
 <style scoped>

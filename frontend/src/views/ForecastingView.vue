@@ -459,12 +459,16 @@
                     Выбрано: {{ selectedIds.size }}
                   </n-text>
                   <template v-if="selectedIds.size">
+                    <!-- Only the unlink direction is allowed in bulk. Marking
+                         items as bought needs the prefilled-expense modal
+                         flow (amount/date/user/category) which doesn't fit
+                         a single bulk button — keep that on per-row level. -->
                     <ConfirmActionButton
-                      v-if="purchasableSelectedCount > 0"
-                      :label="allPurchasableSelectedPurchased ? 'Не куплено' : 'Куплено'"
-                      :type="allPurchasableSelectedPurchased ? 'default' : 'success'"
+                      v-if="purchasedSelectedCount > 0"
+                      label="Не куплено"
+                      type="default"
                       :loading="bulkBusy"
-                      @confirm="bulkTogglePurchased"
+                      @confirm="bulkUnpurchase"
                     />
                     <ConfirmActionButton
                       label="Удалить"
@@ -988,27 +992,33 @@ function toggleSelect(id) {
   selectedIds.value = s
 }
 
-const purchasableSelected = computed(() =>
+// Selected items that are currently marked as purchased — these are the
+// only ones the bulk «Не куплено» action operates on.
+const purchasedSelected = computed(() =>
   wlStore.items.filter(
-    (it) => selectedIds.value.has(it.id) && (!it.frequency || it.frequency === 'once'),
+    (it) =>
+      selectedIds.value.has(it.id) && (!it.frequency || it.frequency === 'once') && it.purchased,
   ),
 )
-const purchasableSelectedCount = computed(() => purchasableSelected.value.length)
-const allPurchasableSelectedPurchased = computed(() => {
-  const list = purchasableSelected.value
-  return list.length > 0 && list.every((it) => it.purchased)
-})
+const purchasedSelectedCount = computed(() => purchasedSelected.value.length)
 
-async function bulkTogglePurchased() {
-  const list = purchasableSelected.value
+// Unlink each selected purchased wishlist item from its expense and reset
+// `purchased` — same flow as the single-row «Не куплено» button so server-
+// side detail-request bookkeeping stays in sync.
+async function bulkUnpurchase() {
+  const list = purchasedSelected.value
   if (!list.length) return
-  const target = !allPurchasableSelectedPurchased.value
   bulkBusy.value = true
   try {
-    await Promise.all(list.map((it) => wlApi.update(it.id, { purchased: target })))
+    await Promise.all(
+      list.map(async (it) => {
+        await wlApi.unlinkPeriod(it.id)
+        return wlStore.update(it.id, { purchased: false })
+      }),
+    )
     exitBulkMode()
     await Promise.all([wlStore.fetch(), loadForecast()])
-    message.success(target ? 'Отмечено как куплено' : 'Отмечено как не куплено')
+    message.success('Записи отвязаны')
   } catch (e) {
     message.error(e.message)
   } finally {

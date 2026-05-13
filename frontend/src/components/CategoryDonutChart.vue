@@ -38,7 +38,10 @@
           <div class="cdc-row-name">{{ row.name }}</div>
         </div>
         <div class="cdc-row-meta">
-          <span v-if="!hideMoney" class="cdc-row-amount">
+          <!-- Amount blurs in hidden mode (rather than disappearing) so the
+               row layout stays stable — same UX as the StatisticsView
+               summary cards. Percent is non-sensitive, never masked. -->
+          <span class="cdc-row-amount" :class="{ 'cdc-row-amount-hidden': valuesHidden }">
             {{ row.amount.toLocaleString('ru') }} ₽
           </span>
           <span class="cdc-row-pct">{{ row.percent }}%</span>
@@ -90,8 +93,6 @@ function toggleHidden(name) {
   else next.add(name)
   hiddenSet.value = next
 }
-
-const hideMoney = computed(() => props.unit === 'ruble' && props.valuesHidden)
 
 const iconCache = useIconCacheStore()
 
@@ -183,12 +184,16 @@ const legendRows = computed(() => {
 const chartOption = computed(() => {
   const p = props.palette
   const isRuble = props.unit === 'ruble'
-  const hide = isRuble && props.valuesHidden
+  const hide = props.valuesHidden
   const tooltipFmt = (params) => {
     const slice = pieSlices.value.find((s) => s.name === params.name)
     const displayName = slice?.label || params.name
     if (isRuble) {
-      return hide ? displayName : `${displayName}: ${params.value.toLocaleString('ru')} ₽`
+      // In hidden mode the value is masked, never dropped — matches the
+      // monthly bar tooltip ('•••• ₽') so the hover never reveals real
+      // numbers but the user still sees the unit and category.
+      const valStr = hide ? '••••' : params.value.toLocaleString('ru')
+      return `${displayName}: ${valStr} ₽`
     }
     return `${displayName}: ${params.percent}%`
   }
@@ -459,6 +464,11 @@ function rowImgStyle(scale) {
 .cdc-row-amount {
   font-size: 14px;
   font-weight: 500;
+  transition: filter 0.25s;
+}
+.cdc-row-amount-hidden {
+  filter: blur(6px);
+  user-select: none;
 }
 .cdc-row-pct {
   font-size: 12px;
