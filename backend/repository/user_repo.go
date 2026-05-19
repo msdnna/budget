@@ -233,6 +233,57 @@ func (r *UserRepository) ClearAvatar(ctx context.Context, id string) (*models.Us
 	return &out, nil
 }
 
+// BackfillUserInfo синхронизирует денормализованные UserInfo-снимки (display_name
+// + avatar_url) во всех коллекциях с эмбеддингом пользователя. Вызывается
+// хендлерами после загрузки/удаления аватара и переименования display_name —
+// записи владельца догоняют актуальное состояние без отдельной миграции.
+//
+// Запускается без транзакции (наш Mongo standalone — replica-set/sharded не
+// поднят, multi-document транзакции недоступны). Падение посередине оставит
+// часть слотов стейлыми; последующая загрузка аватара/смена имени докатит
+// остальное. Для семейного приложения с единичными правками профиля — приемлемо.
+//
+// `avatarURL == ""` означает «аватар снят» → $unset на slot.avatar_url (mirror
+// of users.avatar_url с tag `omitempty`). Бамп `updated_at` только на
+// коллекциях, участвующих в Android sync/pull (transactions, wishlist,
+// categories) — иначе клиент не подхватит изменения на следующем pull.
+func BackfillUserInfo(ctx context.Context, db *mongo.Database, userID, displayName, avatarURL string) error {
+	type slot struct {
+		coll  string
+		field string
+		bump  bool // bump updated_at on this collection (sync-pull participants)
+	}
+	slots := []slot{
+		{"transactions", "created_by", true},
+		{"transactions", "last_modified_by", true},
+		{"wishlist", "created_by", true},
+		{"wishlist", "last_modified_by", true},
+		{"categories", "last_modified_by", true},
+		{"detail_requests", "creator", false},
+		{"detail_requests", "assignee", false},
+		{"category_icons", "uploaded_by", false},
+	}
+	now := time.Now()
+	for _, s := range slots {
+		filter := bson.M{s.field + ".user_id": userID}
+		set := bson.M{s.field + ".display_name": displayName}
+		update := bson.M{}
+		if s.bump {
+			set["updated_at"] = now
+		}
+		if avatarURL == "" {
+			update["$unset"] = bson.M{s.field + ".avatar_url": ""}
+		} else {
+			set[s.field+".avatar_url"] = avatarURL
+		}
+		update["$set"] = set
+		if _, err := db.Collection(s.coll).UpdateMany(ctx, filter, update); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // SoftDelete — выставить deleted_at; record-references (UserInfo в транзакциях)
 // продолжают работать. Идемпотентность — повторный вызов перезаписывает время.
 func (r *UserRepository) SoftDelete(ctx context.Context, id string) error {

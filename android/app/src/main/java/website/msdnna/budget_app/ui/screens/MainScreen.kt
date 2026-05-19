@@ -55,6 +55,7 @@ import website.msdnna.budget_app.ui.components.MandatoryUpdateDialog
 import website.msdnna.budget_app.ui.components.MbLogo
 import website.msdnna.budget_app.ui.components.OptionalUpdateProgressDialog
 import website.msdnna.budget_app.ui.components.UpdateBanner
+import website.msdnna.budget_app.ui.components.UserAvatar
 import website.msdnna.budget_app.ui.theme.AppTheme
 import website.msdnna.budget_app.ui.theme.AppThemes
 import website.msdnna.budget_app.ui.viewmodels.ExpensesViewModel
@@ -727,6 +728,7 @@ fun MainScreen(
             isDark = isDark,
             activeTheme = activeTheme,
             displayName = displayName,
+            avatarUrl = avatarUrl,
             apiVersion = apiVersion,
             availableUpdate = availableUpdate,
             pieUnitRuble = pieUnitRuble,
@@ -845,6 +847,7 @@ fun SettingsDialog(
     isDark: Boolean = false,
     activeTheme: AppTheme,
     displayName: String = "",
+    avatarUrl: String? = null,
     apiVersion: String? = null,
     availableUpdate: String? = null,
     pieUnitRuble: Boolean = true,
@@ -872,19 +875,11 @@ fun SettingsDialog(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Box(
-                            modifier = Modifier.size(36.dp).clip(CircleShape)
-                                .background(primaryColor),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = displayName.split(" ").mapNotNull { it.firstOrNull()?.uppercaseChar() }
-                                    .take(2).joinToString(""),
-                                color = Color.White,
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
+                        UserAvatar(
+                            displayName = displayName,
+                            avatarUrl = avatarUrl,
+                            size = 36.dp,
+                        )
                         Column(modifier = Modifier.weight(1f)) {
                             Text(displayName, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                             Text(

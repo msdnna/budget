@@ -98,10 +98,15 @@ rpi-down: ## Stop Pi stack (keeps volumes)
 rpi-logs: ## Tail Pi logs
 	$(RPI_COMPOSE) logs -f
 
+.PHONY: rpi-apk-fetch
+rpi-apk-fetch: ## Download signed APK for android/VERSION from GitHub Releases into ./apks/
+	tools/rpi-fetch-apk.sh
+
 .PHONY: rpi-update
-rpi-update: ## git pull → rpi-pull → rpi-up (the only command you need after a release)
+rpi-update: ## git pull → rpi-pull → rpi-apk-fetch → rpi-up (the only command you need after a release)
 	git pull --ff-only
 	$(MAKE) rpi-pull
+	$(MAKE) rpi-apk-fetch
 	$(MAKE) rpi-up
 
 .PHONY: rpi-backup-now

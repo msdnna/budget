@@ -100,6 +100,16 @@ object RetrofitClient {
         return service!!
     }
 
+    /**
+     * Server root the active Retrofit service points at, without the trailing
+     * `/api/` segment or slash. Empty string when no service has been built
+     * yet (pre-login flows). Used by Coil-driven UI to expand server-issued
+     * relative URLs like `/api/users/<id>/avatar?v=<ts>` into absolute URLs —
+     * `AsyncImage` can't resolve relative paths on its own.
+     */
+    val serverRoot: String
+        get() = currentBaseUrl.removeSuffix("/").removeSuffix("/api")
+
     // Invalidates the cached service so the next call to getService() rebuilds it.
     // Call this after changing authToken if you want a fresh OkHttp client.
     fun reset() {

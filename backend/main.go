@@ -78,7 +78,7 @@ func main() {
 	syncHandler := handlers.NewSyncHandler(txRepo, wlRepo, catRepo)
 	versionHandler := handlers.NewVersionHandler(appVersion)
 	drHandler := handlers.NewDetailRequestHandler(drRepo, txRepo, userRepo)
-	userAdminHandler := handlers.NewUserAdminHandler(userRepo)
+	userAdminHandler := handlers.NewUserAdminHandler(userRepo, db)
 	limitsHandler := handlers.NewLimitsHandler(catRepo, txRepo)
 	notifHandler := handlers.NewNotificationHandler(notifRepo)
 	limitChecker := handlers.NewLimitChecker(catRepo, txRepo, notifRepo)

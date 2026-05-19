@@ -16,6 +16,15 @@
 
 ## API (backend)
 
+### [1.24.0] — 2026-05-19
+
+#### Added
+- **Auto-backfill UserInfo-снимков** при правке профиля. Загрузка/удаление аватара (`POST|DELETE /api/admin/users/:id/avatar`) и переименование `display_name` (`PATCH /api/admin/users/:id`) теперь синхронизируют денормализованные `created_by`/`last_modified_by`/`creator`/`assignee`/`uploaded_by` во всех 5 коллекциях (`transactions`, `wishlist`, `categories`, `detail_requests`, `category_icons`). До этого snapshot фиксировался при создании записи и не обновлялся, поэтому если юзер поставил аватар постфактум, старые транзакции продолжали возвращать пустой `avatar_url` — UI рисовал инициалы. Теперь чтобы догнать существующие записи достаточно один раз перезагрузить тот же файл аватара (новый `?v=<ts>` триггерит backfill). Отдельный CLI-скрипт миграции не нужен.
+- `repository.BackfillUserInfo(ctx, db, userID, displayName, avatarURL)` — кросс-коллекционный `UpdateMany`. `avatarURL == ""` → `$unset` на slot.avatar_url (mirror `User.AvatarURL` с `omitempty`). На sync-pull коллекциях (`transactions`/`wishlist`/`categories`) дополнительно бампается `updated_at`, чтобы Android-клиент подхватил изменения на следующем pull.
+
+#### Notes
+- Без Mongo-транзакций: prod на standalone `mongo:4.4.18` (replica-set не поднят), multi-document транзакции недоступны. Падение посередине backfill оставит часть snapshot'ов стейлыми; следующий аналогичный вызов докатит остальное. Для семейного приложения с единичными правками профиля — приемлемо.
+
 ### [1.23.0] — 2026-05-19
 
 #### Added
@@ -732,6 +741,16 @@
 ---
 
 ## Android
+
+### [1.38.2] — 2026-05-19
+
+#### Fixed
+- **Аватар в `SettingsDialog`** — заголовочная карточка пользователя (со «Вы авторизованы») рисовала hand-rolled `Box+Text` с инициалами и не знала про `avatar_url`. Перевёл на общий `UserAvatar(displayName, avatarUrl, 36.dp)`, прокинул `avatarUrl` через `MainScreen → SettingsDialog`. Резолвинг URL — через тот же `RetrofitClient.serverRoot`, что и для строк транзакций (1.38.1).
+
+### [1.38.1] — 2026-05-19
+
+#### Fixed
+- **Аватары пользователей теперь отображаются** (не только инициалы). Backend отдаёт `avatar_url` как относительный путь `/api/users/<id>/avatar?v=<ts>` — `<img>` в веб-клиенте поглощает page origin, но Coil `AsyncImage` не умеет резолвить URL без host'а и молча падал в onError, оставляя цветной фон с инициалами. `UserAvatar` теперь резолвит относительные `/...`-пути через новый `RetrofitClient.serverRoot` (текущий base URL без `/api/`), полностью-квалифицированные URL передаются как есть. Bearer-токен на запрос уже подкладывал Coil-`OkHttp`-interceptor в `BudgetApplication.newImageLoader`.
 
 ### [1.38.0] — 2026-05-19
 
