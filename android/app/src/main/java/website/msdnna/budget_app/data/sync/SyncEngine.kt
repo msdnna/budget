@@ -48,12 +48,42 @@ class SyncEngine(
             val api = RetrofitClient.getService(serverUrl)
             push(api)
             pull(api)
+            postPullRefresh(serverUrl)
             Result.Success
         } catch (ce: CancellationException) {
             throw ce
         } catch (e: Exception) {
             Log.w(TAG, "sync failed", e)
             Result.Failed
+        }
+    }
+
+    // Read-only secondary fetches that don't go through /sync/pull: limits
+    // progress + bell-history notifications. Done sequentially after the
+    // main pull so cached state is fresh by the time any UI screen reads
+    // it. New server notifications also trigger system-tray pushes here
+    // (subject to per-toggle prefs + dedup on `pushed_at`).
+    private suspend fun postPullRefresh(serverUrl: String) {
+        try {
+            website.msdnna.budget_app.data.repository.LimitsProgressRepository.refresh(serverUrl)
+        } catch (ce: CancellationException) {
+            throw ce
+        } catch (e: Exception) {
+            Log.w(TAG, "limits-progress refresh failed", e)
+        }
+        try {
+            val newRows = website.msdnna.budget_app.data.repository.NotificationHistoryRepository
+                .refreshFromServer(serverUrl)
+            if (newRows.isNotEmpty()) {
+                website.msdnna.budget_app.notifications.LocalAlertPusher.pushNewIfAllowed(
+                    website.msdnna.budget_app.data.AppContainer.appContext,
+                    newRows,
+                )
+            }
+        } catch (ce: CancellationException) {
+            throw ce
+        } catch (e: Exception) {
+            Log.w(TAG, "notifications refresh failed", e)
         }
     }
 

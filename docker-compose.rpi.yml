@@ -1,0 +1,85 @@
+# Raspberry Pi (or any LAN-only home server) deployment.
+#
+# Differs from docker-compose.prod.yml in three ways:
+#   1. Pulls pre-built multi-arch images from GHCR — no Docker build on the Pi.
+#   2. Frontend binds to ${WEB_HOST_PORT:-80} on all interfaces (LAN-only, no TLS).
+#      No external reverse proxy needed; the frontend's nginx already proxies
+#      /api/ to the backend over budget-network.
+#   3. Backend is not exposed to the host — reachable only via frontend nginx.
+#
+# See docs/RPI_DEPLOY.md for the end-to-end runbook.
+
+services:
+  mongodb:
+    image: mongo:8.0
+    container_name: budget-mongodb
+    restart: always
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME:?MONGO_USERNAME is required}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:?MONGO_PASSWORD is required}
+      MONGO_INITDB_DATABASE: ${MONGO_DB:-budget}
+      TZ: ${TZ:-Europe/Moscow}
+    # Cap WiredTiger cache so Mongo stays predictable on an 8 GB Pi shared with
+    # Docker + nginx. Default is 50% of RAM, which is overkill here and risks
+    # OOM during sync bursts.
+    command: ["--wiredTigerCacheSizeGB", "1"]
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - budget-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  backend:
+    image: ghcr.io/${GHCR_OWNER:-msdnna}/budget-backend:${API_VERSION:?API_VERSION is required (e.g. 1.20.0)}
+    container_name: budget-backend
+    restart: always
+    environment:
+      - APP_ENV=production
+      - GIN_MODE=release
+      - SWAGGER_ENABLED=false
+      - MONGO_URI=mongodb://${MONGO_USERNAME}:${MONGO_PASSWORD}@mongodb:27017/${MONGO_DB:-budget}?authSource=admin
+      - DB_NAME=${MONGO_DB:-budget}
+      - PORT=8080
+      - PDF_FONT_PATH=/usr/share/fonts/dejavu/DejaVuSans.ttf
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
+      - TZ=${TZ:-Europe/Moscow}
+      - ANDROID_LATEST=${ANDROID_LATEST:-1.38.0}
+      - ANDROID_MIN_REQUIRED=${ANDROID_MIN_REQUIRED:-1.12.0}
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - budget-network
+
+  frontend:
+    image: ghcr.io/${GHCR_OWNER:-msdnna}/budget-frontend:${WEB_VERSION:?WEB_VERSION is required (e.g. 1.32.0)}
+    container_name: budget-frontend
+    restart: always
+    environment:
+      - TZ=${TZ:-Europe/Moscow}
+    ports:
+      - "${WEB_HOST_PORT:-80}:80"
+    volumes:
+      # APKs for in-app Android updates. nginx.conf serves /apks/ from
+      # /usr/share/nginx/html/apks — drop msdnna-budget-app-v<ver>.apk here.
+      - ./apks:/usr/share/nginx/html/apks:ro
+    depends_on:
+      - backend
+    networks:
+      - budget-network
+
+volumes:
+  mongodb_data:
+
+networks:
+  budget-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.31.0.0/24
+          gateway: 172.31.0.1

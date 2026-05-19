@@ -1,5 +1,48 @@
 <template>
-  <n-popover trigger="click" placement="bottom-end" :show-arrow="false">
+  <!-- На мобильном Naive NPopover не shift'ит контент горизонтально и
+       вылетает за viewport. Используем NModal: предсказуемое центрирование
+       + клавиатура не «дёргает» bottom-nav. На десктопе оставляем поповер
+       — он там корректно якорится к колокольчику. -->
+  <template v-if="isMobile">
+    <n-tooltip trigger="hover" placement="bottom">
+      <template #trigger>
+        <n-button quaternary circle size="small" @click="show = true">
+          <template #icon>
+            <n-badge :value="badgeCount" :max="9" :offset="[2, -2]" :show="badgeCount > 0">
+              <n-icon size="18"><AlertCircleOutline /></n-icon>
+            </n-badge>
+          </template>
+        </n-button>
+      </template>
+      Запросы на детализацию
+    </n-tooltip>
+    <n-modal
+      v-model:show="show"
+      preset="card"
+      title="Запросы на детализацию"
+      :style="{ width: 'min(420px, calc(100vw - 32px))' }"
+    >
+      <n-tabs
+        v-model:value="tab"
+        type="line"
+        size="small"
+        justify-content="space-evenly"
+        pane-style="padding-top: 6px;"
+      >
+        <n-tab-pane name="open" :tab="`Открытые${openCount ? ' · ' + openCount : ''}`">
+          <DrList :items="myOpen" :empty="'Нет открытых запросов'" @open="open" />
+        </n-tab-pane>
+        <n-tab-pane name="closed" tab="Закрытые">
+          <DrList :items="myClosed" :empty="'Нет закрытых запросов'" @open="open" />
+        </n-tab-pane>
+      </n-tabs>
+      <div class="dr-popover-footer">
+        <n-button size="tiny" text type="primary" @click="store.fetchAll">Обновить</n-button>
+      </div>
+    </n-modal>
+  </template>
+
+  <n-popover v-else trigger="click" placement="bottom-end" :show-arrow="false">
     <template #trigger>
       <n-tooltip trigger="hover" placement="bottom">
         <template #trigger>
@@ -41,8 +84,8 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
-import { NPopover, NButton, NIcon, NBadge, NTooltip, NTabs, NTabPane } from 'naive-ui'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { NPopover, NModal, NButton, NIcon, NBadge, NTooltip, NTabs, NTabPane } from 'naive-ui'
 import { AlertCircleOutline } from '@vicons/ionicons5'
 import { useDetailRequestsStore } from '@/stores/detailRequests'
 import { useAuthStore } from '@/stores/auth'
@@ -54,6 +97,15 @@ const store = useDetailRequestsStore()
 const auth = useAuthStore()
 const { palette } = storeToRefs(useThemeStore())
 const tab = ref('open')
+const show = ref(false)
+
+const windowWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1024)
+const isMobile = computed(() => windowWidth.value < 768)
+function onWinResize() {
+  windowWidth.value = window.innerWidth
+}
+onMounted(() => window.addEventListener('resize', onWinResize))
+onUnmounted(() => window.removeEventListener('resize', onWinResize))
 
 const myOpen = computed(() =>
   store.items.filter((r) => r.status === 'open' && r.assignee?.user_id === auth.user?.user_id),
@@ -88,8 +140,7 @@ onMounted(() => {
 <style scoped>
 .dr-popover {
   padding: 6px 2px;
-  min-width: 280px;
-  max-width: 360px;
+  width: min(360px, calc(100vw - 32px));
 }
 .dr-popover-title {
   font-size: 11px;

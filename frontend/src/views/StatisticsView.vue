@@ -1,10 +1,13 @@
 <template>
   <div>
-    <!-- Period selector -->
+    <!-- Period selector: type-buttons (Месяц / Год / Период) слева, value-
+         picker справа. На десктопе inline TilePeriodPicker / NDatePicker.
+         На мобильном — иконка-кнопка с лейблом, разворачивает picker
+         в popover (узкий контент, помещается). -->
     <n-card style="margin-bottom: 16px">
-      <n-space align="center" wrap>
-        <n-text strong>Период:</n-text>
-        <n-button-group>
+      <n-space align="center" wrap :size="8">
+        <n-text v-if="!isMobile" strong>Период:</n-text>
+        <n-button-group :size="isMobile ? 'small' : 'medium'">
           <n-button :type="period === 'month' ? 'primary' : 'default'" @click="setPeriod('month')">
             Месяц
           </n-button>
@@ -18,38 +21,79 @@
             Период
           </n-button>
         </n-button-group>
-        <TilePeriodPicker
-          v-if="period === 'month'"
-          v-model:value="selectedMonth"
-          type="month"
-          @update:value="onPeriodValueChange"
-        />
-        <TilePeriodPicker
-          v-if="period === 'year'"
-          v-model:value="selectedYear"
-          type="year"
-          @update:value="onPeriodValueChange"
-        />
-        <n-date-picker
-          v-if="period === 'custom'"
-          v-model:value="dateRange"
-          type="daterange"
-          clearable
-          @update:value="onPeriodValueChange"
-        />
+        <!-- Desktop value-picker inline. -->
+        <template v-if="!isMobile">
+          <TilePeriodPicker
+            v-if="period === 'month'"
+            v-model:value="selectedMonth"
+            type="month"
+            @update:value="onPeriodValueChange"
+          />
+          <TilePeriodPicker
+            v-if="period === 'year'"
+            v-model:value="selectedYear"
+            type="year"
+            @update:value="onPeriodValueChange"
+          />
+          <n-date-picker
+            v-if="period === 'custom'"
+            v-model:value="dateRange"
+            type="daterange"
+            clearable
+            @update:value="onPeriodValueChange"
+          />
+        </template>
+        <!-- Mobile: маленькая кнопка-триггер value-picker'a справа. -->
+        <n-popover v-else trigger="click" placement="bottom-end" :show-arrow="false">
+          <template #trigger>
+            <n-button size="small">
+              <template #icon><n-icon :component="CalendarOutline" /></template>
+              {{ periodLabel }}
+            </n-button>
+          </template>
+          <div class="period-popover">
+            <TilePeriodPicker
+              v-if="period === 'month'"
+              v-model:value="selectedMonth"
+              type="month"
+              size="small"
+              width="100%"
+              @update:value="onPeriodValueChange"
+            />
+            <TilePeriodPicker
+              v-if="period === 'year'"
+              v-model:value="selectedYear"
+              type="year"
+              size="small"
+              width="100%"
+              @update:value="onPeriodValueChange"
+            />
+            <n-date-picker
+              v-if="period === 'custom'"
+              v-model:value="dateRange"
+              type="daterange"
+              clearable
+              size="small"
+              style="width: 100%"
+              @update:value="onPeriodValueChange"
+            />
+          </div>
+        </n-popover>
       </n-space>
     </n-card>
 
-    <!-- Summary cards -->
+    <!-- Summary cards — 6-col grid lets us hit 2×2 on mobile (Доходы + Расходы
+         half-each, Баланс full-width) and 3-col on desktop without breakpoint
+         juggling: half = 3/6, third = 2/6, full = 6/6. -->
     <n-grid
-      :cols="3"
+      :cols="6"
       :x-gap="16"
       :y-gap="16"
       responsive="screen"
       :item-responsive="true"
       style="margin-bottom: 16px"
     >
-      <n-grid-item span="3 m:1">
+      <n-grid-item span="3 m:2">
         <n-card>
           <n-statistic label="Доходы">
             <template #prefix>
@@ -70,7 +114,7 @@
           </n-statistic>
         </n-card>
       </n-grid-item>
-      <n-grid-item span="3 m:1">
+      <n-grid-item span="3 m:2">
         <n-card>
           <n-statistic label="Расходы">
             <template #prefix>
@@ -91,7 +135,7 @@
           </n-statistic>
         </n-card>
       </n-grid-item>
-      <n-grid-item span="3 m:1">
+      <n-grid-item span="6 m:2">
         <n-card>
           <n-statistic label="Баланс">
             <template #prefix>
@@ -130,11 +174,19 @@
           <n-spin :show="loadingCharts">
             <CategoryDonutChart
               v-if="expensePieData.length"
-              :data="expensePieData.map((d) => ({ category: d.category, amount: d.amount }))"
+              :data="
+                expensePieData.map((d) => ({
+                  category: d.category,
+                  amount: d.amount,
+                  count: d.count,
+                }))
+              "
               :category-meta="categoryMetaByName"
               :palette="palette"
               :unit="pieChartUnit"
               :values-hidden="valuesHidden"
+              :limits-by-name="limitsByName"
+              @drilldown="(name) => drilldown('expense', name)"
             />
             <n-empty v-else description="Нет данных" style="padding: 60px 0" />
           </n-spin>
@@ -145,11 +197,18 @@
           <n-spin :show="loadingCharts">
             <CategoryDonutChart
               v-if="incomePieData.length"
-              :data="incomePieData.map((d) => ({ category: d.category, amount: d.amount }))"
+              :data="
+                incomePieData.map((d) => ({
+                  category: d.category,
+                  amount: d.amount,
+                  count: d.count,
+                }))
+              "
               :category-meta="categoryMetaByName"
               :palette="palette"
               :unit="pieChartUnit"
               :values-hidden="valuesHidden"
+              @drilldown="(name) => drilldown('income', name)"
             />
             <n-empty v-else description="Нет данных" style="padding: 60px 0" />
           </n-spin>
@@ -173,7 +232,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { use } from 'echarts/core'
 import { BarChart } from 'echarts/charts'
 import {
@@ -199,12 +258,14 @@ import {
   NButton,
   NButtonGroup,
   NDatePicker,
+  NPopover,
   NIcon,
 } from 'naive-ui'
-import { TrendingUpOutline, TrendingDownOutline } from '@vicons/ionicons5'
+import { CalendarOutline, TrendingUpOutline, TrendingDownOutline } from '@vicons/ionicons5'
 import { statistics, categories as catApi } from '@/api'
 import { storeToRefs } from 'pinia'
 import { useThemeStore } from '@/stores/theme'
+import { useRouter } from 'vue-router'
 import TilePeriodPicker from '@/components/TilePeriodPicker.vue'
 
 // ToolboxComponent is registered (without UI) because the Brush component
@@ -222,11 +283,74 @@ use([
 ])
 
 const { primaryColor, palette, valuesHidden, pieChartUnit } = storeToRefs(useThemeStore())
+const router = useRouter()
+
+// Pie-slice click on either chart routes to the matching list view with a
+// category + date-range filter pre-applied. Period derivation mirrors the
+// Android `StatsPeriod → (from, to)` translation: MONTH → first/last of
+// month, YEAR → Jan 1 / Dec 31, RANGE → pass-through. The receiving view
+// reads `route.query.from / .to / .categories` on mount.
+function drilldownRange() {
+  const pad = (n) => String(n).padStart(2, '0')
+  const fmt = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+  if (period.value === 'month') {
+    const d = new Date(selectedMonth.value)
+    const first = new Date(d.getFullYear(), d.getMonth(), 1)
+    const last = new Date(d.getFullYear(), d.getMonth() + 1, 0)
+    return { from: fmt(first), to: fmt(last) }
+  }
+  if (period.value === 'year') {
+    const y = new Date(selectedYear.value).getFullYear()
+    return { from: `${y}-01-01`, to: `${y}-12-31` }
+  }
+  if (period.value === 'custom' && dateRange.value) {
+    return { from: fmt(new Date(dateRange.value[0])), to: fmt(new Date(dateRange.value[1])) }
+  }
+  return {}
+}
+
+function drilldown(kind, categoryName) {
+  if (!categoryName) return
+  const { from, to } = drilldownRange()
+  router.push({
+    path: kind === 'income' ? '/income' : '/expenses',
+    query: {
+      categories: categoryName,
+      ...(from ? { from } : {}),
+      ...(to ? { to } : {}),
+    },
+  })
+}
 
 const period = ref('month')
 const selectedMonth = ref(Date.now())
 const selectedYear = ref(Date.now())
 const dateRange = ref(null)
+
+const windowWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1024)
+const isMobile = computed(() => windowWidth.value < 768)
+function onWinResize() {
+  windowWidth.value = window.innerWidth
+}
+onMounted(() => window.addEventListener('resize', onWinResize))
+onUnmounted(() => window.removeEventListener('resize', onWinResize))
+
+// Краткий лейбл текущего периода для триггера popover'а на мобильном.
+const periodLabel = computed(() => {
+  if (period.value === 'month') {
+    const d = new Date(selectedMonth.value)
+    return d.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })
+  }
+  if (period.value === 'year') {
+    return String(new Date(selectedYear.value).getFullYear())
+  }
+  if (dateRange.value) {
+    const fmt = (ts) =>
+      new Date(ts).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })
+    return `${fmt(dateRange.value[0])} – ${fmt(dateRange.value[1])}`
+  }
+  return 'Период'
+})
 
 const summary = ref({ total_income: 0, total_expense: 0, balance: 0 })
 const expensePieData = ref([])
@@ -236,6 +360,13 @@ const incomePieData = ref([])
 // (income and expense rarely share names) and a single lookup keeps slice
 // colors stable regardless of which chart they appear in.
 const categoryMetaByName = ref({})
+// name → {spent, limit, percent} for expense categories that have a
+// monthly_limit set. Always reflects the CURRENT calendar month — the
+// limits-progress endpoint defaults to that, and we don't pass `month`
+// even when the user is filtering by year/range, because a monthly limit
+// vs a year-to-date sum is misleading. The donut legend renders a small
+// progress bar per row whenever there's a matching entry.
+const limitsByName = ref({})
 const monthlyData = ref([])
 const loadingCharts = ref(false)
 const loadingMonthly = ref(false)
@@ -277,6 +408,20 @@ async function loadCategoryMetadata() {
   }
 }
 
+async function loadLimitsProgress() {
+  try {
+    const { data } = await catApi.limitsProgress()
+    const map = {}
+    for (const row of data?.categories || []) {
+      map[row.name] = { spent: row.spent, limit: row.limit, percent: row.percent }
+    }
+    limitsByName.value = map
+  } catch {
+    // Soft-fail: the bars just don't render.
+    limitsByName.value = {}
+  }
+}
+
 async function loadData() {
   const params = buildParams()
   loadingCharts.value = true
@@ -286,6 +431,7 @@ async function loadData() {
       statistics.byCategory({ ...params, type: 'expense' }),
       statistics.byCategory({ ...params, type: 'income' }),
       loadCategoryMetadata(),
+      loadLimitsProgress(),
     ])
     summary.value = s.data
     expensePieData.value = exp.data || []
@@ -507,3 +653,12 @@ onMounted(async () => {
   activateBrush()
 })
 </script>
+
+<style scoped>
+.period-popover {
+  width: min(280px, calc(100vw - 32px));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+</style>

@@ -91,6 +91,14 @@ class IncomeViewModel(private val serverUrl: String) : ViewModel() {
         _filterCats.value = emptySet()
         _page.value = 1
     }
+
+    /** Replace the active category filter set in one shot. Used by the
+     *  Statistics → Income drilldown when the user taps an income source
+     *  slice on the donut. */
+    fun setFilterCategories(names: Set<String>) {
+        _filterCats.value = names
+        _page.value = 1
+    }
     fun setDateRange(from: String?, to: String?) {
         _filterFrom.value = from
         _filterTo.value = to

@@ -26,6 +26,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -43,6 +44,7 @@ import website.msdnna.budget_app.data.model.UpdateWishlistRequest
 import website.msdnna.budget_app.data.model.UserInfo
 import website.msdnna.budget_app.data.model.WishlistItem
 import website.msdnna.budget_app.data.repository.CategoryRepository
+import website.msdnna.budget_app.data.repository.LimitsProgressRepository
 import website.msdnna.budget_app.data.repository.WishlistRepository
 import website.msdnna.budget_app.ui.components.*
 import website.msdnna.budget_app.ui.theme.LocalExpenseColor
@@ -55,8 +57,10 @@ fun ExpensesScreen(
     valuesHidden: Boolean = false,
     filtersVisible: Boolean = false,
     currentUserId: String = "",
+    isAdmin: Boolean = false,
     onSelectionCountChange: (Int) -> Unit = {},
     onOpenDetailRequest: (String) -> Unit = {},
+    onOpenCategoryLimits: () -> Unit = {},
 ) {
     val vm = viewModel<ExpensesViewModel>(key = "expenses:$serverUrl", factory = ExpensesViewModel.factory(serverUrl))
     val uiState by vm.uiState.collectAsState()
@@ -198,6 +202,28 @@ fun ExpensesScreen(
             // top=6 makes the first card sit 12dp below the AppBar (matches the
             // visual weight of inter-card gaps in the LazyColumn below).
             Column(Modifier.fillMaxSize().padding(top = 6.dp)) {
+                // Monthly limit card — read-only summary of current-month
+                // spending vs total tracked limits. Tap navigates to the
+                // limits editor for admins; non-admins see the card as
+                // pure read-only (no chevron, no ripple).
+                val limitState by LimitsProgressRepository.state.collectAsState()
+                LaunchedEffect(serverUrl) {
+                    if (serverUrl.isNotBlank()) LimitsProgressRepository.refresh(serverUrl)
+                }
+                LimitsSummaryCard(
+                    limit = limitState?.totalLimit ?: 0.0,
+                    spent = limitState?.totalSpent ?: 0.0,
+                    percent = limitState?.totalPercent ?: 0.0,
+                    period = limitState?.period.orEmpty(),
+                    filterFromIso = filterFrom,
+                    filterToIso = filterTo,
+                    valuesHidden = valuesHidden,
+                    expenseColor = expenseColor,
+                    primaryColor = primaryColor,
+                    isAdmin = isAdmin,
+                    onTap = onOpenCategoryLimits,
+                )
+
                 // Filters card — collapsed by default; toggled by the header
                 // FilterAlt button. See IncomeScreen for the same pattern.
                 androidx.compose.animation.AnimatedVisibility(
@@ -234,6 +260,7 @@ fun ExpensesScreen(
                                     selected = filterCats,
                                     categories = categories,
                                     primaryColor = primaryColor,
+                                    serverUrl = serverUrl,
                                     onToggle = { vm.toggleFilterCategory(it) },
                                     onClear = { vm.clearFilterCategories() },
                                     onDelete = { id -> scope.launch { vm.deleteCategory(id) } },
@@ -293,6 +320,8 @@ fun ExpensesScreen(
                                 // Yellow tint when this expense has an open
                                 // detail-request assigned to the current user.
                                 highlightWarning = t.id in myOpenParentIds,
+                                categories = categories,
+                                serverUrl = serverUrl,
                                 onLongPress = vm::startSelection,
                                 onSelectToggle = vm::toggleSelection,
                                 onDelete = vm::deleteTransaction,
@@ -320,6 +349,7 @@ fun ExpensesScreen(
             primaryColor = primaryColor,
             template = template,
             categories = categories,
+            serverUrl = serverUrl,
             onAddCategory = { name -> vm.addCategory(name) },
             onDeleteCategory = { id -> vm.deleteCategory(id) },
             onDismiss = {
@@ -354,6 +384,7 @@ fun ExpensesScreen(
             amountPrefix = "−",
             primaryColor = primaryColor,
             categories = categories,
+            serverUrl = serverUrl,
             onAddCategory = { name -> vm.addCategory(name) },
             onDeleteCategory = { id -> vm.deleteCategory(id) },
             onSave = { req -> vm.updateTransaction(tx.id, req) },
@@ -497,6 +528,10 @@ fun AddExpenseSheet(
     primaryColor: Color,
     template: Transaction? = null,
     categories: List<Category> = emptyList(),
+    /** Used by the dropdown rows to render the category icon next to its
+     *  name. Empty string disables custom-icon rendering (the built-in
+     *  glyph still works); pass the active server URL for full fidelity. */
+    serverUrl: String = "",
     onAddCategory: suspend (String) -> Category? = { null },
     onDeleteCategory: suspend (String) -> Unit = {},
     onDismiss: () -> Unit,
@@ -575,7 +610,13 @@ fun AddExpenseSheet(
                 ExposedDropdownMenu(expanded = catExpanded, onDismissRequest = { catExpanded = false }) {
                     filtered.forEach { cat ->
                         DropdownMenuItem(
-                            text = { Text(cat.name) },
+                            text = {
+                                CategoryLabel(
+                                    name = cat.name,
+                                    category = cat,
+                                    serverUrl = serverUrl,
+                                )
+                            },
                             onClick = {
                                 catInput = cat.name
                                 category = cat.name
@@ -657,4 +698,175 @@ fun AddExpenseSheet(
             ) { Text("Сохранить", fontWeight = FontWeight.SemiBold) }
         }
     }
+}
+
+/**
+ * Read-only "Лимит расходов" card. Mirrors IncomeScreen's "Баланс на
+ * начало месяца" placement. Shows the *current* calendar-month progress
+ * regardless of the active period filter — the limit window is fixed
+ * monthly by spec. When the table filter covers a different period, a
+ * small "тек. месяц" pill nudges the user that the bar is fresh data
+ * (not stale aggregation of the filtered range).
+ *
+ * Admin can tap to navigate to CategoryLimitsScreen for editing; for
+ * non-admins the card is pure display (no chevron, no ripple).
+ */
+@Composable
+private fun LimitsSummaryCard(
+    limit: Double,
+    spent: Double,
+    percent: Double,
+    period: String,
+    filterFromIso: String?,
+    filterToIso: String?,
+    valuesHidden: Boolean,
+    expenseColor: Color,
+    primaryColor: Color,
+    isAdmin: Boolean,
+    onTap: () -> Unit,
+) {
+    if (limit <= 0) return
+    val tint = when {
+        percent >= 100.0 -> expenseColor
+        percent >= 80.0 -> Color(0xFFF59E0B)
+        else -> Color(0xFF22C55E)
+    }
+    val showCurrentPill = filteredRangeDiffersFromCurrentMonth(filterFromIso, filterToIso)
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .then(if (isAdmin) Modifier.clickable(onClick = onTap) else Modifier),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "Лимит расходов",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (showCurrentPill) {
+                        Box(
+                            modifier = Modifier
+                                .background(
+                                    Color(0xFF22C55E).copy(alpha = 0.15f),
+                                    shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+                                )
+                                .padding(horizontal = 6.dp, vertical = 2.dp),
+                        ) {
+                            Text(
+                                "тек. месяц",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color(0xFF15803D),
+                            )
+                        }
+                    }
+                    Text(
+                        prettyPeriod(period),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            Spacer(Modifier.height(6.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // Hidden state mirrors the SummaryCard pattern: tinted Box
+                // placeholder (no shimmer — shimmer is reserved for "loading"
+                // semantics) wrapped in a Crossfade so the swap is animated.
+                // Both children pinned to 22dp so the row height doesn't
+                // flicker when toggling visibility.
+                androidx.compose.animation.Crossfade(
+                    targetState = valuesHidden,
+                    animationSpec = tween(220),
+                    label = "limitHidden",
+                ) { isHidden ->
+                    if (isHidden) {
+                        Box(
+                            modifier = Modifier
+                                .height(22.dp)
+                                .width(140.dp)
+                                .clip(androidx.compose.foundation.shape.RoundedCornerShape(6.dp))
+                                .background(tint.copy(alpha = 0.22f)),
+                        )
+                    } else {
+                        Text(
+                            "${formatMoneyShort(spent)} / ${formatMoneyShort(limit)} ₽",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = tint,
+                            modifier = Modifier.height(22.dp),
+                        )
+                    }
+                }
+                Text(
+                    "${kotlin.math.round(percent).toInt()}%",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            OverlayProgress(
+                fraction = (percent / 100.0).toFloat(),
+                color = tint,
+                trackColor = tint.copy(alpha = 0.16f),
+                height = 8.dp,
+            )
+        }
+    }
+}
+
+private fun filteredRangeDiffersFromCurrentMonth(fromIso: String?, toIso: String?): Boolean {
+    if (fromIso.isNullOrBlank() && toIso.isNullOrBlank()) return false
+    val cal = java.util.Calendar.getInstance()
+    val curStart = cal.apply {
+        set(java.util.Calendar.DAY_OF_MONTH, 1)
+        set(java.util.Calendar.HOUR_OF_DAY, 0)
+        set(java.util.Calendar.MINUTE, 0)
+        set(java.util.Calendar.SECOND, 0)
+        set(java.util.Calendar.MILLISECOND, 0)
+    }.timeInMillis
+    val curEnd = java.util.Calendar.getInstance().apply {
+        timeInMillis = curStart
+        add(java.util.Calendar.MONTH, 1)
+        add(java.util.Calendar.MILLISECOND, -1)
+    }.timeInMillis
+    val from = fromIso?.let { runCatching { parseIso(it) }.getOrNull() }
+    val to = toIso?.let { runCatching { parseIso(it) }.getOrNull() }
+    if (from != null && from < curStart) return true
+    if (to != null && to > curEnd) return true
+    return false
+}
+
+private fun parseIso(iso: String): Long {
+    // Filters use yyyy-MM-dd strings (see DateRangePickerField). Other shapes
+    // bubble up as parse failures → false from the caller (no pill shown).
+    val fmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+    fmt.timeZone = java.util.TimeZone.getDefault()
+    return fmt.parse(iso)?.time ?: throw IllegalArgumentException(iso)
+}
+
+private fun prettyPeriod(yyyyMm: String): String {
+    if (yyyyMm.length != 7 || yyyyMm[4] != '-') return yyyyMm
+    val year = yyyyMm.substring(0, 4).toIntOrNull() ?: return yyyyMm
+    val month = yyyyMm.substring(5, 7).toIntOrNull() ?: return yyyyMm
+    val cal = java.util.Calendar.getInstance().apply { set(year, month - 1, 1) }
+    val name = java.text.SimpleDateFormat("LLLL yyyy", java.util.Locale.forLanguageTag("ru-RU"))
+        .format(cal.time)
+    return name.replaceFirstChar { it.lowercase() }
+}
+
+private fun formatMoneyShort(value: Double): String {
+    val nf = java.text.NumberFormat.getNumberInstance(java.util.Locale.forLanguageTag("ru-RU"))
+    nf.maximumFractionDigits = 0
+    return nf.format(value)
 }

@@ -105,6 +105,11 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
+	if user.BlockedAt != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Учётная запись заблокирована"})
+		return
+	}
+
 	accessStr, refreshStr, accessExp, err := h.issueTokens(user)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка генерации токена"})
@@ -162,6 +167,14 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 	user, err := h.repo.FindByID(c.Request.Context(), claims.UserID)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Пользователь не найден"})
+		return
+	}
+	if user.DeletedAt != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Пользователь удалён"})
+		return
+	}
+	if user.BlockedAt != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Учётная запись заблокирована"})
 		return
 	}
 

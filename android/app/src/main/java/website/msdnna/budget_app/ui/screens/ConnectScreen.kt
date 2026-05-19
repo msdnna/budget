@@ -52,6 +52,7 @@ fun ConnectScreen(
         userId: String,
         displayName: String,
         avatarUrl: String?,
+        isAdmin: Boolean,
     ) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
@@ -176,6 +177,7 @@ fun ConnectScreen(
                     resp.userId,
                     resp.displayName,
                     resp.avatarUrl,
+                    resp.isAdmin,
                 )
             } catch (e: Exception) {
                 loading = false

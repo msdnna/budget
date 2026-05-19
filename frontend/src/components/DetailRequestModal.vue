@@ -79,6 +79,7 @@
                       filterable
                       tag
                       :on-create="(v) => ({ label: v, value: v, id: null, is_default: false })"
+                      :render-label="renderCategoryLabel"
                       to="body"
                       placeholder="Выберите или введите категорию"
                     />
@@ -111,7 +112,12 @@
                   style="width: 100%; flex-wrap: nowrap"
                 >
                   <div style="min-width: 0">
-                    <n-text strong>{{ c.category }}</n-text>
+                    <CategoryLabel
+                      :name="c.category"
+                      :category="catStore.findByName('expense', c.category)"
+                      :size="14"
+                      :text-style="{ fontWeight: 600 }"
+                    />
                     <n-text depth="3" style="font-size: 12px; margin-left: 8px">
                       {{ new Date(c.date).toLocaleDateString('ru-RU') }}
                     </n-text>
@@ -181,7 +187,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, h } from 'vue'
 import {
   NModal,
   NSpin,
@@ -211,6 +217,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
 import { useCategoriesStore } from '@/stores/categories'
 import { storeToRefs } from 'pinia'
+import CategoryLabel from './CategoryLabel.vue'
 
 const props = defineProps({
   show: Boolean,
@@ -223,6 +230,14 @@ const auth = useAuthStore()
 const { palette, valuesHidden, primaryColor } = storeToRefs(useThemeStore())
 const catStore = useCategoriesStore()
 const categoryOptions = computed(() => catStore.options('expense'))
+
+function renderCategoryLabel(option) {
+  return h(CategoryLabel, {
+    name: option.value,
+    category: catStore.findByName('expense', option.value),
+    size: 14,
+  })
+}
 
 const view = ref(null)
 const loading = ref(false)
@@ -285,6 +300,8 @@ async function load() {
   try {
     const { data } = await api.get(props.requestId)
     view.value = data
+    // Resolve category icons for the children list. Cheap when cached.
+    catStore.load('expense')
   } catch (e) {
     message.error(e.message)
   } finally {

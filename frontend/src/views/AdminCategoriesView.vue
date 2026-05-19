@@ -1,7 +1,7 @@
 <template>
-  <div class="admin-shell" :style="cssVars">
-    <!-- Section tree -->
-    <div class="admin-sections">
+  <div class="admin-shell" :style="cssVars" :class="{ 'mobile-editing': isMobile && editing }">
+    <!-- Section tree (vertical on desktop, horizontal tabs on mobile) -->
+    <div class="admin-sections" :class="{ hidden: isMobile && editing }">
       <div class="sections-title">Раздел</div>
       <div
         v-for="s in SECTIONS"
@@ -21,261 +21,324 @@
       </div>
     </div>
 
-    <!-- Categories list -->
-    <div class="admin-list">
-      <div class="list-header">
-        <n-text strong style="font-size: 14px">{{ sectionLabel }}</n-text>
-        <div class="list-header-actions">
-          <n-spin v-if="loading" :size="14" />
-          <n-button size="small" type="primary" :disabled="loading" @click="startCreate">
-            <template #icon><n-icon :component="AddOutline" /></template>
-            Добавить
-          </n-button>
+    <!-- Categories list / editor swap на mobile через slide+fade (см.
+         theme.css `.mobile-slide-*`). v-show вместо :class="{hidden}" —
+         чтобы Vue `<Transition>` мог цеплять enter/leave classes; десктоп
+         не задет, transition-CSS gated @media (max-width: 767px). -->
+    <Transition name="mobile-slide">
+      <div v-show="!isMobile || !editing" class="admin-list">
+        <div class="list-header">
+          <n-text strong style="font-size: 14px">{{ sectionLabel }}</n-text>
+          <div class="list-header-actions">
+            <n-spin v-if="loading" :size="14" />
+            <!-- На мобильном добавление через FAB снизу-справа (см. ниже). -->
+            <n-button
+              v-if="!isMobile"
+              size="small"
+              type="primary"
+              :disabled="loading"
+              @click="startCreate"
+            >
+              <template #icon><n-icon :component="AddOutline" /></template>
+              Добавить
+            </n-button>
+          </div>
         </div>
-      </div>
-      <!-- `.list-rows` sits as a direct flex child of `.admin-list` so the
+        <!-- `.list-rows` sits as a direct flex child of `.admin-list` so the
            parent's `min-height: 0` propagates and `overflow-y: auto` kicks
            in. Wrapping in `<n-spin>` injects intermediate divs that don't
            forward flex sizing and breaks the scroll containment. -->
-      <div class="list-rows">
-        <div
-          v-for="c in displayCategories"
-          :key="c.id"
-          class="cat-row"
-          :class="{ active: selectedId === c.id }"
-          @click="select(c)"
-        >
-          <div class="cat-badge" :style="{ backgroundColor: resolveColor(c) }">
-            <n-icon
-              v-if="iconKind(c.icon) === 'builtin'"
-              :component="categoryIcon(c.icon)"
-              :size="18"
-              color="#fff"
-            />
-            <img
-              v-else-if="customUrlFor(c.icon)"
-              :src="customUrlFor(c.icon)"
-              class="cat-badge-img"
-              :style="badgeImgStyle(c.icon_scale)"
-              alt=""
-            />
+        <div class="list-rows">
+          <div
+            v-for="c in displayCategories"
+            :key="c.id"
+            class="cat-row"
+            :class="{ active: selectedId === c.id, 'cat-row-with-limit': limitProgressFor(c.id) }"
+            @click="select(c)"
+          >
+            <div class="cat-row-main">
+              <div class="cat-badge" :style="{ backgroundColor: resolveColor(c) }">
+                <n-icon
+                  v-if="iconKind(c.icon) === 'builtin'"
+                  :component="categoryIcon(c.icon)"
+                  :size="18"
+                  color="#fff"
+                />
+                <img
+                  v-else-if="customUrlFor(c.icon)"
+                  :src="customUrlFor(c.icon)"
+                  class="cat-badge-img"
+                  :style="badgeImgStyle(c.icon_scale)"
+                  alt=""
+                />
+              </div>
+              <span class="cat-name">{{ c.name }}</span>
+              <n-tag v-if="!c.is_default" size="tiny" :bordered="false" type="info">польз.</n-tag>
+            </div>
+            <div v-if="limitProgressFor(c.id)" class="cat-row-limit">
+              <n-progress
+                type="line"
+                :percentage="Math.min(100, limitProgressFor(c.id).percent)"
+                :show-indicator="false"
+                :color="limitProgressColor(limitProgressFor(c.id).percent)"
+                :height="6"
+                :border-radius="3"
+              />
+              <n-text depth="3" class="cat-row-limit-text">
+                {{ formatMoney(limitProgressFor(c.id).spent) }} /
+                {{ formatMoney(limitProgressFor(c.id).limit) }} ₽ ({{
+                  Math.round(limitProgressFor(c.id).percent)
+                }}%)
+              </n-text>
+            </div>
           </div>
-          <span class="cat-name">{{ c.name }}</span>
-          <n-tag v-if="!c.is_default" size="tiny" :bordered="false" type="info">польз.</n-tag>
+          <n-empty
+            v-if="!loading && !displayCategories.length"
+            description="Пусто"
+            style="padding: 24px 0"
+          />
         </div>
-        <n-empty
-          v-if="!loading && !displayCategories.length"
-          description="Пусто"
-          style="padding: 24px 0"
-        />
       </div>
-    </div>
+    </Transition>
 
-    <!-- Editor -->
-    <div class="admin-editor">
-      <template v-if="editing">
-        <div class="editor-header">
-          <n-text strong style="font-size: 15px">
-            {{ isCreating ? 'Новая категория' : editing.name }}
-          </n-text>
-          <n-button quaternary circle size="small" @click="cancelEdit">
-            <template #icon><n-icon :component="CloseOutline" /></template>
-          </n-button>
-        </div>
+    <!-- Editor — mirror admin-list swap-обёртка. -->
+    <Transition name="mobile-slide">
+      <div v-show="!isMobile || editing" class="admin-editor">
+        <template v-if="editing">
+          <div class="editor-header">
+            <n-button v-if="isMobile" text size="small" title="Назад" @click="cancelEdit">
+              <template #icon><n-icon :component="ArrowBackOutline" /></template>
+            </n-button>
+            <n-text strong style="font-size: 15px; flex: 1">
+              {{ isCreating ? 'Новая категория' : editing.name }}
+            </n-text>
+            <n-button v-if="!isMobile" quaternary circle size="small" @click="cancelEdit">
+              <template #icon><n-icon :component="CloseOutline" /></template>
+            </n-button>
+          </div>
 
-        <div class="editor-body">
-          <n-form label-placement="top" require-mark-placement="right-hanging">
-            <n-form-item label="Название">
-              <n-input
-                v-model:value="editForm.name"
-                :disabled="!isCreating && editing.is_default"
-                placeholder="Название категории"
-              />
-            </n-form-item>
+          <div class="editor-body">
+            <n-form label-placement="top" require-mark-placement="right-hanging">
+              <n-form-item label="Название">
+                <n-input
+                  v-model:value="editForm.name"
+                  :disabled="!isCreating && editing.is_default"
+                  placeholder="Название категории"
+                />
+              </n-form-item>
 
-            <n-form-item label="Цвет">
-              <n-color-picker
-                v-model:value="editForm.color"
-                :swatches="FALLBACK_PALETTE"
-                :show-alpha="false"
-                :modes="['hex']"
-              />
-            </n-form-item>
+              <n-form-item label="Цвет">
+                <n-color-picker
+                  v-model:value="editForm.color"
+                  :swatches="FALLBACK_PALETTE"
+                  :show-alpha="false"
+                  :modes="['hex']"
+                />
+              </n-form-item>
 
-            <n-form-item label="Иконка">
-              <!-- Wrap picker + hint in a flex-column so the picker stretches
+              <n-form-item label="Иконка">
+                <!-- Wrap picker + hint in a flex-column so the picker stretches
                  to 100% of the form-item width (Naive's default row layout
                  collapses the grid to its minimum content otherwise). -->
-              <div class="icon-section">
-                <div class="icon-picker">
-                  <button
-                    type="button"
-                    class="icon-tile"
-                    :class="{ active: !editForm.icon }"
-                    :style="{ backgroundColor: editForm.color }"
-                    title="Без иконки"
-                    @click="editForm.icon = ''"
-                  >
-                    <span class="icon-tile-none">—</span>
-                  </button>
-                  <button
-                    v-for="key in recentIcons"
-                    :key="key"
-                    type="button"
-                    class="icon-tile"
-                    :class="{ active: editForm.icon === key }"
-                    :style="{ backgroundColor: editForm.color }"
-                    :title="key"
-                    @click="pickBuiltin(key)"
-                  >
-                    <n-icon :component="categoryIcon(key)" :size="22" color="#fff" />
-                  </button>
-                  <button
-                    v-for="i in uploadedIcons"
-                    :key="i.id"
-                    type="button"
-                    class="icon-tile"
-                    :class="{ active: editForm.icon === 'custom:' + i.id }"
-                    :style="{ backgroundColor: editForm.color }"
-                    :title="`custom:${i.id}`"
-                    @click="editForm.icon = 'custom:' + i.id"
-                  >
-                    <!-- Tiles render at scale 1 — the dedicated preview
+                <div class="icon-section">
+                  <div class="icon-picker">
+                    <button
+                      type="button"
+                      class="icon-tile"
+                      :class="{ active: !editForm.icon }"
+                      :style="{ backgroundColor: editForm.color }"
+                      title="Без иконки"
+                      @click="editForm.icon = ''"
+                    >
+                      <span class="icon-tile-none">—</span>
+                    </button>
+                    <button
+                      v-for="key in recentIcons"
+                      :key="key"
+                      type="button"
+                      class="icon-tile"
+                      :class="{ active: editForm.icon === key }"
+                      :style="{ backgroundColor: editForm.color }"
+                      :title="key"
+                      @click="pickBuiltin(key)"
+                    >
+                      <n-icon :component="categoryIcon(key)" :size="22" color="#fff" />
+                    </button>
+                    <button
+                      v-for="i in uploadedIcons"
+                      :key="i.id"
+                      type="button"
+                      class="icon-tile"
+                      :class="{ active: editForm.icon === 'custom:' + i.id }"
+                      :style="{ backgroundColor: editForm.color }"
+                      :title="`custom:${i.id}`"
+                      @click="editForm.icon = 'custom:' + i.id"
+                    >
+                      <!-- Tiles render at scale 1 — the dedicated preview
                        below the slider shows the chosen scale effect. -->
+                      <img
+                        v-if="iconCache.cache.get(i.id)"
+                        :src="iconCache.cache.get(i.id)"
+                        class="icon-tile-img"
+                        alt=""
+                      />
+                      <n-spin v-else size="small" />
+                    </button>
+                    <!-- Открытие через явный @click + NModal (на любых
+                       экранах). Раньше использовали NPopover, но на узком
+                       вьюпорте он вылетал за край: Naive не shift'ит
+                       контент горизонтально, чтобы вписаться. -->
+                    <button
+                      type="button"
+                      class="icon-tile icon-tile-upload"
+                      title="Найти ещё или загрузить свою"
+                      @click="pickerOpen = true"
+                    >
+                      <n-icon :component="AddOutline" :size="22" />
+                    </button>
+                    <n-modal
+                      v-model:show="pickerOpen"
+                      preset="card"
+                      title="Выбор иконки"
+                      :style="{ width: 'min(420px, calc(100vw - 32px))' }"
+                    >
+                      <div class="picker-popover">
+                        <n-input
+                          ref="pickerSearchRef"
+                          v-model:value="iconQuery"
+                          placeholder="Поиск (Cart, Bicycle, Phone…)"
+                          clearable
+                          size="small"
+                        />
+                        <div class="picker-results">
+                          <button
+                            v-for="name in iconSearchResults"
+                            :key="name"
+                            type="button"
+                            class="picker-tile"
+                            :style="{ backgroundColor: editForm.color }"
+                            :title="name"
+                            @click="pickFromSearch(name)"
+                          >
+                            <n-icon :component="iconByName(name)" :size="22" color="#fff" />
+                          </button>
+                          <div v-if="iconQuery && !iconSearchResults.length" class="picker-hint">
+                            Ничего не найдено
+                          </div>
+                          <div v-else-if="!iconQuery" class="picker-hint">
+                            Введите название на английском
+                          </div>
+                          <div
+                            v-else-if="iconSearchResults.length === MAX_SEARCH"
+                            class="picker-hint"
+                          >
+                            Показаны первые {{ MAX_SEARCH }} — уточните запрос
+                          </div>
+                        </div>
+                        <n-divider style="margin: 4px 0" />
+                        <label class="picker-upload" :class="{ uploading }">
+                          <input
+                            ref="fileInput"
+                            type="file"
+                            accept="image/png,image/svg+xml"
+                            hidden
+                            @change="handleUpload"
+                          />
+                          <n-icon v-if="!uploading" :component="CloudUploadOutline" :size="18" />
+                          <n-spin v-else :size="14" />
+                          <span>Загрузить свою иконку</span>
+                        </label>
+                      </div>
+                    </n-modal>
+                  </div>
+                  <n-text depth="3" style="font-size: 12px">
+                    Сетка собирает недавно использованные. PNG (с альфой, до 512×512) или SVG, до
+                    512 KB — через «+».
+                  </n-text>
+                </div>
+              </n-form-item>
+
+              <n-form-item v-if="activeSection === 'expense'" label="Месячный лимит (₽)">
+                <div class="limit-row">
+                  <n-input-number
+                    v-model:value="editForm.monthly_limit"
+                    :min="0"
+                    :step="100"
+                    placeholder="Без лимита"
+                    clearable
+                    style="flex: 1"
+                  />
+                  <n-text depth="3" style="font-size: 12px">
+                    Сбрасывается 1-го числа каждого месяца.
+                  </n-text>
+                </div>
+              </n-form-item>
+
+              <n-form-item v-if="showScale" label="Масштаб иконки в бейдже">
+                <div class="scale-row">
+                  <n-slider
+                    v-model:value="editForm.icon_scale"
+                    :min="0.6"
+                    :max="2.2"
+                    :step="0.05"
+                    :tooltip="false"
+                    style="flex: 1"
+                  />
+                  <div class="scale-preview" :style="{ backgroundColor: editForm.color }">
                     <img
-                      v-if="iconCache.cache.get(i.id)"
-                      :src="iconCache.cache.get(i.id)"
-                      class="icon-tile-img"
+                      v-if="previewCustomUrl"
+                      :src="previewCustomUrl"
+                      :style="previewImgStyle"
                       alt=""
                     />
-                    <n-spin v-else size="small" />
-                  </button>
-                  <!-- `trigger="click"` makes NPopover handle both toggling
-                       and click-outside dismissal natively; the explicit
-                       @click on the button is replaced by a watcher that
-                       resets the search and autofocuses the input on open. -->
-                  <n-popover v-model:show="pickerOpen" trigger="click" placement="bottom-end">
-                    <template #trigger>
-                      <button
-                        type="button"
-                        class="icon-tile icon-tile-upload"
-                        title="Найти ещё или загрузить свою"
-                      >
-                        <n-icon :component="AddOutline" :size="22" />
-                      </button>
-                    </template>
-                    <div class="picker-popover">
-                      <n-input
-                        ref="pickerSearchRef"
-                        v-model:value="iconQuery"
-                        placeholder="Поиск (Cart, Bicycle, Phone…)"
-                        clearable
-                        size="small"
-                      />
-                      <div class="picker-results">
-                        <button
-                          v-for="name in iconSearchResults"
-                          :key="name"
-                          type="button"
-                          class="picker-tile"
-                          :style="{ backgroundColor: editForm.color }"
-                          :title="name"
-                          @click="pickFromSearch(name)"
-                        >
-                          <n-icon :component="iconByName(name)" :size="22" color="#fff" />
-                        </button>
-                        <div v-if="iconQuery && !iconSearchResults.length" class="picker-hint">
-                          Ничего не найдено
-                        </div>
-                        <div v-else-if="!iconQuery" class="picker-hint">
-                          Введите название на английском
-                        </div>
-                        <div
-                          v-else-if="iconSearchResults.length === MAX_SEARCH"
-                          class="picker-hint"
-                        >
-                          Показаны первые {{ MAX_SEARCH }} — уточните запрос
-                        </div>
-                      </div>
-                      <n-divider style="margin: 4px 0" />
-                      <label class="picker-upload" :class="{ uploading }">
-                        <input
-                          ref="fileInput"
-                          type="file"
-                          accept="image/png,image/svg+xml"
-                          hidden
-                          @change="handleUpload"
-                        />
-                        <n-icon v-if="!uploading" :component="CloudUploadOutline" :size="18" />
-                        <n-spin v-else :size="14" />
-                        <span>Загрузить свою иконку</span>
-                      </label>
-                    </div>
-                  </n-popover>
+                  </div>
+                  <n-text depth="3" style="font-size: 12px; min-width: 48px; text-align: right">
+                    ×{{ editForm.icon_scale.toFixed(2) }}
+                  </n-text>
                 </div>
-                <n-text depth="3" style="font-size: 12px">
-                  Сетка собирает недавно использованные. PNG (с альфой, до 512×512) или SVG, до 512
-                  KB — через «+».
-                </n-text>
-              </div>
-            </n-form-item>
+              </n-form-item>
+            </n-form>
+          </div>
 
-            <n-form-item v-if="showScale" label="Масштаб иконки в бейдже">
-              <div class="scale-row">
-                <n-slider
-                  v-model:value="editForm.icon_scale"
-                  :min="0.6"
-                  :max="2.2"
-                  :step="0.05"
-                  :tooltip="false"
-                  style="flex: 1"
-                />
-                <div class="scale-preview" :style="{ backgroundColor: editForm.color }">
-                  <img
-                    v-if="previewCustomUrl"
-                    :src="previewCustomUrl"
-                    :style="previewImgStyle"
-                    alt=""
-                  />
-                </div>
-                <n-text depth="3" style="font-size: 12px; min-width: 48px; text-align: right">
-                  ×{{ editForm.icon_scale.toFixed(2) }}
-                </n-text>
-              </div>
-            </n-form-item>
-          </n-form>
+          <div class="editor-footer">
+            <n-popconfirm
+              v-if="!isCreating && !editing.is_default"
+              positive-text="Удалить"
+              negative-text="Отмена"
+              @positive-click="handleDelete"
+            >
+              <template #trigger>
+                <n-button type="error" ghost :disabled="saving">Удалить</n-button>
+              </template>
+              Удалить категорию «{{ editing.name }}»? Транзакции с этой категорией останутся.
+            </n-popconfirm>
+            <span v-else />
+            <n-space>
+              <n-button :disabled="saving" @click="cancelEdit">Отмена</n-button>
+              <n-button type="primary" :loading="saving" @click="saveEdit">
+                {{ isCreating ? 'Создать' : 'Сохранить' }}
+              </n-button>
+            </n-space>
+          </div>
+        </template>
+        <div v-else-if="!isMobile" class="editor-empty">
+          <n-empty description="Выберите категорию слева или нажмите «Добавить»" />
         </div>
-
-        <div class="editor-footer">
-          <n-popconfirm
-            v-if="!isCreating && !editing.is_default"
-            positive-text="Удалить"
-            negative-text="Отмена"
-            @positive-click="handleDelete"
-          >
-            <template #trigger>
-              <n-button type="error" ghost :disabled="saving">Удалить</n-button>
-            </template>
-            Удалить категорию «{{ editing.name }}»? Транзакции с этой категорией останутся.
-          </n-popconfirm>
-          <span v-else />
-          <n-space>
-            <n-button :disabled="saving" @click="cancelEdit">Отмена</n-button>
-            <n-button type="primary" :loading="saving" @click="saveEdit">
-              {{ isCreating ? 'Создать' : 'Сохранить' }}
-            </n-button>
-          </n-space>
-        </div>
-      </template>
-      <div v-else class="editor-empty">
-        <n-empty description="Выберите категорию слева или нажмите «Добавить»" />
       </div>
-    </div>
+    </Transition>
+
+    <!-- Mobile FAB — добавить категорию в активной секции. Скрыт во время
+         edit/create, потому что редактор уже на месте списка. -->
+    <FabButton
+      v-if="isMobile && !editing"
+      :title="`Добавить ${sectionLabel.toLowerCase()}`"
+      @click="startCreate"
+    />
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import {
   NSpace,
   NText,
@@ -287,15 +350,17 @@ import {
   NForm,
   NFormItem,
   NInput,
+  NInputNumber,
   NColorPicker,
   NPopconfirm,
-  NPopover,
+  NModal,
   NSlider,
   NDivider,
+  NProgress,
   useMessage,
 } from 'naive-ui'
 import * as Ionicons5 from '@vicons/ionicons5'
-const { AddOutline, CloseOutline, CloudUploadOutline } = Ionicons5
+const { AddOutline, CloseOutline, CloudUploadOutline, ArrowBackOutline } = Ionicons5
 import { storeToRefs } from 'pinia'
 import { useThemeStore } from '@/stores/theme'
 import { categories as catApi, icons as iconsApi } from '@/api'
@@ -309,6 +374,7 @@ import {
   resolveCategoryColor,
 } from '@/utils/categoryIcons'
 import { useIconCacheStore, parseCustomIconKey } from '@/stores/iconCache'
+import FabButton from '@/components/FabButton.vue'
 
 const message = useMessage()
 const iconCache = useIconCacheStore()
@@ -321,6 +387,7 @@ const { palette, primaryColor } = storeToRefs(useThemeStore())
 const cssVars = computed(() => ({
   '--admin-surface': palette.value.surface,
   '--admin-surface-alt': palette.value.surfaceAlt,
+  '--admin-card-bg': palette.value.cardSurface,
   '--admin-border': palette.value.border,
   '--admin-hover': palette.value.hover,
   '--admin-text1': palette.value.text1,
@@ -350,6 +417,22 @@ const activeSection = ref('expense')
 const loading = ref(false)
 const all = ref({ expense: [], income: [], wishlist: [] })
 const uploadedIcons = ref([])
+// Limit progress for the current month, keyed by category_id. Refreshed
+// alongside the category list — admin edits to monthly_limit / fresh
+// expense writes will only be reflected after the next reload.
+const limitProgressById = ref(new Map())
+const limitsTotalLimit = ref(0)
+const limitsTotalSpent = ref(0)
+
+// Responsive — keeps DOM consistent with App.vue's 768px breakpoint so the
+// list/editor switch fires on the same threshold as the bottom-nav swap.
+const windowWidth = ref(window.innerWidth)
+const isMobile = computed(() => windowWidth.value < 768)
+function onWinResize() {
+  windowWidth.value = window.innerWidth
+}
+onMounted(() => window.addEventListener('resize', onWinResize))
+onUnmounted(() => window.removeEventListener('resize', onWinResize))
 
 async function loadAll() {
   loading.value = true
@@ -362,9 +445,50 @@ async function loadAll() {
     }
     uploadedIcons.value = iconRes.data || []
     for (const i of uploadedIcons.value) iconCache.resolve(i.id).catch(() => {})
+    await loadLimitsProgress()
   } finally {
     loading.value = false
   }
+}
+
+// Refresh just the limits-progress map without re-pulling the whole
+// category list. Called after admin edits to monthly_limit so the
+// progress bars in the cat-row list reflect the new state immediately.
+async function loadLimitsProgress() {
+  try {
+    const { data: lp } = await catApi.limitsProgress()
+    if (!lp) {
+      limitProgressById.value = new Map()
+      limitsTotalLimit.value = 0
+      limitsTotalSpent.value = 0
+      return
+    }
+    const map = new Map()
+    for (const row of lp.categories || []) map.set(row.category_id, row)
+    limitProgressById.value = map
+    limitsTotalLimit.value = lp.total_limit || 0
+    limitsTotalSpent.value = lp.total_spent || 0
+  } catch {
+    // Soft-fail: stale bars stay until the next reload.
+  }
+}
+
+// Progress-bar tint scales green→amber→red as spending climbs toward
+// (and past) the limit. Uses theme-aware palette tokens so light/dark
+// both look balanced (same scheme is mirrored in ExpensesView).
+function limitProgressColor(percent) {
+  if (percent >= 100) return palette.value.expense
+  if (percent >= 80) return '#F59E0B'
+  return palette.value.income
+}
+
+function limitProgressFor(catId) {
+  return limitProgressById.value.get(catId) || null
+}
+
+function formatMoney(value) {
+  if (value == null) return ''
+  return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(value)
 }
 
 onMounted(loadAll)
@@ -494,7 +618,7 @@ function pickFromSearch(name) {
 
 // ── Editor state ────────────────────────────────────────────────────
 const editing = ref(null)
-const editForm = ref({ name: '', color: '', icon: '', icon_scale: 1 })
+const editForm = ref({ name: '', color: '', icon: '', icon_scale: 1, monthly_limit: null })
 const selectedId = computed(() => editing.value?.id || null)
 const isCreating = computed(() => editing.value && !editing.value.id)
 const saving = ref(false)
@@ -528,6 +652,7 @@ function select(c) {
     color: c.color || resolveCategoryColor({ name: c.name }),
     icon: c.icon || '',
     icon_scale: c.icon_scale && c.icon_scale > 0 ? c.icon_scale : 1,
+    monthly_limit: typeof c.monthly_limit === 'number' ? c.monthly_limit : null,
   }
   const cid = parseCustomIconKey(c.icon)
   if (cid) iconCache.resolve(cid).catch(() => {})
@@ -540,6 +665,7 @@ function startCreate() {
     color: FALLBACK_PALETTE[0],
     icon: '',
     icon_scale: 1,
+    monthly_limit: null,
   }
 }
 
@@ -558,17 +684,27 @@ async function saveEdit() {
         color: editForm.value.color || '',
         icon: editForm.value.icon || '',
       })
-      // Scale isn't part of Create — issue a follow-up PATCH if user
-      // dialled something other than the default 1.0.
+      // Scale + monthly_limit aren't part of Create — issue a follow-up
+      // PATCH if the user set them during creation.
       let finalRow = created
+      const followUp = {}
       if (parseCustomIconKey(created.icon) && editForm.value.icon_scale !== 1) {
-        const { data: patched } = await catApi.update(created.id, {
-          icon_scale: editForm.value.icon_scale,
-        })
+        followUp.icon_scale = editForm.value.icon_scale
+      }
+      if (activeSection.value === 'expense' && typeof editForm.value.monthly_limit === 'number') {
+        followUp.monthly_limit = editForm.value.monthly_limit
+      }
+      if (Object.keys(followUp).length) {
+        const { data: patched } = await catApi.update(created.id, followUp)
         finalRow = patched
       }
       appendToList(finalRow)
       select(finalRow)
+      // If the new category was created with a limit, the progress bar
+      // should appear immediately — refresh in the background.
+      if (activeSection.value === 'expense' && typeof editForm.value.monthly_limit === 'number') {
+        loadLimitsProgress()
+      }
       message.success('Создано')
     } else {
       const patch = {
@@ -579,9 +715,25 @@ async function saveEdit() {
       if (!editing.value.is_default && editForm.value.name.trim() !== editing.value.name) {
         patch.name = editForm.value.name.trim()
       }
+      // monthly_limit uses tri-state: present number = set; explicit `null`
+      // = clear; key absent = leave unchanged. Backend's NullableFloat
+      // custom unmarshaler distinguishes the three on the server side.
+      if (editing.value.section === 'expense') {
+        const prev =
+          typeof editing.value.monthly_limit === 'number' ? editing.value.monthly_limit : null
+        const next =
+          typeof editForm.value.monthly_limit === 'number' ? editForm.value.monthly_limit : null
+        if (prev !== next) patch.monthly_limit = next
+      }
       const { data } = await catApi.update(editing.value.id, patch)
       replaceInList(data)
       select(data)
+      // Refresh progress map when a limit was touched (or could have been
+      // touched — we send `patch.monthly_limit` only on real change). The
+      // check stays scoped to expense edits to avoid pointless refetches.
+      if (editing.value.section === 'expense' && 'monthly_limit' in patch) {
+        loadLimitsProgress()
+      }
       message.success('Сохранено')
     }
   } catch (err) {
@@ -595,9 +747,11 @@ async function handleDelete() {
   if (!editing.value?.id || editing.value.is_default) return
   saving.value = true
   try {
+    const wasLimited = limitProgressById.value.has(editing.value.id)
     await catApi.remove(editing.value.id)
     removeFromList(editing.value.id)
     cancelEdit()
+    if (wasLimited) loadLimitsProgress()
     message.success('Удалено')
   } catch (err) {
     message.error(err?.message || 'Ошибка удаления')
@@ -677,7 +831,7 @@ async function handleUpload(e) {
 /* Mobile: header (64px) + content padding (16 top + 80 bottom for the
    fixed bottom tab bar). Tab bar itself is `position: fixed`, so it's
    covered by padding-bottom in the layout, not subtracted here. */
-@media (max-width: 720px) {
+@media (max-width: 767px) {
   .admin-shell {
     height: calc(100vh - var(--app-header-h, 64px) - 96px);
   }
@@ -686,9 +840,12 @@ async function handleUpload(e) {
 .admin-sections,
 .admin-list,
 .admin-editor {
-  background: var(--admin-surface);
+  /* Theme-aware bg, совпадает с Naive NCard.color (см. tokens.js
+     cardSurface). Раньше palette.surface был светлее и «выпирал». */
+  background: var(--admin-card-bg);
   border: 1px solid var(--admin-border);
-  border-radius: 10px;
+  /* 3px = Naive default Card.borderRadius — единый стиль с NCard. */
+  border-radius: 3px;
   padding: 12px;
   display: flex;
   flex-direction: column;
@@ -711,7 +868,7 @@ async function handleUpload(e) {
   align-items: center;
   justify-content: space-between;
   padding: 8px 10px;
-  border-radius: 6px;
+  border-radius: 3px;
   cursor: pointer;
   color: var(--admin-text2);
   transition:
@@ -768,13 +925,33 @@ async function handleUpload(e) {
 }
 .cat-row {
   display: flex;
-  align-items: center;
-  gap: 10px;
+  flex-direction: column;
+  gap: 6px;
   padding: 8px 6px;
   cursor: pointer;
   border-radius: 6px;
   color: var(--admin-text1);
   transition: background 0.12s;
+}
+.cat-row-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.cat-row-limit {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 42px; /* align with name column (badge 32px + gap 10px) */
+}
+.cat-row-limit-text {
+  font-size: 11px;
+}
+.limit-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
 }
 .cat-row:hover {
   background: var(--admin-hover);
@@ -808,6 +985,7 @@ async function handleUpload(e) {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
   padding-bottom: 12px;
   border-bottom: 1px solid var(--admin-border);
   margin-bottom: 12px;
@@ -817,6 +995,9 @@ async function handleUpload(e) {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
+  /* Лёгкий inset, чтобы фокус-кольца чекбоксов/инпутов слева не клипались
+     при `overflow:hidden` родительского `.admin-editor`. */
+  padding: 2px 4px 2px 4px;
   scrollbar-width: thin;
   scrollbar-color: rgba(127, 127, 127, 0.3) transparent;
 }
@@ -910,7 +1091,9 @@ async function handleUpload(e) {
 }
 
 .picker-popover {
-  width: 320px;
+  /* На узком экране иначе вылазит за viewport — popover позиционируется к
+     тайлу `+`, который посередине сетки иконок. Ограничиваем по ширине. */
+  width: min(320px, calc(100vw - 32px));
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -1015,13 +1198,76 @@ async function handleUpload(e) {
     grid-area: editor;
   }
 }
-@media (max-width: 720px) {
+
+/* ── Mobile (≤720px): tabs for sections, list/editor exclusive ────
+   Sections row gets converted into a horizontal tab-strip. The list
+   and editor share the same grid slot; we toggle their visibility
+   from JS via `.hidden` so back-button navigation reads as «list ⇄
+   editor», not «scroll through both». */
+@media (max-width: 767px) {
   .admin-shell {
+    /* Mobile: settings tabs strip (44px) + content padding + bottom nav */
+    height: calc(100vh - var(--app-header-h, 64px) - 96px - 56px);
     grid-template-columns: 1fr;
     grid-template-areas:
       'sections'
-      'list'
-      'editor';
+      'list';
+    grid-template-rows: auto 1fr;
+  }
+  .admin-sections,
+  .admin-list,
+  .admin-editor {
+    grid-column: 1;
+  }
+  .admin-list,
+  .admin-editor {
+    grid-row: 2;
+  }
+  .admin-list.hidden,
+  .admin-editor.hidden,
+  .admin-sections.hidden {
+    display: none;
+  }
+
+  /* Section block becomes a horizontal tab strip — title hidden, rows
+     line up in a flex row that scrolls horizontally if too narrow. */
+  .admin-sections {
+    padding: 6px;
+    /* 3px — единый радиус по всем mobile tab-strip'ам (mirror
+       `.settings-tabs` / `.forecast-tabs`) и дефолтному NCard
+       borderRadius'у, чтобы tab-полоска не «выпирала» относительно
+       соседних карточек. */
+    border-radius: 3px;
+  }
+  .sections-title {
+    display: none;
+  }
+  .admin-sections {
+    flex-direction: row;
+    overflow-x: auto;
+    overflow-y: hidden;
+    gap: 4px;
+  }
+  .section-row {
+    flex: 1 1 0;
+    justify-content: center;
+    padding: 8px 10px;
+    gap: 6px; /* breathing room between label and counter tag */
+    white-space: nowrap;
+    /* Mobile tab strip: matches `.forecast-tab` / `.settings-tab`
+       (3px) — единая пара 3/3px по всем primary mobile tab UI. */
+    border-radius: 3px;
+  }
+  /* Чуть больше скругления у счётчика секции — n-tag scoped из-за
+     deep-селектора (тэг — child компонента). */
+  .section-row :deep(.n-tag) {
+    border-radius: 8px;
+  }
+
+  /* Icon picker: ~6 columns on mobile via auto-fit, larger min so tiles
+     stay tappable. Desktop stays locked to 16 × 2 (already declared). */
+  .icon-picker {
+    grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
   }
 }
 </style>

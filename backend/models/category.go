@@ -1,6 +1,9 @@
 package models
 
 import (
+	"bytes"
+	"encoding/json"
+	"strconv"
 	"time"
 )
 
@@ -14,7 +17,11 @@ type Category struct {
 	// badge (legend/lists). 0 (omitempty) = client uses default; 1.0 =
 	// default size; >1 = upscaled and clipped to badge shape; <1 = shrunk.
 	// Pie chart slice icons ignore this — they're sized for arc readability.
-	IconScale      float64    `bson:"icon_scale,omitempty" json:"icon_scale,omitempty"`
+	IconScale float64 `bson:"icon_scale,omitempty" json:"icon_scale,omitempty"`
+	// MonthlyLimit caps spending for an expense category over the current
+	// calendar month (1st–end). Nil = no limit tracked. Only meaningful for
+	// section="expense"; ignored for income/wishlist.
+	MonthlyLimit   *float64   `bson:"monthly_limit,omitempty" json:"monthly_limit,omitempty"`
 	IsDefault      bool       `bson:"is_default" json:"is_default"`
 	CreatedAt      time.Time  `bson:"created_at" json:"created_at"`
 	Version        int        `bson:"version" json:"version"`
@@ -33,9 +40,45 @@ type CreateCategoryRequest struct {
 // UpdateCategoryRequest carries the editable fields. All are optional:
 // nil pointer = leave unchanged; empty string / zero scale = clear back to
 // client default. Used by the admin PATCH /categories/:id endpoint.
+//
+// MonthlyLimit uses NullableFloat so the JSON tri-state is meaningful:
+// key absent = leave unchanged; `null` = clear the limit; number = set.
+// (Go's stdlib json folds absent + null into nil for plain pointer types,
+// so we need a custom unmarshaler to tell them apart.)
 type UpdateCategoryRequest struct {
-	Name      *string  `json:"name,omitempty"`
-	Color     *string  `json:"color,omitempty"`
-	Icon      *string  `json:"icon,omitempty"`
-	IconScale *float64 `json:"icon_scale,omitempty"`
+	Name         *string       `json:"name,omitempty"`
+	Color        *string       `json:"color,omitempty"`
+	Icon         *string       `json:"icon,omitempty"`
+	IconScale    *float64      `json:"icon_scale,omitempty"`
+	MonthlyLimit NullableFloat `json:"monthly_limit,omitempty"`
+}
+
+// NullableFloat preserves the JSON tri-state needed for "set / clear /
+// leave alone" PATCH semantics. Present = true means the key appeared in
+// the body; Valid = false means it was explicitly `null` (i.e. clear).
+type NullableFloat struct {
+	Present bool
+	Valid   bool
+	Value   float64
+}
+
+func (n *NullableFloat) UnmarshalJSON(b []byte) error {
+	n.Present = true
+	if bytes.Equal(bytes.TrimSpace(b), []byte("null")) {
+		n.Valid = false
+		return nil
+	}
+	v, err := strconv.ParseFloat(string(bytes.TrimSpace(b)), 64)
+	if err != nil {
+		// Fallback for JSON numbers that strconv refuses (e.g. exponent
+		// notation edge cases — let encoding/json handle it).
+		var f float64
+		if err2 := json.Unmarshal(b, &f); err2 != nil {
+			return err
+		}
+		v = f
+	}
+	n.Valid = true
+	n.Value = v
+	return nil
 }

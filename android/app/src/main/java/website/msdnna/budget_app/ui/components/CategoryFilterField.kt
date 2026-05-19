@@ -34,6 +34,9 @@ fun CategoryFilterField(
     onClear: () -> Unit,
     onDelete: (String) -> Unit,
     modifier: Modifier = Modifier,
+    /** Passed through to [CategoryLabel] so per-row icons can resolve
+     *  `custom:<id>` keys to the server's `/api/icons/:id` endpoint. */
+    serverUrl: String = "",
 ) {
     var expanded by remember { mutableStateOf(false) }
     val label = when {
@@ -82,8 +85,10 @@ fun CategoryFilterField(
                                 colors = CheckboxDefaults.colors(checkedColor = primaryColor),
                             )
                             Spacer(Modifier.width(4.dp))
-                            Text(
-                                cat.name,
+                            CategoryLabel(
+                                name = cat.name,
+                                category = cat,
+                                serverUrl = serverUrl,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f),

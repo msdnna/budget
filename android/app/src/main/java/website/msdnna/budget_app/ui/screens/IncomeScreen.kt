@@ -284,6 +284,7 @@ fun IncomeScreen(
                                     selected = filterCats,
                                     categories = categories,
                                     primaryColor = primaryColor,
+                                    serverUrl = serverUrl,
                                     onToggle = { vm.toggleFilterCategory(it) },
                                     onClear = { vm.clearFilterCategories() },
                                     onDelete = { id -> scope.launch { vm.deleteCategory(id) } },
@@ -318,6 +319,8 @@ fun IncomeScreen(
                                 valuesHidden = valuesHidden,
                                 selectionMode = selectionMode,
                                 selected = t.id in selectedIds,
+                                categories = categories,
+                                serverUrl = serverUrl,
                                 onLongPress = vm::startSelection,
                                 onSelectToggle = vm::toggleSelection,
                                 onDelete = vm::deleteTransaction,
@@ -345,6 +348,7 @@ fun IncomeScreen(
             primaryColor = primaryColor,
             template = template,
             categories = categories,
+            serverUrl = serverUrl,
             onAddCategory = { name -> vm.addCategory(name) },
             onDeleteCategory = { id -> vm.deleteCategory(id) },
             onDismiss = {
@@ -366,6 +370,7 @@ fun IncomeScreen(
             amountPrefix = "+",
             primaryColor = primaryColor,
             categories = categories,
+            serverUrl = serverUrl,
             onAddCategory = { name -> vm.addCategory(name) },
             onDeleteCategory = { id -> vm.deleteCategory(id) },
             onSave = { req -> vm.updateTransaction(tx.id, req) },
@@ -413,12 +418,19 @@ fun SwipeableTransactionCard(
     /** When true, paint the card background in a warning (yellow) tint —
      *  used by the assignee's expense list to surface open detail-requests. */
     highlightWarning: Boolean = false,
+    /** Category metadata for the inline icon next to the category name.
+     *  Caller passes the same list it feeds the add/edit sheet — the card
+     *  picks the matching entry by `name`. Defaults to empty so the icon
+     *  silently falls back to plain text when metadata isn't wired. */
+    categories: List<Category> = emptyList(),
+    /** Resolves `custom:<id>` icon keys to a downloadable URL. */
+    serverUrl: String = "",
     onLongPress: (id: String) -> Unit = {},
     onSelectToggle: (id: String) -> Unit = {},
     onDelete: (id: String) -> Unit,
     onToggleHidden: (id: String, currentHidden: Boolean) -> Unit,
     onCreateFromTemplate: (Transaction) -> Unit,
-    onDetails: (Transaction) -> Unit = {}
+    onDetails: (Transaction) -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
@@ -597,8 +609,29 @@ fun SwipeableTransactionCard(
             animationSpec = tween(durationMillis = 260),
             label = "cardBg",
         )
+        // Dynamic corner shape: the edge that meets the revealed action rail
+        // straightens to 0dp as the swipe progresses, so the card visually
+        // "docks" against the action panel instead of leaving a rounded
+        // notch. The opposite edge stays fully rounded throughout.
+        // The ×6 multiplier saturates corner progress within the first ~17%
+        // of swipe; below that threshold the card's still-rounded corner
+        // would cut into the (already exposed) rail's color and expose a
+        // hairline sliver of the rail through the corner cut. Reaching 0dp
+        // before the rail is meaningfully revealed eliminates the artifact.
+        val baseCorner = 12.dp
+        val rightSwipeProgress = ((offsetX.value / leftRevealPx) * 6f).coerceIn(0f, 1f)
+        val leftSwipeProgress = ((-offsetX.value / rightRevealPx) * 6f).coerceIn(0f, 1f)
+        val leftEdgeCorner = baseCorner * (1f - rightSwipeProgress)
+        val rightEdgeCorner = baseCorner * (1f - leftSwipeProgress)
+        val cardShape = androidx.compose.foundation.shape.RoundedCornerShape(
+            topStart = leftEdgeCorner,
+            bottomStart = leftEdgeCorner,
+            topEnd = rightEdgeCorner,
+            bottomEnd = rightEdgeCorner,
+        )
         Card(
             modifier = cardModifier,
+            shape = cardShape,
             colors = CardDefaults.cardColors(containerColor = animatedBg)
         ) {
             Row(
@@ -621,10 +654,12 @@ fun SwipeableTransactionCard(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        Text(
-                            transaction.category,
+                        CategoryLabel(
+                            name = transaction.category,
+                            category = categories.firstOrNull { it.name == transaction.category },
+                            serverUrl = serverUrl,
                             style = MaterialTheme.typography.bodySmall,
-                            fontWeight = FontWeight.Medium
+                            fontWeight = FontWeight.Medium,
                         )
                         if (transaction.hidden) {
                             Text(
@@ -698,6 +733,10 @@ fun TransactionDetailSheet(
     amountPrefix: String,
     primaryColor: Color = amountColor,
     categories: List<Category> = emptyList(),
+    /** Resolves `custom:<id>` icon keys to a downloadable URL for the
+     *  inline category icon next to the category name (both view and
+     *  edit modes). Empty disables custom-icon fetching. */
+    serverUrl: String = "",
     onAddCategory: suspend (String) -> Category? = { null },
     onDeleteCategory: suspend (String) -> Unit = {},
     onSave: suspend (UpdateTransactionRequest) -> Unit,
@@ -785,10 +824,12 @@ fun TransactionDetailSheet(
                                     color = amountColor
                                 )
                                 Spacer(Modifier.height(4.dp))
-                                Text(
-                                    text = transaction.category,
+                                CategoryLabel(
+                                    name = transaction.category,
+                                    category = categories.firstOrNull { it.name == transaction.category },
+                                    serverUrl = serverUrl,
                                     style = MaterialTheme.typography.titleMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    textColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -986,7 +1027,13 @@ fun TransactionDetailSheet(
                             ExposedDropdownMenu(expanded = catExpanded, onDismissRequest = { catExpanded = false }) {
                                 catFiltered.forEach { cat ->
                                     DropdownMenuItem(
-                                        text = { Text(cat.name) },
+                                        text = {
+                                            CategoryLabel(
+                                                name = cat.name,
+                                                category = cat,
+                                                serverUrl = serverUrl,
+                                            )
+                                        },
                                         onClick = {
                                             editCatInput = cat.name
                                             editCategory = cat.name
@@ -1160,10 +1207,13 @@ fun AddIncomeSheet(
     primaryColor: Color,
     template: Transaction? = null,
     categories: List<Category> = emptyList(),
+    /** Powers the per-row category icon next to the dropdown item label —
+     *  needed to resolve `custom:<id>` icon keys to a downloadable URL. */
+    serverUrl: String = "",
     onAddCategory: suspend (String) -> Category? = { null },
     onDeleteCategory: suspend (String) -> Unit = {},
     onDismiss: () -> Unit,
-    onSave: (CreateTransactionRequest) -> Unit
+    onSave: (CreateTransactionRequest) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val today = remember { SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date()) }
@@ -1233,7 +1283,13 @@ fun AddIncomeSheet(
                 ExposedDropdownMenu(expanded = catExpanded, onDismissRequest = { catExpanded = false }) {
                     filtered.forEach { cat ->
                         DropdownMenuItem(
-                            text = { Text(cat.name) },
+                            text = {
+                                CategoryLabel(
+                                    name = cat.name,
+                                    category = cat,
+                                    serverUrl = serverUrl,
+                                )
+                            },
                             onClick = {
                                 catInput = cat.name
                                 category = cat.name

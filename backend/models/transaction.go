@@ -83,6 +83,11 @@ type TransactionFilter struct {
 	// IncludeDetailed: when false, parents of closed detail-requests are
 	// hidden (they're historical and superseded by their children in stats).
 	IncludeDetailed bool
+	// Unlinked: when true, restrict to expense transactions that are NOT
+	// already attached to a wishlist item, NOT a child of a parent, and NOT
+	// closed/parent-of-closed DR. Backs the «привязать к существующему
+	// расходу» picker on wishlist/regular items.
+	Unlinked bool
 }
 
 type CategoryData struct {

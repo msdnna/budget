@@ -16,6 +16,54 @@
 
 ## API (backend)
 
+### [1.21.0] — 2026-05-19
+
+#### Added
+- **`POST /api/wishlist/:id/link/:tx_id`** — привязка существующего расхода к wishlist/regular-итему. Бэкенд для UI-кнопки «Привязать к существующему» в Прогнозе. Валидирует, что транзакция expense, не soft-deleted, ещё не связана и не часть закрытого detail-request. Категория транзакции приводится к категории wishlist-итема (чтобы pie-слайс соответствовал тому, что получает «Куплено»/«Оплачено»). Если такой категории нет в expense-секции — она клонируется с цветом и иконкой из wishlist-секции через `CategoryRepository.EnsureInSection`. Для `once`-итемов также выставляется `purchased=true`.
+- **`GET /api/transactions?unlinked=true`** — список кандидатов на привязку: только expense, без `wishlist_id`, без `parent_id`, без открытого/закрытого detail-request, без `excluded_from_stats`. Игнорирует параметр `type=` (фильтр сам подставляет expense).
+
+#### Tests
+- `TestWishlist_LinkExisting` — happy-path привязка с clone категории; once-итем флипается в purchased; повторная привязка → 409; income → 400; missing tx → 404.
+- `TestTransactions_UnlinkedFilter` — eligible expense возвращается, привязанный/income/closed-DR-parent отфильтровываются.
+
+### [1.20.0] — 2026-05-15
+
+#### Added
+- **Лимиты расходов на категории (Phase 5).** `Category.monthly_limit *float64` — опциональный месячный лимит на expense-категорию (income/wishlist игнорируют). `UpdateCategoryRequest.MonthlyLimit` использует кастомный `NullableFloat` тип, чтобы JSON-tri-state (`absent` / `null` / `number`) был различим: ключ отсутствует — поле не трогается, `null` — лимит снимается через `$unset`, число — устанавливается через `$set`. Стандартный Go `*float64` / `**float64` не различает absent от null в `encoding/json`.
+- **`GET /api/categories/limits-progress?month=YYYY-MM`** — возвращает по каждой expense-категории с заданным лимитом: `spent`, `limit`, `percent`, плюс `total_limit` + `total_spent` + `total_percent` (суммируются только по категориям с лимитом — категории без лимита не «разбавляют» отношение). По умолчанию — текущий календарный месяц (с 1-го по последний день, UTC).
+- **Notification subsystem** — новая коллекция `notifications`, family-wide события с per-user read-state.
+  - Модель `Notification`: `type` (`category_limit_exceeded` | `global_limit_exceeded`), `period` (YYYY-MM), `category_id` (для категорийных), snapshot `limit` / `spent` / `category_name`, `read_by []string` (массив user_id).
+  - Unique-индекс `(type, period, category_id)` обеспечивает дедуп: один алерт на категорию на месяц (MVP-правило «(a)»). Global-нотификация сидит в этом же индексе с `category_id=""`.
+  - `GET /api/notifications` — список (newest-first, default limit=50) с `read: bool` на каждой записи (per-user view) + `unread_count`.
+  - `POST /api/notifications/read-all` — `$addToSet user_id` во все записи. Идемпотентно.
+  - `POST /api/notifications/:id/read` — пометить одну (фронт пока не использует, оставлено на будущее).
+- **`LimitChecker`** — фоновый триггер, дёргается из `TransactionHandler` после Create/Update/Delete расходных транзакций (income/initial_balance не трогаются). Запускается через `go ...` с собственным 5-секундным контекстом, чтобы request-context закрытие не оборвало проверку. Считает текущий месяц по `Category` категории с `monthly_limit` + общий лимит как сумму всех заданных лимитов; вызывает `NotificationRepository.EnsureExceeded` (insert с дедупом на уникальном индексе).
+
+#### Tests
+- `models.TestNullableFloat_TriState` — 4 кейса: absent / null / number / zero. Гарантирует, что custom-unmarshaler различает absent от null (стандартный `*float64` не различает).
+- `handlers.TestLimits_ProgressEndpoint` — round-trip: PATCH `monthly_limit=N` → книжим транзакцию → progress endpoint возвращает корректные `spent` / `percent` / `total_*`. Затем PATCH `monthly_limit:null` → endpoint снова пуст.
+- `handlers.TestLimits_NotificationOnOverflow` — расход поверх лимита генерирует category-notification + global-notification (тест поллит до 2с т.к. триггер async); повторные over-limit расходы не плодят дубли (дедуп держится).
+
+### [1.19.0] — 2026-05-13
+
+#### Added
+- **Управление пользователями (admin)** — phase 4 admin-консоли. Новая группа `/api/admin/users/*` под `AdminRequired`:
+  - `GET /admin/users` — список с админ-полями (`login`, `is_admin`, `blocked_at`, `created_at`); soft-deleted скрыты, заблокированные включены (админу нужно их видеть, чтобы разблокировать).
+  - `POST /admin/users` — создать (login + password + display_name + is_admin). 409 на коллизии логина (unique-индекс).
+  - `PATCH /admin/users/:id` — partial-update login / display_name / is_admin / blocked. Pointer-семантика как в категориях. `blocked=true` ставит `blocked_at=now()`, `false` — unset.
+  - `POST /admin/users/:id/password` — admin-reset (без старого пароля).
+  - `POST /admin/users/:id/avatar` (multipart) — загрузка PNG/JPEG/SVG до 512KB, хранится inline в `users` коллекции (поля `avatar_mime`/`avatar_data`); `avatar_url` выставляется на `/api/users/:id/avatar?v=<ts>` (cache-buster при смене файла).
+  - `DELETE /admin/users/:id/avatar` — снять.
+  - `DELETE /admin/users/:id` — **soft-delete** (`deleted_at=now()`); UserInfo-снимки в существующих транзакциях/желаниях остаются валидными.
+  - `GET /api/users/:id/avatar` (auth, не admin-only) — отдать байты (нужно всем клиентам, рендерящим аватары в записях).
+- **`POST /api/auth/password`** (self) — смена собственного пароля с проверкой старого. Возвращает 401 «Старый пароль не подходит» если bcrypt не сошёлся.
+- **Soft-delete + блокировка enforcement** — `/auth/login` возвращает 403 для заблокированного юзера; `/auth/refresh` — 401 для удалённого, 403 для заблокированного. `FindByLogin` исключает `deleted_at` (повторное создание логина после soft-delete не даст логиниться удалённому, но новый пользователь с тем же login не получится — unique-индекс этого не позволит до hard delete; этого достаточно для семейного приложения).
+- **Safeguards в admin-handler'е**: нельзя снять с себя `is_admin` (поле `Blocked=true`), нельзя удалить себя, нельзя снять админку с последнего активного админа, нельзя удалить последнего админа.
+
+#### Changed
+- `User` модель получила `BlockedAt`/`DeletedAt` (`*time.Time`, omitempty), `AvatarMime`/`AvatarData` (inline blob, скрыты от JSON через `json:"-"`).
+- `UserRepository.FindAll` / `EnsureAdmin` фильтруют soft-deleted; `FindByID` — нет (нужен для UserInfo-снимков в записях).
+
 ### [1.18.0] — 2026-05-13
 
 #### Added
@@ -185,6 +233,240 @@
 ---
 
 ## Web (frontend)
+
+### [1.38.0] — 2026-05-19
+
+#### Added
+- **Тег «Привязано к…» в строке расхода.** Для каждой транзакции расходов с непустым `wishlist_id` рендерится round `NTag type="info"` с иконкой 🔗 и подписью `Регулярный: <name>` или `Желание: <name>`. На desktop вшит в колонку «Описание» (над текстом описания, или вместо него если описание пустое — режим inline-edit сохранён); на mobile — в `.tx-card-desc` перед текстом. Клик по тегу → `router.push('/forecast?focus=<wishlist_id>')`. Получаем wishlist'ы через общий `useWishlistStore` (fire-and-forget `fetch()` в `onMounted` ExpensesView).
+- **Фокус на записи прогноза.** `ForecastingView` читает `route.query.focus` на маунте + watch'ит изменения; находит item в `wlStore`, переключает мобильную табу (`regular` ↔ `wishlist`) если нужно, ставит `focusedId`, скроллит к строке/карточке (`scrollIntoView({behavior:'smooth', block:'center'})`) и подсвечивает её через `row-class-name="fc-row-focus"` (desktop) / `:class="fc-card-focus"` (mobile). CSS-анимация `fc-focus-flash` — 2.5с amber-фон+обводка ease-out → прозрачный.
+
+### [1.37.1] — 2026-05-19
+
+#### Changed
+- **Action-колонка Прогноза перестроена в 3 фиксированных слота.** Раньше в строке регулярного расхода рисовалось 4 кнопки (`refresh-or-placeholder | check | link | trash`) — для оплаченной строки `check` и `link` рендерились как `quaternary`-серые на серой подложке и читались как «пустое место» между ✗ и 🗑. Теперь центральная кнопка одна и переключается по состоянию: `✓ Оплачено` ↔ `✗ Отменить оплату`. Иконка-привязка сдвинута влево, trash остаётся справа. Wishlist получил такую же раскладку `[🔗 link-or-placeholder | ✓/✗ toggle | 🗑 trash]` — у уже-купленных позиций link-слот пустой, но trash остаётся в общей вертикали.
+
+### [1.37.0] — 2026-05-19
+
+#### Added
+- **Привязка существующего расхода к wishlist/regular-итему.** Новый компонент `LinkExistingExpenseModal.vue` показывает список не связанных расходов (`/api/transactions?unlinked=true`, лимит 100) с поиском по назначению/категории/сумме; на каждой строке — `ConfirmActionButton` для двухтапового подтверждения. Привязка идёт через `POST /api/wishlist/:id/link/:tx_id` (api ≥ 1.21.0), который сам клонирует категорию из wishlist в expense с цветом/иконкой если её там нет, и для `once`-итемов выставляет `purchased=true`. Кнопка-иконка «Привязать» добавлена в actions-колонку и для регулярных, и для желаний (desktop), и в swipe-actions (mobile) — для wishlist скрывается когда `purchased=true`. После привязки store категорий, store wishlist и forecast обновляются, чтобы pie/легенда сразу подхватили возможную новую категорию.
+- `wishlist.linkExisting(id, txId)` в `api/index.js`; `LinkOutline` импорт + новый `.swipe-action-info` стиль (`#2080f0`).
+
+### [1.36.0] — 2026-05-19
+
+#### Added
+- **Autocomplete на свободно-вводимых полях форм.** «Источник» (Доходы), «Назначение» (Расходы), «Название» (Прогноз — wishlist + regular делят один ключ) теперь рендерятся как `<n-auto-complete>` с dropdown'ом из localStorage-истории недавно введённых значений. На каждом submit'е значение пушится в начало списка (дедуп — точное совпадение перемещается, не дублируется), pukoнечный список капается до 20 entries. `get-show: () => true` показывает dropdown даже на пустом input'е — на focus юзер сразу видит свои частые «Магнит / Зарплата / Интернет» без необходимости начать печатать или копировать через свайп-«Шаблон». Замена «обычной браузерной автоподстановке», которая в SPA-формах без real form-submit работает непредсказуемо.
+- **`utils/inputHistory.js`** — общий helper: `loadHistory(key)` / `pushHistory(key, value)` / `historyOptions(key)`. Storage под префиксом `budget-history-` (легко вычистить в DevTools), graceful-fallback при QuotaExceeded / Safari private-mode, фильтрация corrupt-payload'ов. 7 тестов под `tests/utils/inputHistory.test.js` покрывают dedup, кап на 20, trim whitespace, broken JSON.
+
+### [1.35.0] — 2026-05-19
+
+#### Added
+- **Mobile UX-анимации.** Шесть точечных `<Transition>` / `<TransitionGroup>` оборачивают ключевые swap'ы в mobile-вьюхах. Все классы объявлены глобально в `styles/theme.css` (`mobile-slide`, `fab-swap`, `bulk-icon`, `tx-list`, `tab-fade`). Длительности 120-220мс, animate только `transform` + `opacity` (GPU-friendly), `@media (max-width: 767px)` гейт где это имеет смысл только на мобильном, `prefers-reduced-motion: reduce` отключает всё. Места:
+  - **Mobile add/edit ↔ list slide** в Income/Expenses + **list/editor swap** в AdminCategoriesView/UsersAdminView (`mobile-slide`, slide-from-side + fade ~220мс). В админ-вьюхах `:class="{hidden}"` заменён на `v-show` чтобы `<Transition>` мог цеплять enter/leave-классы — desktop поведение не задето.
+  - **FAB-«+» ↔ BulkFabRow crossfade** в Income/Expenses/Forecast (`fab-swap` mode="out-in", fade+scale(0.85) ~150мс).
+  - **Avatar ↔ bulk-circle swap** на карточке записи (Income/Expenses/Forecast wishlist) — `bulk-icon` mode="out-in", fade ~120мс. На Forecast regular fade-in/fade-out целого `.tx-card-left` при входе/выходе bulk-режима.
+  - **Collapse-leave удалённой карточки** в Income/Expenses/Forecast — `<TransitionGroup name="tx-list" tag="div">` с `max-height` + `margin` collapse + opacity 0 + translateX(-12px), ~220мс. Enter не анимируется чтобы не было flicker'а при первом рендере страницы.
+  - **Tab content fade** в Forecast (Аналитика/Регулярные/Желания) — `tab-fade`, opacity ~140мс, mobile-only.
+
+### [1.34.0] — 2026-05-19
+
+#### Added
+- **`BulkFabRow.vue`** — общий компонент для mobile bulk-mode toolbar'a в стиле Android Scaffold floatingActionButton (см. `IncomeScreen.kt:124-148`). Ряд FAB-style кнопок снизу-справа, position: fixed; принимает массив `actions` с полями `{icon, title, variant, confirm, loading, onClick}`. Variant'ы: `default` (нейтральный surface-bg, для toggle/cancel), `primary` (синий), `danger` (красный). Confirm-вариант делает 2-tap (первый тап — pulse-анимация на 2.5с, второй — реальный onClick), чтобы случайный тап на FAB не сносил выбор.
+
+#### Changed
+- **Mobile bulk-mode переехал на FAB-row.** В Income / Expenses / Forecast (regular + wishlist) на мобильном при выборе записей FAB-«+» подменяется на 2-3 FAB'a (Hide/Show или Cancel-action, Delete, Отмена выбора). Inline-toolbar buttons (`Скрыть/Удалить/Отмена`) скрыты под `v-if="!isMobile"` — но «Выбрано: N» остаётся, чтобы пользователь видел счётчик не отрывая взгляда от карточек. Mirror Android UX.
+- **Swipe-action цвета Hide/Template поменялись местами.** Hide теперь использует `swipe-action-info` (синий `#2080f0`) — действие неразрушительное, нейтральный toggle. Template — `swipe-action-warning` (оранжевый `#f0a020`) — привлекает внимание, т.к. переносит данные в форму добавления. Раньше пара была инвертирована.
+
+#### Fixed
+- **Template-свайп на мобилке открывает форму с заполненными полями.** Раньше `fillFromTemplate()` выставлял `form.value` и показывал snack «Форма заполнена по шаблону» — но сама форма на мобильном скрыта до нажатия FAB-«+», и пользователь оставался на экране списка без видимой формы и со снеком про мнимый успех. Теперь на `isMobile` дополнительно выставляется `mobileAdding=true` — форма открывается сразу с pre-fill'ом, snack убран как избыточный. Затронуло Income и Expenses (Wishlist шаблона не имеет).
+
+### [1.33.0] — 2026-05-18
+
+#### Added
+- **Drill-down по клику на pie-чарте.** Слайс на «Расходы по категориям» / «Доходы по источникам» кликабелен: переход на `/expenses` или `/income` с pre-applied фильтром (`categories` + `from`/`to`). Период берётся из текущего picker'а Statistics (month → 1-е/последнее число месяца, year → 01-01/12-31, custom → as-is). `CategoryDonutChart` эмитит `drilldown(name)`, `StatisticsView` строит URL и пушит через `useRouter`. `IncomeView` и `ExpensesView` читают `route.query` в onMounted + watch и гидрируют локальные `filterCategories`/`filterRange`, чтобы UI-фильтра тоже отразил состояние.
+- **Раскрытие «Прочее» по клику + кнопка «Назад» в центре donut'a.** Клик по синтетическому wedge'у «Прочее» не дрилдаунит, а скрывает все остальные категории (`hiddenSet = allLabels - groupedLabels`) — маленькие категории раздвигаются в полноразмерные wedges и становятся кликабельными для drilldown'a. В дырке donut'a появляется theme-aware кнопка «← Назад» (mount'ится при `hiddenStack.length > 0`); один клик pops top of stack, поддерживает nested-«Прочее» (когда мелкие категории сами объединяются в новое «Прочее»). Зеркалит Android-поведение 1.36.
+- **`<CategoryLabel>`-компонент.** Один общий компонент рендерит `[иконка] <название>` без бейджа-фона: иконка тинтуется в `Category.color`, размер равен размеру текста, custom-SVG'и тинтуются через `mask-image` (alpha-only стандарт). Вертикальное выравнивание: `vertical-align: middle` на корневом inline-flex (центрирует относительно line-box родителя), `line-height: 1` на root + ico, `line-height: 1.1` на text + `transform: translateY(-1px)` на `.cat-label-ico` — компенсирует асимметрию descender/ascender, чтобы визуальный центр иконы совпадал с x-height текста на n-select / n-tag триггерах. Подключён в:
+  - n-select dropdown'ах (`render-label`) на формах Income/Expenses/Forecast/Pay-modal/DetailRequest — иконка рядом с названием в раскрытом списке и (для single-tag-mode) в селекте-триггере. `render-tag` только на multi-select-фильтрах — на single-select'ах Naive вызывает его с placeholder ghost-option'ом, что порождало пустой pill с крестиком вместо плейсхолдера.
+  - Multi-select фильтры Income/Expenses: `render-tag` оборачивает CategoryLabel в `NTag size="small"` (без margin-override — Naive сама задаёт spacing между chips, иначе высота control'a уезжает выше n-date-picker'a).
+  - Mobile SwipeableCard на Income/Expenses (`tx-card-category`) — иконка рядом с названием категории в карточке записи.
+  - Desktop NDataTable «Категория»-колонке для Income/Expenses и для регулярных расходов + wishlist в Forecast (inline-edit display).
+  - Mobile карточки регулярных расходов + wishlist в Forecast, список children в `DetailRequestModal`.
+  - Категории в `categories` store расширены: `options()` отдаёт `color`/`icon`/`icon_scale`; новые helper'ы `findByName(section, name)` и `findAcrossSections(name)` для lookup'ов по имени без перебора массива на каждый рендер.
+- **Подписи на swipe-action кнопках (mobile).** Action-кнопки SwipeableCard на Income/Expenses (Скрыть·Шаблон·Удалить) и Forecast регулярных/wishlist (Оплачено·Куплено·Отменить·Не куплено·Удалить) рендерят иконку + текстовую подпись (column-flex, 10px caption), как в Android-клиенте — раньше пользователь видел только цветную иконку без значения.
+- **Luminance-aware текст на выбранных `n-radio-button`-ах + mobile tab-strip'ах.** Новый стор-геттер `onPrimaryColor` (`textOnPrimary(activeTheme.primary)`, порог luminance 0.30) экспонирует контрастный цвет для primary-фонов. В `themeOverrides` добавлены `Radio.buttonColorActive` + `buttonTextColorActive` + `buttonBorderColorActive` (light и dark), используют тот же `textOnPrimary()` что и Button — выбранный radio на оранжевом/бирюзовом теперь рисуется тёмным текстом, на холодных primary — белым. То же для `.forecast-tabs` / `.settings-tabs` через CSS-var `--st-on-primary`.
+
+#### Changed
+- **Локализация date-picker'a (RU).** `NConfigProvider` получает `:locale="ruRU"` + `:date-locale="dateRuRU"` из `naive-ui`. Календарь автоматически: (а) начинает неделю с Понедельника (date-fns ruRU `weekStartsOn: 1`), (б) рисует заголовки дней «Пн/Вт/Ср/...» вместо «Su/Mo/Tu/...», (в) переименовывает футерные кнопки «Очистить» / «Подтвердить». Затрагивает все date-picker'ы (Доходы/Расходы/Прогноз/Statistics/Export). Кнопки футера подняты с tiny до small (28px высоты, 13px font, padding 0 14px) через глобальный CSS в `styles/theme.css` — popup mount'ится в body, scoped CSS не достаёт.
+- **Mobile tab-strip'ы (settings / forecast / admin-sections) выровнены на пару 3/3px.** `.settings-tabs` / `.forecast-tabs` / `.admin-sections` mobile container + inner = `3px` (default Naive `borderRadius`) — все три tab UI совпадают по визуальному радиусу с соседними NCard'ами. SettingsTabs (Категории/Пользователи) также перешёл на `palette.cardSurface` bg вместо `palette.surface`: на dark-теме `cardSurface=#18181c` темнее, чем `surface=#1e1e1e`, поэтому верхняя и нижняя tab-полоски в `/settings/categories` теперь читаются единым блоком.
+- **Swipe-action цвета — Naive-палитра + Material Grey на cancel-действиях.** Income/Expenses Hide=warning `#f0a020`, Template=info `#2080f0`, Delete=error `#d03050`. Forecast Regular/Wishlist Paid·Bought=success `#18a058`, Delete=error `#d03050`. На «отменяющих» свайпах (Forecast Regular «Отменить», Wishlist «Не куплено») использован Material Grey `#757575` — жёлтый warning там читался как «опасное действие», хотя действие неразрушительное (возврат в нейтральное состояние).
+
+#### Fixed
+- **CategoryLabel в mobile-tx-карточках не съезжает вверх + дата не переносится.** `.tx-card-row1` в Income/Expenses View'ах перешёл с `align-items: baseline` на `align-items: center` — `CategoryLabel` это `inline-flex` с собственным `line-height: 1`, его baseline считается от icon-box'a, не от текста, поэтому baseline-выравнивание визуально сдвигало категорию вверх относительно даты-sibling'a. `.tx-card-date` получил `white-space: nowrap` + `flex-shrink: 0`, чтобы «17.05.2026» не ломалась на две строки в узких карточках.
+
+### [1.32.8] — 2026-05-15
+
+#### Fixed
+- **«Количество транзакций» убрано из чарта «Прогноз по категориям».** Breakdown в прогнозе смешивает исторический tx-средний и проектируемые wishlist-итемы — единого осмысленного tx-count там нет, поэтому раньше все строки показывали `0`. Добавил prop `hide-count` в `CategoryDonutChart` и проставил его в `ForecastingView`. На Statistics-чартах подпись осталась как было.
+
+### [1.32.7] — 2026-05-15
+
+#### Added
+- **Подпись «Количество транзакций: N» в легенде `CategoryDonutChart`.** Берётся из поля `count` в `CategoryData` (бэкенд уже отдаёт). Для категорий **без** лимита надпись отрисовывается под названием категории; для категорий **с** лимитом — под прогресс-баром по левому краю (на одной строке с правой подписью «X / Y ₽ (Z%)», через `justify-content: space-between`). `StatisticsView` теперь пробрасывает `count` в `data` для обоих донат-чартов (expense + income).
+
+### [1.32.6] — 2026-05-15
+
+#### Changed
+- **Иконка категории в легенде `CategoryDonutChart` центрируется по вертикали всего item'а.** Badge вынесен из `.cdc-row-main` как прямой ребёнок `.cdc-row`; `cdc-row-main` + `cdc-row-limit` переехали внутрь нового `.cdc-row-content` (flex-column). Теперь `align-items: center` на `.cdc-row` центрирует иконку по середине строки независимо от того, есть ли лимит-бар на второй строке. Раньше badge был привязан к верху строки на лимитных рядах.
+
+### [1.32.5] — 2026-05-15
+
+#### Changed
+- **Лимит-бар в легенде `CategoryDonutChart` начинается под названием категории, а не под иконкой.** `.cdc-row-limit` получил `padding-left: 48px` (badge 36px + row gap 12px) — бар теперь стартует от колонки имени и тянется до правого края; подпись «X / Y ₽ (Z%)» остаётся по правому краю под суммой.
+
+### [1.32.4] — 2026-05-15
+
+#### Changed
+- **Лимит-прогрессбар в легенде `CategoryDonutChart` теперь во всю ширину строки.** Бар сидит на отдельной строке под «название + сумма», тянется через весь row (а не только под meta-колонкой как в 1.32.3); подпись «X / Y ₽ (Z%)» по правому краю — лежит точно под суммой по категории. Hover-тултип с долей в диаграмме на сумме сохраняется.
+
+### [1.32.3] — 2026-05-15
+
+#### Changed
+- **Лимит-прогрессбар в легенде `CategoryDonutChart` переехал внутрь meta-колонки.** Раньше бар + подпись лежали отдельной строкой под всей строкой легенды; теперь они подменяют собой строку «X% от чарта» под суммой категории, а доля диаграммы переехала в hover-тултип на самой сумме («Доля в диаграмме: 9.2%»). Строки без лимита остались как были (amount + %). Бар тянется на всю ширину meta-колонки (`align-self: stretch`); лимит-строкам выделен `min-width: 140px` чтобы текст «12 326 / 10 000 ₽ (123%)» не давил бар в полоску.
+
+### [1.32.2] — 2026-05-15
+
+#### Added
+- **Прогресс-бар по лимиту в легенде pie-chart'а (`CategoryDonutChart`)** — те же стили, что и в `/settings/categories`: тонкая `n-progress` line + строка `<spent> / <limit> ₽ (<percent>%)` под основной строкой легенды. Рендерится только если у категории установлен `monthly_limit`. Цвет (`palette.income` / amber / `palette.expense`) синхронизирован с другими местами, где показывается лимит. `StatisticsView` подтягивает `catApi.limitsProgress()` параллельно с pie-данными и прокидывает name-индексированный map только в expense-донат (income лимиты не поддерживает). Лимиты всегда отражают **текущий календарный месяц** — не подстраиваются под выбранный период фильтра (monthly limit vs YTD сравнение было бы вводящим в заблуждение). Значения суммы блюрятся под `valuesHidden` так же, как и основная сумма строки.
+
+### [1.32.1] — 2026-05-15
+
+#### Fixed
+- **Мобильный header больше не переполняется.** Четыре визуальных тоггла (цвет темы, скрыть/показать суммы, %/₽ диаграмм, тёмная тема) свернуты в один popover-«Внешний вид» под иконкой `ColorPaletteOutline`. Внутри — секция «Цвет темы» (theme-dots) + вертикальный список из трёх кнопок-тогглов с подписями. Так 7 иконок (avatar + DR-bell + NotificationBell + 4 визуальных + info) сжимаются до 4 (avatar + DR-bell + NotificationBell + visuals + info) и не выталкивают строку «<дата>» на следующую строку.
+- **Прогресс по лимитам в админке обновляется сразу после сохранения.** `loadLimitsProgress()` выделен из `loadAll()` и вызывается после Create-with-limit, Update-with-monthly_limit-change и Delete-of-limited-category. Раньше прогресс-бары в списке категорий показывали устаревшие данные до перезагрузки страницы.
+- **Стили карточки «Лимит расходов» (ExpensesView) выровнены с «Баланс на начало месяца» (IncomeView):** убрано `size="small"` (заголовок теперь default-NCard размера), сумма 18px (было 16px), цвета суммы и progress-bar тянутся из `palette.income` / `palette.expense` вместо hardcoded `#22C55E` / `#EF4444` — теперь в светлой/тёмной теме green/red точно совпадают с цветами доходов/расходов в остальной части UI. Прогрессбар amber на 80%+ остаётся хардкодом (палитра не несёт оранжевого токена). Тот же палитро-aware tint применён и к per-row progress в `AdminCategoriesView`.
+- **«Баланс на начало месяца» на мобильном перенесён в history-view.** Раньше IB-карточка показывалась только при добавлении/редактировании дохода (была вложена в add-form wrapper). Теперь вынесена из add-wrapper'а; её собственный `v-show` показывает её только в history-режиме на мобильном (на десктопе — всегда), мирорит paзмещение «Лимит расходов» в Expenses.
+
+### [1.32.0] — 2026-05-15
+
+#### Added
+- **Лимиты расходов на категории (Phase 5).** UI поверх api 1.20.0.
+  - `AdminCategoriesView`: новое поле «Месячный лимит (₽)» (NInputNumber с `clearable`) — видно только для expense-категорий. PATCH использует tri-state: число → `monthly_limit:N`, очистка → `monthly_limit:null`, без изменения → ключ отсутствует. Прогресс-бар (NProgress, line) под каждой строкой списка категорий — пороги зелёный/жёлтый/красный на 80/100%. Текст-метка: `<spent> / <limit> ₽ (<percent>%)`. При создании новой категории лимит выставляется follow-up PATCH'ем (Create не принимает поле — мирор `icon_scale`).
+  - `ExpensesView`: новая карточка-заголовок в левом pane «Лимит расходов» (read-only). Показывает текущий календарный месяц **независимо** от фильтра периода истории; если фильтр охватывает другой период, рядом отображается `n-tag` «тек. месяц» (success-стиль) чтобы пользователь не путал. Прогресс-бар + сумма потрачено / лимит + процент. Подписан на `store.items` через `watch(deep:true)` — обновляется после CRUD без перезагрузки.
+- **Bell-popover для уведомлений в header.** Новые `NotificationBell.vue` + `NotificationsList.vue` + `stores/notifications.js`. Иконка-колокольчик (`NotificationsOutline`) с `n-badge` (unread count, max 9). Мобильный — `n-modal`, десктоп — `n-popover` bottom-end (мирорит DetailRequestBell). Список уведомлений (newest-first) с типом + категорией + suma/limit/period; кнопка «Прочитать все» помечает все через `POST /notifications/read-all` (per-user state). Polling раз в 60с пока вкладка видима (`document.hidden` чек), плюс refresh на `visibilitychange` (возврат во вкладку) и на изменение `store.items` в `ExpensesView` (с 800мс delay — backend-триггер async).
+- API: `categories.limitsProgress(month?)`, `notifications.list/readAll/read` в `frontend/src/api/index.js`.
+
+#### Changed
+- `cat-row` в `AdminCategoriesView` теперь flex-column (badge+name сверху, progress-bar снизу) — чтобы лимит не загромождал основной ряд.
+
+### [1.31.0] — 2026-05-15
+
+#### Added
+- **Desktop Forecast переведён на `NDataTable` (Phase 6)** — карточный list-стиль на десктопе (≥768px) заменён на две независимые `n-data-table` (Регулярные расходы / Список желаний), мирор Income/Expense. Mobile (≤767px) остаётся на SwipeableCard. Inline-edit pencil по каждой ячейке, bulk-checkbox, reassignable user-avatar (только wishlist).
+- **Адаптивный `SplitPane`** — новый prop `stack-below` (px) + `ResizeObserver` на контейнере. Когда ширина контейнера меньше порога, слоты автоматически складываются в вертикальный стек (`gap: 16px` между ними), drag-divider прячется. CSS-правило `@media (max-width: 768px)` заменено на JS-driven класс `.stacked` — работает для любого breakpoint'а. Дефолт `stack-below: 768` сохраняет старое поведение Income/Expense.
+- **Forecast: `stack-below="1280"`** — на узких экранах/контейнерах две таблицы складываются друг под другом, на широких — SplitPane c drag (storage-key `forecast-split`, default 50/50, min 30%, max 70%).
+- **Per-table адаптивная компрессия (`utils/adaptiveTable.js`)** — общая утилита для Forecast / Income / Expenses: `useAdaptiveTable(threshold)` (ResizeObserver + `compact` флаг), фабрики `pencilBtn` / `okBtn` / `cancelBtn` / `iconActionBtn` / `renderActionButton` / `renderActionsPopover` / `plainTextCell`. Единый порог `COMPACT_TH = 740`. Когда pane < 740, ВСЕ оптимизации срабатывают одновременно: action-кнопки сворачиваются в «•••» popover (`EllipsisHorizontalOutline` с вертикальным списком действий и подписями), pencil-affordance скрываются, текстовые колонки получают `ellipsis: { tooltip: true }` (truncation «…» + tooltip с полным текстом по hover), `NPopconfirm` для destructive-операций сохраняется внутри popover'а.
+- **Адаптивный паттерн распространён на Income / Expenses.** Колонки Категория / Источник / Назначение / Описание переключаются между двумя режимами:
+  - Wide (≥740): `minWidth: 120`, inline-pencil top-right, full inline-edit.
+  - Compact (<740): `minWidth: 70` + `ellipsis: { tooltip: true }`, pencil скрыт, текст сокращается «…» с тултипом.
+  Action-кнопки (Скрыть/Показать, Шаблон, Запрос на детализацию у Expenses, Удалить) сворачиваются в «•••» popover. `size="small"` на n-data-table, `scroll-x` снят.
+
+#### Changed
+- **Колонки таблиц переразмерены под адаптивную модель.** Forecast/Регулярные: bulk-checkbox 36 / Название (minWidth 90, теги Частота + «Оплачено?» под ним) / Категория (compact `minWidth: 70` + ellipsis, wide `minWidth: 100` + inline-pencil) / Заметки / След. оплата (width 80, скрыта в compact) / Сумма (width 100) / Действия (compact 44 / wide 110). Wishlist: select 42 / Название (minWidth 90, тег «Куплено?» под ним) / Категория / Заметки / Сумма / Действия (compact 44 / wide 80). Income: select 36 / Дата 100 / Категория / Источник / Описание (flex с conditional minWidth + ellipsis) / Сумма (compact 110 / wide 150) / Действия (compact 44 / wide 100). Expenses аналогично + дополнительная action-кнопка детализации.
+- **Pencil-affordance в правом-верхнем углу cell'ы по всему ряду** во всех адаптивных таблицах. `<div display:flex; align-items:flex-start>` с `flex:1; min-width:0` на content + pencil справа. Карандашики выровнены в одну вертикаль по столбцу. Колонка «Частота» удалена в Forecast (тег теперь под названием).
+- **Колонки «Сумма» / суммы дохода-расхода — left-align** (как остальные колонки). Pencil — top-right, как у всех.
+- **Action-колонки — right-anchored.** Forecast/Регулярные: 3 фиксированных слота `[Refresh-или-placeholder, Check, Trash]`, Trash всегда в одной вертикали по всем строкам, Refresh виден только при `paid_this_period`. Wishlist: 2 слота `[Toggle, Trash]`. Income/Expenses: 3-4 слота справа (`[Eye, Copy, (DetailReq?), Trash]`). Все — `quaternary` + `NTooltip` иконочные кнопки. Bulk-highlight через class `.fc-row-sel`.
+- **`n-data-table size="small"` на всех таблицах записей** — Naive cell-padding 24 → 16 px на сторону, освобождается ~50 px на 7 колонок, action-кнопки видны без скролла даже при сжатии pane к `minLeft: 30%`.
+- **Income / Expenses SplitPane: `max-left: 75 → 60`, `min-left: 20 → 25`** — пользователь больше не может сжать историю до состояния, где даже compact-режим таблицы не помещается. `SplitPane` clamp'ит сохранённую в localStorage позицию против актуальных min/max при mount'е (старый 75% больше не пересилит).
+- **Expenses: порядок action-кнопок мирорит Forecast pattern** — `[DetailRequest-или-placeholder, Eye, Copy, Trash]`. Trash всегда в одной вертикали по всем строкам, Eye и Copy слева от него, ЗнД виден только у parent-расходов (когда отсутствует — невидимый 28-px placeholder сохраняет slot-позицию).
+
+#### Removed
+- Мёртвый desktop sub-card markup Forecast'а (`.regular-row*` flex-layout, `.inline-edit-icon`, `.user-assign-btn`, `.meta-sep`, `checkboxStyle()`, `pencilIconHtml`) — на десктопе теперь чистый NDataTable.
+
+### [1.30.0] — 2026-05-14
+
+#### Added
+- **Swipe-to-reveal actions на мобильных карточках записей.** Новый компонент `SwipeableCard.vue` инкапсулирует жесты: горизонтальный свайп-влево раскрывает action-кнопки за карточкой (revealWidth 180 px = три кнопки по 60 px), вертикальный touch пропускается на скролл страницы, долгий тап эмитит `longpress`, обычный — `tap`. Synthetic click после свайпа подавляется флагом `swipeJustHappened`. Open-state schloss'ится тапом по контенту. `touch-action: pan-y` запрещает браузеру горизонтальный scroll'инг страницы во время свайпа.
+- **Доходы / Расходы карточки**: swipe → Скрыть/Показать (warning), Шаблон (info), Удалить (danger). Tap = edit, long-press = bulk-select. Удаление — нативный `window.confirm` (после намеренного свайпа + tap'а отдельный popconfirm избыточен).
+- **Forecast Регулярные / Желания карточки**: swipe → Оплачено / Куплено (success) либо Отменить оплату / Не куплено (warning) в зависимости от `paid_this_period` / `purchased`, плюс Удалить (danger). Действия дёргают существующие хендлеры (`openPayRegular`/`openPayWishlist`, `cancelRegularPaid`/`unpurchaseWishlist`, `wlStore.remove`).
+
+#### Changed
+- Mobile-card-iteration переведён на `<template v-for>` с разделением `SwipeableCard v-if="isMobile"` / `n-card v-else` — десктоп-вид Forecast (со сложной инлайн-разметкой) рендерится без swipe-обёртки.
+- `onForecastLongPressStart` / `onForecastLongPressEnd` / `onForecastCardTap` удалены из ForecastingView — gesture-логика теперь в SwipeableCard. Оставлен `onForecastBulkLongPress(kind, id)` как @longpress-handler.
+- Income/Expenses тоже потеряли свой local long-press timer code (`LONG_PRESS_MS`, `onLongPressStart/End`) — обёртка теперь у SwipeableCard.
+
+### [1.29.0] — 2026-05-14
+
+#### Changed
+- **Forecast карточки на мобильном — tap-to-edit, как в Доходах/Расходах.** Сложная разметка с inline-pencil'ами и action-кнопками (Оплачено / Куплено / Отменить / Удалить) скрыта на мобильном через `v-if="!isMobile"`; вместо неё — компактная `.tx-mobile-row`: название + бейдж частоты/статуса, строка «категория · заметки · след. оплата ДД.ММ.ГГГГ», сумма справа цветом расхода. Long-press по карточке заводит bulk-режим (как раньше), тап (если не bulk) открывает edit-вью.
+- **Edit-вью** = существующая форма «Добавить»: заголовок переключается на «Регулярный расход / Желаемая покупка», submit вызывает `wlStore.update` вместо create. В footer'е появляются Удалить (red-ghost) + Сохранить (primary) в одну строку, ниже — кнопка действия в зависимости от статуса: Оплачено/Куплено (success) если не оплачено в текущем периоде, Отменить оплату / Не куплено (default) если оплачено. Pay-кнопка открывает существующую prefilled-expense модалку (`openPayRegular` / `openPayWishlist`), Cancel-кнопка вызывает `cancelRegularPaid` / `unpurchaseWishlist`.
+- Долгий тап теперь снова имеет `forecastLongPressFired`-флаг — после long-press последующий click подавляется (иначе bulk-select заодно открывал бы edit).
+- **Desktop вид Forecast записей не менялся** — там по-прежнему inline-pencil'ы и кнопки действий. Конверсия в NDataTable вынесена в отдельный шаг.
+
+### [1.28.0] — 2026-05-14
+
+#### Fixed
+- **Luminance-порог текста на primary-кнопке** 0.55 → 0.30: оранжевый (lum ≈0.43) и бирюзовый (≈0.34) теперь получают тёмный текст вместо нечитаемого белого на светлом саттурированном фоне. Холодные синий/зелёный/красный/фиолетовый/розовый имеют lum < 0.30 и остаются с белым текстом.
+- **Поповер выбора иконки на узком экране** вылетал за viewport — Naive NPopover не shift'ит контент по горизонтали. Заменили на `NModal` (теперь и на десктопе тоже — centered modal надёжно работает в любых размерах вьюпорта).
+- **DetailRequestBell**: на мобильном popover заменён на `NModal` (та же причина — вылазил за край); десктоп оставлен с popover'ом.
+- **Бэйдж активных фильтров уезжал за бордер кнопки**: заменили `<n-badge>`-обёртку вокруг иконки на простой суффикс «Фильтр · N» в тексте кнопки.
+- **Контраст label'ов в filter-popover** (ПЕРИОД / КАТЕГОРИИ) поднят: `var(--text-3)` → `var(--text-1)` + `opacity: 0.85` + `font-weight: 600` — читаемо на тёмной теме.
+
+#### Changed
+- **Mobile FAB** (`FabButton.vue`): круглая 56-px кнопка `+ Добавить` фиксирована bottom-right поверх bottom-nav на Income / Expenses / Forecast. Заменяет inline-«+ Добавить» в шапке карточки. Цвет = `primaryColor` из theme-store через `v-bind`. Скрыта во время add/edit и на десктопе. На Forecast «Аналитика» FAB тоже скрыт (нечего добавлять — только summary + pie).
+- **Statistics period selector**: возвращён в один inline-ряд (как было до 1.27). Type-кнопки (Месяц / Год / Период) слева, value-picker справа. На десктопе — inline TilePeriodPicker / NDatePicker; на мобильном — компактная кнопка-триггер с иконкой календаря + текущим лейблом, открывает popover с picker'ом.
+
+### [1.27.0] — 2026-05-14
+
+#### Fixed
+- **Текст на primary-кнопках читаем во всех темах.** Naive UI в dark-режиме автоматически переключал `textColorPrimary` на тёмный, давая нечитаемый dark-on-blue. Override считает relative luminance активного `primary`-цвета и принудительно ставит белый текст на тёмных/средних акцентах (синий / зелёный / красный / фиолетовый / бирюзовый / розовый) и `#1f1f1f` только на очень светлых (порог 0.55 — оранжевый/жёлтый/салат). Применяется одинаково в light и dark.
+- **Заголовок в `card-back-header` (Income / Expenses / Forecast)** примыкал к back-стрелке: gap 8→12px + extra 2px margin-right на самой кнопке, чтобы стрелка не липла к рамке/тексту. Симметрично — `editor-header` в AdminCategoriesView / UsersAdminView.
+- **Поповеры на узком экране (`<400px`) вылазили за viewport**: иконка-picker (AdminCategoriesView), DetailRequestBell. Контентам выставлен `width: min(<base>, calc(100vw − 32px))`, иконка-picker дополнительно переведён с `placement="bottom-end"` на `placement="bottom"` (центр) — Naive auto-shift'нет под viewport надёжнее.
+
+#### Changed
+- **Income / Expenses на мобильном — «+ Добавить» в шапке карточки** «История …», справа от заголовка (как в UsersAdminView), вместо full-width-кнопки над списком.
+- **Edit-режим (Income / Expenses)**: кнопки «Удалить» и «Сохранить» — в одну строку (flex 1:1) вместо stack'а. Red-ghost слева, primary справа.
+- **Фильтры списков (Income / Expenses) свернуты в popover** на мобильном: одна кнопка «Фильтр» с `FunnelOutline` + badge с числом активных фильтров. Внутри popover — date-range + categories multi-select + (для Expenses) checkbox «Показать закрытые запросы» + кнопка «Сбросить». Десктоп — фильтры inline как раньше.
+- **Forecast Регулярные / Желания на мобильном — «+ Добавить» в шапке секции** справа от заголовка (а не full-width-кнопка над списком). «Пакетное редактирование» (большая кнопка) скрыто на мобильном — bulk-режим теперь заходит через **long-press** на карточку записи (то же, что в Доходах / Расходах).
+- **Long-press**: 450 → **1000 мс** во всех видах. Короткое срабатывало слишком часто при обычной прокрутке.
+- **Forecast add-вид** теперь полностью замещает список Регулярных / Желаний (раньше форма показывалась поверх, а список просвечивал ниже): добавлен флаг `!mobileForecastAdding` к `v-if` обоих `n-grid-item` секций.
+- **Statistics period-фильтр на мобильном** — единая кнопка-триггер с текущим лейблом периода («Май 2026» / «2026» / «12.03 – 15.04»), открывает popover с button-group выбора режима + value-picker'ом (TilePeriodPicker / NDatePicker). На десктопе — прежний inline-ряд кнопок в карточке.
+
+### [1.26.0] — 2026-05-14
+
+#### Changed
+- **Доходы / Расходы — карточный список вместо NDataTable на мобильном.** Тесная и невнятная таблица на узком экране заменена на вертикальный список карточек (одна запись на строку). Внутри: аватар автора слева (32px) или bulk-чекбокс, дата + категория в одной строке, источник/назначение и описание в строке `dim`, сумма справа жирным с цветом (`incomeColor` / `expenseColor`) — скрывается blur'ом по тогглу `valuesHidden`. Карточки `hidden=true` притуплены `opacity:0.45` как в desktop-таблице.
+- **Тап по карточке → edit-вид** в той же добавочной форме. Поведение мирорит add-flow: тап заменяет «Историю» на форму с pre-fill'ом, в `#header` появляются back-стрелка и заголовок «Изменить доход / расход», submit-кнопка превращается в «Сохранить» (вызывает `store.update` вместо `store.create`); под ней — красная «Удалить запись» с popconfirm. На Income initial-balance карточка скрывается в edit-режиме как посторонний контекст.
+- **Долгое нажатие (450 мс) на карточке → bulk-режим** с одновременным выделением этой записи. После long-press последующий `click` подавляется флагом `longPressFired`, чтобы тап заодно не открыл edit. В bulk-режиме обычный тап перекидывается на toggle-select.
+- Кнопка «Пакетное редактирование» в шапке списка скрыта на мобильном (точка входа — long-press), на десктопе осталась.
+- Пагинация — отдельный `NPagination` под списком карточек (заменяет встроенный paginator таблицы) с `size="small"` и центровкой.
+
+### [1.25.0] — 2026-05-14
+
+#### Changed
+- **Statistics summary 2×2 на мобильном**: `n-grid` переведён с `:cols="3"` на `:cols="6"`, карточки Доходы / Расходы — `span="3 m:2"` (1/2 ширины на мобильном, 1/3 на десктопе), Баланс — `span="6 m:2"` (полная строка ниже на мобильном, 1/3 на десктопе). Десктопный вид не изменился.
+- **Forecasting на мобильном — 3 табы** (Аналитика / Регулярные / Желания). Под `isMobile` (window<768) рендерится горизонтальная таб-полоса в стиле SettingsTabs.vue. Десктоп показывает все три секции в общем потоке как раньше.
+  - Summary 4 → **2×2 на мобильном**: `span="2 m:1"` (½ ширины на мобильном, ¼ на десктопе).
+  - На `n-grid-item` для секций «Регулярные» / «Желания» используется `v-if` (не `v-show`) — NGridItem не пропускает v-show на свой root, поэтому при `v-show=false` карточки рендерились пустыми внутри слота. С `v-if` неактивная секция полностью удаляется из vnode-дерева, активная занимает full-width.
+  - **Add-record через «+ Добавить» с навигацией**. Форма «Добавить» в Аналитике скрыта на мобильном. В табах Регулярные / Желания над списком появляется кнопка «+ Добавить …» — клик предустанавливает `form.kind` и переключает `mobileForecastAdding=true`: всё прочее (summary, pie, list, табы) скрывается, видна только карточка формы с back-стрелкой в `#header`. Переключатель wishlist/regular в форме скрыт на мобильном (kind уже выбран табой). После submit состояние сбрасывается.
+- **Income / Expenses — add-record nav на мобильном**: левая панель SplitPane (форма «Добавить» + Initial balance в Income) по умолчанию скрыта, видна история. Кнопка «+ Добавить доход / расход» поверх истории на мобильном; клик → переключение `mobileAdding=true`, форма появляется с back-стрелкой в `#header` карточки («← Новый доход / расход» внутри одной рамки, мирорит AdminCategoriesView editor). После успешного submit состояние сбрасывается и пользователь возвращается в историю. Десктоп — без изменений, обе панели рядом.
+
+#### Fixed
+- **AdminCategoriesView — таб-полоса разделов**: добавлен `gap: 6px` между лейблом и счётчиком, у `n-tag` счётчика увеличен `border-radius` до `8px` (`:deep(.n-tag)`).
+- **Back-кнопка в add-/edit-вьюшках в тёмной теме** имела видимый фон от `quaternary`-стиля. Заменена на `<n-button text>` (без фона, без hover-подсветки) в AdminCategoriesView, UsersAdminView, IncomeView, ExpensesView, ForecastingView.
+
+#### Added
+- **Управление пользователями** (`/settings/users`, admin) — split-pane `UsersAdminView.vue` поверх `/api/admin/users/*` (api 1.19.0). Слева список пользователей с UserAvatar + бейджами (admin / заблокирован / вы); справа — редактор с полями login, отображаемое имя, чекбоксы «Администратор» / «Заблокирован», загрузка/удаление аватара, кнопка «Изменить пароль». Создание: login + password + display_name + is_admin; аватар доступен после первого сохранения (нужен id). Сортировка списка: свой первым → админы → по имени. Safeguards UI отзеркаливают бэкенд (нельзя снять админку/заблокировать/удалить себя).
+- **Модальная смена пароля**: для своей учётки требует старый пароль (через `POST /api/auth/password`), для чужой — только новый + подтверждение (через `POST /api/admin/users/:id/password`). `canSubmitPassword` следит за длиной (≥4) и совпадением «новый/подтверждение».
+- **Шапка «Настройки» на мобильном** — `SettingsTabs.vue` (горизонтальные таб-кнопки «Категории» / «Пользователи»), монтируется в App.vue над router-view'ом только при `isMobile && route.path.startsWith('/settings/')`. На десктопе подразделы по-прежнему живут в sidebar-дереве.
+- Маршрут `/settings/users` (`adminOnly`) + редирект `/settings` → `/settings/categories`. Mobile bottom-nav «Настройки» по-прежнему открывает `settings/categories`; подсветка вкладки активна на любом `/settings/*` пути (через `mobileActiveKey`).
+
+#### Changed
+- Sidebar-дерево: «Категории» → «Управление категориями», добавлен пункт «Управление пользователями».
+- **`AdminCategoriesView` — мобильная адаптация**:
+  - Раздел (Расходы / Доходы / Желания) на ≤767px рендерится горизонтальной таб-полосой (flex-row, скрытый sections-title, центрированный текст со счётчиком); на десктопе — прежняя вертикальная колонка.
+  - List + Editor стали взаимоисключающими: при `editing != null` список и таб-полоса скрываются, на левом краю редактора появляется кнопка «Назад» (`ArrowBackOutline`).
+  - Иконка-сетка теперь адаптивная: на десктопе — фиксированные 16 × 2 (как было), на мобильном — `repeat(auto-fill, minmax(44px, 1fr))` чтобы тайлы были tap-friendly.
+  - Удалён обманчивый плейсхолдер «Выберите категорию слева» на мобильном — на узких экранах списка нет «слева», показывался путаюший empty-state. Теперь editor-empty виден только на десктопе.
+  - Breakpoint media-query'ев унифицирован: 720px → 767px чтобы совпадать с `isMobile = window.innerWidth < 768` (App.vue / SettingsTabs).
 
 ### [1.23.0] — 2026-05-13
 
@@ -427,6 +709,135 @@
 ---
 
 ## Android
+
+### [1.38.0] — 2026-05-19
+
+#### Added
+- **Привязка существующего расхода к wishlist/regular-итему.** Новый overlay-экран `LinkExpenseScreen.kt` (slide+fade поверх MainScreen, аналогично `DetailRequestsScreen`) показывает список не связанных расходов (`getTransactions(unlinked=true)`, лимит 100) с поиском по назначению/категории/сумме. Каждая строка — двухтаповый конфирм (первый tap красит amber «Подтвердить?», второй — `POST wishlist/:id/link/:tx_id`). На обоих swipe-картах (`SwipeableRegularItemCard` + `SwipeableWishlistCard`) добавлен синий action «Привязать» (цвет `0xFF2080F0`) рядом с «Удалить»; для wishlist скрывается когда `purchased=true`. После успешного линка хост-экран дёргает `CategoryRepository.loadAll()` (на случай если сервер клонировал категорию в expense) и `SyncWorker.enqueue()` (чтобы только что привязанная транзакция корректно ушла в Room через следующий pull).
+- `ApiService.linkWishlistToExpense(id, txId)` + параметр `unlinked: Boolean? = null` у `getTransactions(...)`.
+
+### [1.37.4] — 2026-05-16
+
+#### Fixed
+- **Прогресс-бар лимита в pie-легенде больше не «съезжает» при скрытии сумм.** Заменил `AnimatedVisibility(shrinkHorizontally)` на `Modifier.alpha(animatedFloat)` — текст остаётся в layout (его слот резервирован), просто становится прозрачным. Bar's `weight(1f)` теперь стабилен, правый край каждой строки на своём месте независимо от `valuesHidden`.
+- **Счётчик активных фильтров учитывает «Показать закрытые запросы»** на Расходах. Раньше включал только `filterCats.size + (dateRange ? 1 : 0)`. Теперь для expenses-таргета: `+ (includeDetailed ? 1 : 0)` — `expensesVm.includeDetailed` пробрасывается тем же `collectAsStateWithLifecycle`-паттерном, что остальные filter-флоу. У income аналогичного тогла нет.
+- **Скрыт hairline-просвет рельса под скруглением свайпабельной карточки во время свайпа.** Корень: при переходе corner-radius из 12dp → 0dp карточка проходит промежуточные значения (8dp, 5dp, …), и закруглённый угол вырезает часть карточки, через которую просвечивает уже частично-открытый rail. Решение: ×6 множитель на `swipeProgress` — `((offsetX / revealPx) * 6f).coerceIn(0,1)`. Угол достигает 0dp в первых ~17% свайпа, до того как rail успевает показаться существенной полосой. Дальше до конца свайпа угол остаётся плоским — артефакт стартового окна минимизирован ниже перцептивного порога. Применено ко всем трём (`SwipeableTransactionCard`, `SwipeableRegularItemCard`, `SwipeableWishlistCard`).
+
+### [1.37.3] — 2026-05-16
+
+#### Fixed
+- **Bell-badge на тёмной теме** — мелкий "2" на красном фоне читался как серый из-за того, что MD3 `colorScheme.error` в dark-теме разрешается в более тёмно-розовый, а 10sp белого текста с SemiBold-весом по нему антиалиасился до неразличимого. Захардкожен яркий `Color(0xFFEF4444)` для фона + `FontWeight.Bold` (как у соседнего DR-badge с оранжевым `0xFFF0A020`).
+- **LimitsSummaryCard hidden state** больше не выбивается из общего стиля — раньше показывал `•••• / •••• ₽` placeholder-текстом; теперь, как и в `SummaryCard`, — `Crossfade` на тинтированный Box-плашку (`Modifier.height(22.dp).width(140.dp).background(tint.copy(alpha=0.22f))`). Анимация 220ms.
+- **Суммы лимитов в pie-легенде** скрываются при `valuesHidden`. Текст `"%.0f ₽"` обёрнут в `AnimatedVisibility(enter=fadeIn+expandHorizontally, exit=fadeOut+shrinkHorizontally)`; прогресс-бар внутри Row через `weight(1f)` плавно расширяется вправо когда текст уходит — мимика что текст "уезжает". Идея подсказана юзером.
+
+#### Added
+- **Счётчик активных фильтров на иконке в TopAppBar** — Box-badge в стиле bell/DR-бэйджей (Box + `align(TopEnd).offset((-4).dp, 6.dp)` чтобы не клиппиться TopAppBar'ом). Источник: `expensesVm.filterCats.size + (filterFrom!=null && filterTo!=null ? 1 : 0)` (аналогично для income). Цвет — `primaryColor` (отличается от error-bell, чтобы не сливался). Состояние пробрасывается из расшаренных VM (MainScreen уже использует тот же `viewModel(key=)`-инстанс, что Income/Expenses-экраны).
+
+#### Changed
+- **Свайпабельные карточки выпрямляют угол на стороне открытого action-rail'а.** Все 3 (`SwipeableTransactionCard`, `SwipeableRegularItemCard`, `SwipeableWishlistCard`) теперь считают `cardShape` из `offsetX.value`: при right-swipe (`offsetX > 0`) `topStart/bottomStart` → 0dp пропорционально прогрессу, `topEnd/bottomEnd` остаются 12dp. При left-swipe — наоборот. Карточка визуально "стыкуется" с rail-панелью вместо круглого зазора. Зеркалит фронт.
+
+### [1.37.2] — 2026-05-15
+
+#### Changed
+- **Упрощён лимит-бар в `ChartLegend`** — справа от бара теперь только сам лимит (например, «50 000 ₽») вместо «spent/limit (percent%)». Потраченная сумма уже стоит на строке выше (это `slice.value`), а процент визуализирован самим прогресс-баром — обе цифры дублировались. Высота бара возвращена к 5dp (с 7dp), top-padding limit-row убран — компактнее по вертикали, теперь карточка с большим количеством категорий лучше помещается на экран.
+- **Удалены `formatLegendMoney` и `LEGEND_NUMBER_FORMAT`** — стали dead code после упрощения форматирования (новый текст идёт через `"%.0f ₽".format(limit)`).
+
+#### Added
+- **`@Preview StatisticsDonutsPreview()` в `Charts.kt`** — две карточки Расходов/Доходов как на экране Статистики, рендерятся в Light + Dark в Android Studio. `DonutChart` детектит `LocalInspectionMode.current` и скипает sweep-анимацию (анимационный clock в превью не тикает; без этого слайсы остались бы свёрнутыми на 0).
+- **Compose preview tooling**: `androidx.compose.ui:ui-tooling-preview` (release) + `androidx.compose.ui:ui-tooling` (debug-only) через compose-BOM. `@Preview CategoryLabelPreview()` в `CategoryLabel.kt` как шаблон для остальных leaf-композаблов.
+
+### [1.37.1] — 2026-05-15
+
+#### Fixed
+- **Custom-SVG категории теперь тинтятся в цвет категории** (а не остаются прозрачными альфа-глифами, которые были невидимы на светлой теме). `CategoryLabel` навешивает `ColorFilter.tint(resolvedColor)` на `AsyncImage` так же, как built-in vector'ы получают `Icon(tint = …)`. Для типичных мono-glyph SVG (Wildberries / OZON / Магнит) это даёт тот же визуальный вес, что у встроенных иконок. Замечание: multi-colour логотип тинт сплющит — админам надо выбирать built-in key для таких случаев.
+- **Custom-SVG больше не выпрыгивают по размеру** относительно built-in иконок в строках/dropdown'ах. Раньше `Modifier.size(computedSize * iconScale)` множил размер на `Category.iconScale` (значение для legend-badge'а 28dp×18dp — обычно 1.0–2.0). Без бейджа этот множитель распирал иконку шире текста. Теперь size зафиксирован на `computedSize` (равен размеру текста), `ContentScale.Fit` сохраняет aspect-ratio non-square SVG.
+
+#### Added
+- **CategoryLabel распространён на ForecastScreen** (последнее место, где он отсутствовал по предыдущему апдейту):
+  - `SwipeableRegularItemCard` — «Регулярные расходы», sub-line «<категория> · <частота>» теперь начинается с иконки.
+  - `SwipeableWishlistCard` — «Список желаний», аналогично.
+  - `WishlistInteractiveSheet` — row «Категория» в view-mode рендерит CategoryLabel через новый параметр `valueContent` у `WishlistDetailRow`; edit-mode dropdown — стандартный CategoryLabel в каждой строке.
+  - `AddWishlistSheet` (модалка «Добавить регулярный расход» / «Желаемая покупка») — dropdown категорий.
+  - «Прогноз по категориям» breakdown rows — иконка слева от названия категории. Резолв сначала через `expenseCategories` (выводимый прогноз — это в основном расходы), фолбэк на `categories` (wishlist superset).
+
+#### Changed
+- `WishlistDetailRow(label, value, valueContent: (@Composable () -> Unit)? = null)` — необязательный slot для значения, чтобы «Категория»-row рендерила CategoryLabel вместо plain Text. Остальные вызовы (Периодичность / Статус / Заметки) продолжают работать на старом сигнатурном варианте.
+- `SwipeableRegularItemCard`, `SwipeableWishlistCard`, `WishlistInteractiveSheet`, `AddWishlistSheet` приняли `categories` (где не было) + `serverUrl: String = ""` с дефолтами для обратной совместимости.
+
+### [1.37.0] — 2026-05-15
+
+#### Added
+- **Иконка категории рядом с названием во всех списочных местах** — без бейджа с фоном, чистый глиф/SVG. Built-in vector'ы тинтятся в цвет категории (`resolveCategoryColor(name, color)`); custom-загрузки рендерятся в своих естественных цветах (логотипы вроде OZON / Wildberries / Магнит — тинт бы их размылил). Размер иконки автоматически подгоняется под размер текста названия (`style.fontSize.toDp()` для sp-юнитов; иначе 14dp дефолт). Покрыты все четыре места из ТЗ:
+  - **AddExpenseSheet / AddIncomeSheet** — dropdown-пункты выбора категории при создании/редактировании записи.
+  - **CategoryFilterField** — чекбокс-список фильтра по категориям (между checkbox'ом и названием).
+  - **SwipeableTransactionCard** — строка списка транзакций (перед названием категории рядом с датой).
+  - **TransactionDetailSheet** — bottom-sheet деталей записи: view-mode (под суммой) + edit-mode dropdown.
+- **Новый общий компонент `ui/components/CategoryLabel.kt`** + публичный хелпер `categoryIconUrl(serverUrl, iconKey)` (выносил из приватной функции StatisticsScreen — теперь переиспользуется). API: `CategoryLabel(name, category, serverUrl, style, fontWeight, textColor, iconSize?, spacing, maxLines, overflow)`. `category=null` → плавный fallback на plain `Text` (для транзакций со снятой/удалённой категорией). Нет иконки в `Category.icon` → коллапсирует icon-слот, текст flush-left (никаких phantom-gap'ов).
+
+#### Changed
+- **Расширены сигнатуры shared-компонентов**:
+  - `SwipeableTransactionCard(..., categories: List<Category> = emptyList(), serverUrl: String = "")` — defaults на пустые для обратной совместимости; вызовы из IncomeScreen/ExpensesScreen прокидывают свои `categories`/`serverUrl`.
+  - `TransactionDetailSheet(..., serverUrl: String = "")` — добавлен между `categories` и `onAddCategory`.
+  - `AddExpenseSheet(..., serverUrl: String = "")` / `AddIncomeSheet(..., serverUrl: String = "")` — добавлен после `categories`. Все 5 вызовов (Income/Expenses/Forecast×2/DetailRequest) пробрасывают свой `serverUrl`.
+  - `CategoryFilterField(..., serverUrl: String = "")` — для рендера custom-иконок в фильтре.
+
+### [1.36.1] — 2026-05-15
+
+#### Fixed
+- **Clockwise-sweep анимация вернулась на старт приложения и pull-to-refresh.** В 1.36.0 per-slice morph съел "часовое" появление чарта — entries растили radial от 0 даже при свежей загрузке. Теперь `CategoryDonut` пробрасывает в `DonutChart` `freshDataKey = remember(allSlices) { Any() }` — ref меняется только когда родитель прислал новый allSlices (refresh / period switch / cold start), но НЕ при legend-toggle (тогда меняется только `hidden`, не `allSlices`). На смену `freshDataKey` `DonutChart` snap'ает entries к таргет-значениям и анимирует отдельный `sweepProgress: Animatable 0→1`, который в Canvas-draw обрезает каждый слайс до `maxAngleFromStart = 360 × progress` — получается тот самый clockwise reveal. На toggle/`Прочее`-раскрытие путь остаётся per-slice morph. Иконки на слайсах ждут, пока sweep пересечёт их midline; клики игнорируются пока `sweepProgress < 1f`.
+- **Скрытая через легенду категория при повторном показе возвращается на свою позицию** (а не в конец чарта). Алгоритм sync entries в morph-режиме переписан с двух фаз "update existing + append new" на единый merge: `targetEntries` строится в порядке `slices` с переиспользованием существующих `AnimSlice` по label; затем walk через `oldOrder` interleave'ит target-entries (в target-порядке) с exiting-entries (которые остаются на своих исходных позициях). Re-shown-категория попадает на свой target-индекс независимо от того, успело ли её предыдущее `animateTo(0)` доехать до конца (если не успело — reuse того же `Animatable`, его текущая coroutine отменяется при re-key LaunchedEffect, новый `animateTo(targetValue)` плавно реверсит из промежуточного значения).
+
+### [1.36.0] — 2026-05-15
+
+#### Added
+- **Тап по доли pie-чарта → переход в "Расходы"/"Доходы" с фильтром по категории.** `CategoryDonut` принимает `onCategoryDrilldown`; `DonutChart` хит-тестит тап через `pointerInput { detectTapGestures }`, нормализует угол относительно -90° (12 часов) и находит слайс по cumulative-sum текущих анимированных значений. Из `StatisticsScreen` пробрасываются `onDrilldownExpense`/`onDrilldownIncome` с парой (fromIso, toIso) — период транслируется в календарные границы (MONTH → 1-е / последний день, YEAR → 01-01 / 12-31, RANGE → как есть). `MainScreen` дёргает `setFilterCategories` + `setDateRange` на расшаренном ExpensesViewModel/IncomeViewModel (тот же `viewModel(key=)`, что используют сами экраны), скроллит pager на нужную страницу и взводит `statsDrilldownTarget`. Системная кнопка "Назад" в этом режиме (`BackHandler(enabled = statsDrilldownTarget != null && currentPage == target)`) очищает фильтр + дату и возвращает на Статистику. Если пользователь сам ушёл свайпом/тапом на другую вкладку, флаг сбрасывается (`LaunchedEffect(pagerState.settledPage)`) — "came-from-stats"-семантика больше не действует. Outer-BackHandler регистрируется первым, чтобы внутренние per-page-хендлеры (selection-mode на Расходах) получали приоритет.
+- **Тап по "Прочее" → раскрытие сгруппированных категорий.** `PieSlice` получил поле `groupedLabels: List<String>` (заполняется только в `groupSmallSlices` для synthetic-wedge). При клике по "Прочее" `CategoryDonut` программно добавляет все *не-сгруппированные* (крупные) метки в `hidden` → маленькие категории перестают сворачиваться, "Прочее" исчезает, и каждая открывается как полноразмерный wedge с собственной иконкой; дальнейший тап ведёт в Расходы по той же логике.
+
+#### Changed
+- **Анимация pie-чарта переписана с clockwise-sweep на per-slice morph.** Раньше при любом изменении `slices` (тоггл в легенде, обновление данных, смена периода) использовался единый `Animatable` 0..1, умножавшийся на sweep — получался одинаковый "часовой" реверс. Теперь `DonutChart` ведёт `mutableStateListOf<AnimSlice>` (label + Animatable<Float> + exiting-flag): при обновлении входа существующие entries `animateTo(newValue)` плавно интерполируют свои углы (соседи "раздвигаются", скрываемая доля схлопывается), новые entries растут от 0, исчезающие — анимируются до 0 и удаляются из списка. Иконки на слайсах позиционируются по текущим анимированным углам (двигаются вместе со слайсом) и фейдятся через порог `MIN_ICON_PCT` (не "поп"-в/из-видимости при росте/схлопывании). Зеркалит поведение ECharts pie-update в web `CategoryDonutChart.vue`.
+- **Выравнивание прогресс-бара лимита в `ChartLegend`.** Высота бара 5dp → 7dp, `top = 2.dp` → `top = 4.dp` в limit-row; так колонка с текстом+баром визуально весит достаточно, чтобы 28dp-бейдж читался по-настоящему центрированным относительно всего item'а (тонкий бар смещал восприятие центра вверх к строке с названием+суммой).
+
+### [1.35.4] — 2026-05-15
+
+#### Fixed
+- **Pie-легенда `ChartLegend`**: иконка категории центрируется по вертикали всего item'а (badge — sibling новой content-колонки, не вложен в main-row), прогресс-бар теперь сидит вплотную к основной строке (`top = 2.dp` вместо `4.dp` + убран `start = 36.dp` отступ — бар живёт внутри content-колонки и сам сдвинут на ширину badge). Зеркалит фикс CategoryLimitsScreen / web-CategoryDonutChart.
+
+### [1.35.3] — 2026-05-15
+
+#### Added
+- **Прогресс-бар лимита в легенде pie-чарта** (StatisticsScreen, expense-донат). Только для категорий, где у админа задан `monthly_limit`. Под основной строкой легенды (badge + название + сумма) появляется компактный ряд: бар `weight(1f)` начинается под названием категории (offset 36.dp = badge 28.dp + row gap 8.dp), справа от бара — текст `<spent>/<limit> (<percent>%)`. Цвет бара green→amber→red на 80/100% — одинаковые пороги во всех точках: ExpensesScreen «Лимит расходов», CategoryLimitsScreen, теперь и в pie-легенде. `PieSlice` получил поля `limitTotal: Double?` + `limitSpent: Double` + `limitPercent: Double`; `StatisticsScreen` подтягивает `LimitsProgressRepository.state` и матчит по `category.name`. Income-донат лимиты не получает (бэкенд их там не считает).
+
+### [1.35.2] — 2026-05-15
+
+#### Fixed
+- **Тоглы лимит-алёртов в `NotificationsScreen`** выглядят как соседние reminder-тоглы — `checkedThumbColor = primaryColor` + `checkedTrackColor = primaryColor.copy(alpha = 0.4f)`. Раньше у новых тогглов был solid-track (без alpha), и они читались как другой контрол на той же странице.
+
+### [1.35.1] — 2026-05-15
+
+#### Fixed
+- **«Без лимита» в `CategoryLimitsScreen`** теперь читается на обоих темах — переключён с `colorScheme.outline` (placeholder-уровень контраста) на `colorScheme.onSurfaceVariant`.
+- **Кастомные SVG-иконки рендерятся** в карточках `CategoryLimitsScreen` — раньше `CategoryBadge` смотрел только в `categoryIcon(key)` и отдавал пустой бейдж для `custom:<id>`. Теперь использует тот же путь, что и легенда pie-чарта: `parseCustomIconKey` → `AsyncImage` (Coil, через общий `BudgetApplication` ImageLoader с auth-интерсептором), масштаб через `iconScale`.
+- **Дата в `NotificationsHistoryScreen`** — `outline` → `onSurfaceVariant` (та же логика, что и «Без лимита»).
+- **Прогресс-бар стал цельным**, без визуального шва между filled/track половинами. Новый `OverlayProgress` (`ui/components/OverlayProgress.kt`) — простой `Box` с округлённым треком + наложенный сверху `Box` для filled-части; `LinearProgressIndicator` (M3) рисовал обе половины со своими округлёнными торцами и оставлял заметную «прорезь» в центре даже с `gapSize = 0.dp`. Применён в карточке «Лимит расходов» (ExpensesScreen) и в карточках `CategoryLimitsScreen`.
+
+### [1.35.0] — 2026-05-15
+
+#### Added
+- **Phase 5 — Лимиты на категории + история уведомлений** (api 1.20.0). Полный читай/пиши UI и системные push'и поверх свежего backend'а.
+- **Data layer**:
+  - `Category.monthlyLimit: Double?` в DTO + `CategoryEntity.monthly_limit REAL` (nullable: `null` = лимит не задан; различает от 0₽-лимита). Room migration v5→v6 (`ALTER TABLE categories ADD COLUMN monthly_limit REAL`) + новая таблица `notification_history` (id, server_id, type, period, category_id/name, limit, spent, title, body, created_at, read_local, pushed_at). Маппинг round-trip покрыт `MappersTest`.
+  - `LoginResponse.isAdmin` парсится + сохраняется в DataStore (`IS_ADMIN` ключ); экспонируется как `prefs.isAdmin: Flow<Boolean>`. Backfill через `/auth/me` тоже забирает флаг.
+  - `LimitsProgressRepository` (in-memory `StateFlow`) — обёртка над `GET /api/categories/limits-progress`. Не персистится в Room: значения — серверная агрегация за текущий месяц, повторять её офлайн избыточно. Cached snapshot остаётся при оффлайне, read-only.
+  - `NotificationHistoryRepository` — единый feed для bell-popover'а из двух источников: server-pulled limit-уведомления (через `/api/notifications`) + локальные reminder-фейринги (`NotificationReceiver` пишет ряд после каждого AlarmManager-фейринга). Dedup по `server_id`; per-user read-state через `read_local` + POST `/notifications/read-all`.
+  - `CategoryRepository.patchMonthlyLimit` — admin-only PATCH с ручной сборкой JSON (literal `null` для очистки лимита, обходит default-Gson, который дропает null в map'ах). Online-only; offline-edits недоступны.
+- **Sync hook**: `SyncEngine.postPullRefresh()` после каждого pull дёргает `LimitsProgressRepository.refresh` + `NotificationHistoryRepository.refreshFromServer`; новые история-row'ы передаются в `LocalAlertPusher.pushNewIfAllowed` (системный push через `NotificationManager`, с учётом per-toggle prefs + дедуп по `pushed_at`).
+- **UI**:
+  - **`ExpensesScreen`** — карточка «Лимит расходов» над списком записей (mirror «Начальный баланс» в `IncomeScreen`). Read-only progress bar + сумма / лимит + %; зелёный→amber→red на 80/100%. Плашка «тек. месяц» появляется когда фильтр истории выходит за рамки текущего календарного месяца (лимит-окно всегда фиксировано). Тап карточки для админа → `CategoryLimitsScreen`; для не-админа карточка не кликабельная.
+  - **`CategoryLimitsScreen`** (новый, admin-only overlay) — карточный список expense-категорий с иконкой/цветом + текущим лимитом справа. Тап по карточке → `ModalBottomSheet` с `OutlinedTextField` (Decimal keyboard) + кнопками «Снять лимит» (если задан) и «Сохранить». Прогресс-бар под карточкой дублирует тинт суммарной карточки.
+  - **`NotificationBell` в `MainScreen` TopAppBar** — глобальная иконка-колокольчик с red-bage счётчиком непрочитанных (9+ для >9). Тап → `NotificationsHistoryScreen` overlay со списком notification_history (newest-first), цветные иконки по типу (PriorityHigh для global, WarningAmber для category, NotificationsActive для reminder'ов). Кнопка «Прочитать все» в TopAppBar диалога. Unread-фон 18% errorContainer на каждой непрочитанной строке.
+  - **`NotificationsScreen`** — две новые toggle-row над reminder-секцией: «Превышение лимита по категории» и «Превышение общего лимита». Дефолт обе включены. При активации запрашивается permission notify (как для reminders).
+- **`NotificationReceiver`** теперь пишет ряд в `notification_history` (type=`expenses_reminder`/`income_reminder`, `pushed_at = createdAt` сразу, т.к. система получила push в тот же момент). Bell-история смешивает их с server-side limit-алёртами в одном feed'е.
+- **Tests**: `MappersTest.\`category roundtrip preserves monthly_limit incl null\`` гарантирует, что миграция и маппинг не теряют новое поле.
 
 ### [1.34.0] — 2026-05-13
 

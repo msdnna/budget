@@ -86,8 +86,38 @@ export const useCategoriesStore = defineStore('categories', () => {
       value: c.name,
       id: c.id,
       is_default: c.is_default,
+      color: c.color,
+      icon: c.icon,
+      icon_scale: c.icon_scale,
     }))
   }
 
-  return { bySection, load, add, remove, options, recordUse, sortByRecentUse }
+  // Lookup helpers used by inline icon rendering — keyed by category name
+  // because that's what transaction rows store. `null` when no match found,
+  // so callers can fall back to the hash-based palette colour.
+  function findByName(section, name) {
+    if (!name) return null
+    return bySection.value[section].find((c) => c.name === name) || null
+  }
+
+  function findAcrossSections(name) {
+    if (!name) return null
+    for (const sec of ['expense', 'income', 'wishlist']) {
+      const found = findByName(sec, name)
+      if (found) return found
+    }
+    return null
+  }
+
+  return {
+    bySection,
+    load,
+    add,
+    remove,
+    options,
+    recordUse,
+    sortByRecentUse,
+    findByName,
+    findAcrossSections,
+  }
 })

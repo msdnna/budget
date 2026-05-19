@@ -2,6 +2,10 @@ export const DARK = {
   bg: '#121212',
   surface: '#1e1e1e',
   surfaceAlt: '#252525',
+  // cardSurface = Naive UI default Card.color в dark-теме — чтобы кастомные
+  // «cards» (Settings-панели) совпадали по фону с NCard в Income/Expense/
+  // Forecast. surface (#1e1e1e) светлее и «выпирает» из общего фона.
+  cardSurface: '#18181c',
   hover: '#2d2d2d',
   border: '#333333',
   text1: '#f0f0f0',
@@ -23,6 +27,8 @@ export const LIGHT = {
   bg: '#f5f5f5',
   surface: '#ffffff',
   surfaceAlt: '#f8f8f8',
+  // Naive UI default Card.color в light = #ffffff.
+  cardSurface: '#ffffff',
   hover: '#f0f0f0',
   border: '#e8e8e8',
   text1: '#333333',

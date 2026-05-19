@@ -94,6 +94,8 @@ data class CategoryEntity(
     @ColumnInfo(name = "color", defaultValue = "''") val color: String? = null,
     @ColumnInfo(name = "icon", defaultValue = "''") val icon: String? = null,
     @ColumnInfo(name = "icon_scale", defaultValue = "0") val iconScale: Double = 0.0,
+    // null = no monthly limit tracked; only meaningful when section="expense".
+    @ColumnInfo(name = "monthly_limit") val monthlyLimit: Double? = null,
 
     @ColumnInfo(name = "created_at") val createdAt: String,
     val version: Int,
@@ -104,4 +106,37 @@ data class CategoryEntity(
     val syncStatus: String = SyncStatus.SYNCED,
 
     @ColumnInfo(name = "server_payload") val serverPayload: String? = null,
+)
+
+/**
+ * Unified history feed for the in-app bell popover. Two sources land here:
+ *   1. Server-side notifications pulled from `/api/notifications`
+ *      (category/global limit overflows). `serverId` holds the server UUID;
+ *      `readLocal` mirrors per-device read state — we still call
+ *      `/notifications/read-all` so the server marks them read for the
+ *      current user, but the local flag drives the badge instantly.
+ *   2. Local AlarmManager reminders (income/expense transaction nudges).
+ *      `serverId` is null; `readLocal` is the source of truth.
+ *
+ * `pushedAt` is non-null only after we've raised a system-tray notification
+ * for this entry — prevents duplicate pushes when the same row arrives via
+ * subsequent sync pulls.
+ */
+@Entity(tableName = "notification_history")
+data class NotificationHistoryEntity(
+    @PrimaryKey val id: String,
+    @ColumnInfo(name = "server_id") val serverId: String? = null,
+    /** "category_limit_exceeded" | "global_limit_exceeded" | "expenses_reminder" | "income_reminder" */
+    val type: String,
+    /** YYYY-MM for limit alerts; "" for reminders. */
+    val period: String = "",
+    @ColumnInfo(name = "category_id") val categoryId: String? = null,
+    @ColumnInfo(name = "category_name") val categoryName: String? = null,
+    val limit: Double = 0.0,
+    val spent: Double = 0.0,
+    val title: String = "",
+    val body: String = "",
+    @ColumnInfo(name = "created_at") val createdAt: Long,
+    @ColumnInfo(name = "read_local") val readLocal: Boolean = false,
+    @ColumnInfo(name = "pushed_at") val pushedAt: Long? = null,
 )

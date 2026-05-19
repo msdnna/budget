@@ -72,6 +72,50 @@ prod-down: ## Stop production environment
 prod-logs: ## Tail production logs
 	docker compose -f docker-compose.prod.yml logs -f
 
+# ─── Raspberry Pi (home server) ──────────────────────────────────────────────
+# Pulls multi-arch images from GHCR; see docs/RPI_DEPLOY.md.
+
+# API_VERSION / WEB_VERSION default to the VERSION files in the repo. Override
+# explicitly on the Pi if you want to pin to a different release tag than the
+# one currently checked out (e.g. API_VERSION=1.19.2 make rpi-up).
+RPI_API_VERSION ?= $(shell cat $(BACKEND_DIR)/VERSION)
+RPI_WEB_VERSION ?= $(shell cat $(FRONTEND_DIR)/VERSION)
+RPI_COMPOSE     := API_VERSION=$(RPI_API_VERSION) WEB_VERSION=$(RPI_WEB_VERSION) docker compose -f docker-compose.rpi.yml
+
+.PHONY: rpi-pull
+rpi-pull: ## Pull GHCR images for the pinned API/WEB_VERSION
+	$(RPI_COMPOSE) pull
+
+.PHONY: rpi-up
+rpi-up: ## Start Pi stack (detached); pulls images if missing
+	$(RPI_COMPOSE) up -d
+
+.PHONY: rpi-down
+rpi-down: ## Stop Pi stack (keeps volumes)
+	$(RPI_COMPOSE) down
+
+.PHONY: rpi-logs
+rpi-logs: ## Tail Pi logs
+	$(RPI_COMPOSE) logs -f
+
+.PHONY: rpi-update
+rpi-update: ## git pull → rpi-pull → rpi-up (the only command you need after a release)
+	git pull --ff-only
+	$(MAKE) rpi-pull
+	$(MAKE) rpi-up
+
+.PHONY: rpi-backup-now
+rpi-backup-now: ## Run a one-off MongoDB backup right now
+	sudo tools/rpi-backup.sh
+
+.PHONY: rpi-backup-install
+rpi-backup-install: ## Install the systemd timer for daily 03:30 backups
+	sudo install -m 0644 deploy/systemd/budget-backup.service /etc/systemd/system/budget-backup.service
+	sudo install -m 0644 deploy/systemd/budget-backup.timer   /etc/systemd/system/budget-backup.timer
+	sudo systemctl daemon-reload
+	sudo systemctl enable --now budget-backup.timer
+	@echo "Installed. Next run: $$(systemctl list-timers budget-backup.timer --no-pager | awk 'NR==2 {print $$1,$$2}')"
+
 # ─── Local development ───────────────────────────────────────────────────────
 
 .PHONY: dev

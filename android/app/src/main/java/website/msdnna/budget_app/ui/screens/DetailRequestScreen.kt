@@ -203,6 +203,7 @@ fun DetailRequestScreen(
             primaryColor = primaryColor,
             template = null,
             categories = categories,
+            serverUrl = serverUrl,
             onAddCategory = { name ->
                 CategoryRepository.addCategory(serverUrl = serverUrl, section = "expense", name = name)
             },

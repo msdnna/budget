@@ -1,9 +1,14 @@
 <template>
   <div>
-    <SplitPane storage-key="income-split" :default-left="45" :min-left="20" :max-left="75">
+    <SplitPane storage-key="income-split" :default-left="45" :min-left="25" :max-left="60">
       <template #left>
-        <!-- Initial balance card -->
-        <n-card style="margin-bottom: 12px">
+        <!-- Initial balance card. Sits outside the add-form wrapper below
+             so the mobile layout shows it above the history list (matches
+             ExpensesView's "Лимит расходов" placement). Visibility: always
+             on desktop; on mobile only in history mode (hidden during add
+             and edit — the IB is foreign context when the user is filling
+             a single record). -->
+        <n-card v-show="!isMobile || (!mobileAdding && !mobileEditing)" style="margin-bottom: 12px">
           <template #header>
             <n-space align="center" justify="space-between" style="width: 100%">
               <n-text strong>Баланс на начало месяца</n-text>
@@ -35,123 +40,395 @@
           </n-space>
         </n-card>
 
-        <n-card title="Добавить доход">
-          <n-form ref="formRef" :model="form" :rules="rules" label-placement="top">
-            <n-grid :cols="2" :x-gap="12" :item-responsive="true">
-              <n-grid-item span="2 s:1">
-                <n-form-item label="Сумма (₽)" path="amount">
-                  <n-input-number
-                    v-model:value="form.amount"
-                    :min="0.01"
-                    :precision="2"
-                    style="width: 100%"
-                    placeholder="0.00"
-                  />
-                </n-form-item>
-              </n-grid-item>
-              <n-grid-item span="2 s:1">
-                <n-form-item label="Дата" path="date">
-                  <n-date-picker v-model:value="form.date" type="date" style="width: 100%" />
-                </n-form-item>
-              </n-grid-item>
-              <n-grid-item span="2 s:1">
-                <n-form-item label="Категория" path="category">
-                  <n-select
-                    v-model:value="form.category"
-                    :options="categoryOptions"
-                    filterable
-                    tag
-                    :on-create="handleCategoryCreate"
-                    :render-option="renderCategoryOption"
-                    to="body"
-                    placeholder="Выберите или введите категорию"
-                  />
-                </n-form-item>
-              </n-grid-item>
-              <n-grid-item span="2 s:1">
-                <n-form-item label="Источник">
-                  <n-input v-model:value="form.source" placeholder="Откуда получен доход" />
-                </n-form-item>
-              </n-grid-item>
-              <n-grid-item span="2">
-                <n-form-item label="Описание">
-                  <n-input
-                    v-model:value="form.description"
-                    placeholder="Дополнительно (необязательно)"
-                  />
-                </n-form-item>
-              </n-grid-item>
-            </n-grid>
-            <n-button type="primary" :loading="saving" block @click="submit">
-              Добавить доход
-            </n-button>
-          </n-form>
-        </n-card>
+        <!-- На мобильном левый pane по умолчанию скрыт. Кнопка `+ Добавить
+             доход` (см. #right) переключает в add-view; стрелка ← в header
+             n-card возвращает в историю. На десктопе обе панели видны рядом.
+             `<Transition>` даёт mobile-only slide+fade при swap'е (см.
+             theme.css `.mobile-slide-*`). На desktop'е CSS-классы no-op
+             через `@media (max-width:767px)`-гейт. -->
+        <Transition name="mobile-slide">
+          <div v-show="!isMobile || mobileAdding || mobileEditing">
+            <n-card>
+              <template #header>
+                <div v-if="isMobile && (mobileAdding || mobileEditing)" class="card-back-header">
+                  <n-button text size="small" @click="exitMobileAddEdit">
+                    <template #icon><n-icon :component="ArrowBackOutline" /></template>
+                  </n-button>
+                  <n-text strong style="font-size: 16px">
+                    {{ mobileEditing ? 'Изменить доход' : 'Новый доход' }}
+                  </n-text>
+                </div>
+                <span v-else>Добавить доход</span>
+              </template>
+              <n-form ref="formRef" :model="form" :rules="rules" label-placement="top">
+                <n-grid :cols="2" :x-gap="12" :item-responsive="true">
+                  <n-grid-item span="2 s:1">
+                    <n-form-item label="Сумма (₽)" path="amount">
+                      <n-input-number
+                        v-model:value="form.amount"
+                        :min="0.01"
+                        :precision="2"
+                        style="width: 100%"
+                        placeholder="0.00"
+                      />
+                    </n-form-item>
+                  </n-grid-item>
+                  <n-grid-item span="2 s:1">
+                    <n-form-item label="Дата" path="date">
+                      <n-date-picker v-model:value="form.date" type="date" style="width: 100%" />
+                    </n-form-item>
+                  </n-grid-item>
+                  <n-grid-item span="2 s:1">
+                    <n-form-item label="Категория" path="category">
+                      <n-select
+                        v-model:value="form.category"
+                        :options="categoryOptions"
+                        filterable
+                        tag
+                        :on-create="handleCategoryCreate"
+                        :render-option="renderCategoryOption"
+                        :render-label="renderCategoryLabel"
+                        to="body"
+                        placeholder="Выберите или введите категорию"
+                      />
+                    </n-form-item>
+                  </n-grid-item>
+                  <n-grid-item span="2 s:1">
+                    <n-form-item label="Источник">
+                      <!-- NAutoComplete тянет options из localStorage-кэша
+                           (см. utils/inputHistory.js). `get-show: () => true`
+                           показывает dropdown даже при пустом input'е — на
+                           focus юзер сразу видит свои частые «Магнит /
+                           Зарплата / ...» без необходимости начать печатать. -->
+                      <n-auto-complete
+                        v-model:value="form.source"
+                        :options="sourceHistoryOptions"
+                        :get-show="() => true"
+                        placeholder="Откуда получен доход"
+                      />
+                    </n-form-item>
+                  </n-grid-item>
+                  <n-grid-item span="2">
+                    <n-form-item label="Описание">
+                      <n-input
+                        v-model:value="form.description"
+                        placeholder="Дополнительно (необязательно)"
+                      />
+                    </n-form-item>
+                  </n-grid-item>
+                </n-grid>
+                <!-- Edit-режим на мобильном: Удалить + Сохранить в одну строку
+                   (red ghost слева, primary справа). Иначе — один full-width
+                   submit-button. -->
+                <div v-if="isMobile && mobileEditing" class="form-actions-row">
+                  <n-popconfirm @positive-click="deleteEditingRow">
+                    <template #trigger>
+                      <n-button type="error" ghost :disabled="saving" style="flex: 1">
+                        <template #icon><n-icon :component="TrashOutline" /></template>
+                        Удалить
+                      </n-button>
+                    </template>
+                    Удалить запись?
+                  </n-popconfirm>
+                  <n-button type="primary" :loading="saving" style="flex: 1" @click="submit">
+                    Сохранить
+                  </n-button>
+                </div>
+                <n-button v-else type="primary" :loading="saving" block @click="submit">
+                  Добавить доход
+                </n-button>
+              </n-form>
+            </n-card>
+          </div>
+        </Transition>
+        <!-- /mobile-add wrap -->
       </template>
 
       <template #right>
-        <n-card title="История доходов">
-          <n-space style="margin-bottom: 12px" wrap align="center" justify="space-between">
-            <n-space wrap>
-              <n-date-picker
-                v-model:value="filterRange"
-                type="daterange"
-                clearable
-                size="small"
-                @update:value="applyFilters"
-              />
-              <n-select
-                v-model:value="filterCategories"
-                :options="categoryOptions"
-                multiple
-                clearable
-                size="small"
-                style="width: 230px"
-                placeholder="Все категории"
-                :max-tag-count="1"
-                to="body"
-                @update:value="applyFilters"
-              />
-            </n-space>
-            <n-space align="center" :size="8">
-              <template v-if="!bulkMode">
-                <n-button size="small" @click="enterBulkMode">Пакетное редактирование</n-button>
-              </template>
-              <template v-else>
-                <n-text v-if="selectedIds.size" depth="2" style="font-size: 12px">
-                  Выбрано: {{ selectedIds.size }}
-                </n-text>
-                <template v-if="selectedIds.size">
-                  <ConfirmActionButton
-                    :label="allSelectedHidden ? 'Показать' : 'Скрыть'"
-                    :type="allSelectedHidden ? 'default' : 'warning'"
-                    :loading="bulkBusy"
-                    @confirm="bulkToggleHidden"
+        <Transition name="mobile-slide">
+          <div v-show="!isMobile || (!mobileAdding && !mobileEditing)">
+            <n-card title="История доходов">
+              <n-space style="margin-bottom: 12px" wrap align="center" justify="space-between">
+                <!-- Desktop: фильтры inline. -->
+                <n-space v-if="!isMobile" wrap>
+                  <n-date-picker
+                    v-model:value="filterRange"
+                    type="daterange"
+                    clearable
+                    size="small"
+                    @update:value="applyFilters"
                   />
-                  <ConfirmActionButton
-                    label="Удалить"
-                    type="error"
-                    :loading="bulkBusy"
-                    @confirm="bulkDelete"
+                  <n-select
+                    v-model:value="filterCategories"
+                    :options="categoryOptions"
+                    multiple
+                    clearable
+                    size="small"
+                    style="width: 230px"
+                    placeholder="Все категории"
+                    :max-tag-count="1"
+                    :render-label="renderCategoryLabel"
+                    :render-tag="renderCategoryTag"
+                    to="body"
+                    @update:value="applyFilters"
                   />
-                </template>
-                <n-button size="small" quaternary @click="exitBulkMode">Отмена</n-button>
-              </template>
-            </n-space>
-          </n-space>
-          <n-data-table
-            :columns="columns"
-            :data="store.items"
-            :loading="store.loading"
-            :pagination="pagination"
-            :row-props="getRowProps"
-            remote
-            :scroll-x="960"
-            @update:page="store.setPage"
-          />
-        </n-card>
+                </n-space>
+                <!-- Mobile: иконка-кнопка с popover, чтобы фильтры не съедали
+                   две полные строки в шапке списка. -->
+                <n-popover v-else trigger="click" placement="bottom-start" :show-arrow="false">
+                  <template #trigger>
+                    <n-button size="small">
+                      <template #icon><n-icon :component="FunnelOutline" /></template>
+                      Фильтр{{ activeFilterCount ? ` · ${activeFilterCount}` : '' }}
+                    </n-button>
+                  </template>
+                  <div class="filter-popover">
+                    <div class="filter-popover-label">Период</div>
+                    <n-date-picker
+                      v-model:value="filterRange"
+                      type="daterange"
+                      clearable
+                      size="small"
+                      style="width: 100%"
+                      @update:value="applyFilters"
+                    />
+                    <div class="filter-popover-label">Категории</div>
+                    <n-select
+                      v-model:value="filterCategories"
+                      :options="categoryOptions"
+                      multiple
+                      clearable
+                      size="small"
+                      style="width: 100%"
+                      placeholder="Все категории"
+                      :max-tag-count="2"
+                      :render-label="renderCategoryLabel"
+                      :render-tag="renderCategoryTag"
+                      to="body"
+                      @update:value="applyFilters"
+                    />
+                    <n-button
+                      v-if="activeFilterCount > 0"
+                      size="small"
+                      quaternary
+                      block
+                      style="margin-top: 8px"
+                      @click="resetFilters"
+                    >
+                      Сбросить
+                    </n-button>
+                  </div>
+                </n-popover>
+                <n-space align="center" :size="8">
+                  <template v-if="!bulkMode">
+                    <n-button v-if="!isMobile" size="small" @click="enterBulkMode">
+                      Пакетное редактирование
+                    </n-button>
+                  </template>
+                  <template v-else>
+                    <n-text v-if="selectedIds.size" depth="2" style="font-size: 12px">
+                      Выбрано: {{ selectedIds.size }}
+                    </n-text>
+                    <!-- Inline-кнопки только на десктопе. На мобилке те же
+                       действия дублируются в `<BulkFabRow>` снизу-справа
+                       (см. ниже). -->
+                    <template v-if="!isMobile && selectedIds.size">
+                      <ConfirmActionButton
+                        :label="allSelectedHidden ? 'Показать' : 'Скрыть'"
+                        :type="allSelectedHidden ? 'default' : 'warning'"
+                        :loading="bulkBusy"
+                        @confirm="bulkToggleHidden"
+                      />
+                      <ConfirmActionButton
+                        label="Удалить"
+                        type="error"
+                        :loading="bulkBusy"
+                        @confirm="bulkDelete"
+                      />
+                    </template>
+                    <n-button v-if="!isMobile" size="small" quaternary @click="exitBulkMode">
+                      Отмена
+                    </n-button>
+                  </template>
+                </n-space>
+              </n-space>
+              <!-- Desktop: NDataTable с инлайн-редактированием по ячейкам.
+                 Обёрнут в div с ref для ResizeObserver — отслеживает
+                 фактическую ширину pane для compact-переключения. -->
+              <div v-if="!isMobile" ref="tablePaneRef">
+                <n-data-table
+                  size="small"
+                  :columns="columns"
+                  :data="store.items"
+                  :loading="store.loading"
+                  :pagination="pagination"
+                  :row-props="getRowProps"
+                  remote
+                  @update:page="store.setPage"
+                />
+              </div>
+              <!-- Mobile: список карточек. Тап → edit-вид (та же форма
+                 «Добавить», pre-fill'енная). Долгий тап → bulk-режим. -->
+              <div v-else class="tx-cards">
+                <n-spin v-if="store.loading && !store.items.length" style="margin: 24px 0" />
+                <n-empty
+                  v-else-if="!store.items.length"
+                  description="Записей нет"
+                  style="padding: 32px 0"
+                />
+                <!-- `<TransitionGroup>` оборачивает листинг для collapse-leave
+                   анимации (см. theme.css `.tx-list-*`). enter не анимируем —
+                   при первом рендере страницы это создаёт водопад flicker'ов.
+                   Только leave: удалённая карточка схлопывается по высоте +
+                   уезжает влево с opacity 0. -->
+                <TransitionGroup v-else name="tx-list" tag="div" class="tx-cards-list">
+                  <SwipeableCard
+                    v-for="row in store.items"
+                    :key="row.id"
+                    :long-press-ms="bulkMode ? 0 : 1000"
+                    :radius="3"
+                    @tap="onCardTap(row)"
+                    @longpress="onCardLongPress(row.id)"
+                  >
+                    <template #actions>
+                      <button
+                        class="swipe-action swipe-action-info"
+                        :title="row.hidden ? 'Показать' : 'Скрыть'"
+                        @click="store.toggle(row.id, !row.hidden)"
+                      >
+                        <n-icon :component="row.hidden ? EyeOffOutline : EyeOutline" :size="20" />
+                        <span class="swipe-action-label">
+                          {{ row.hidden ? 'Показать' : 'Скрыть' }}
+                        </span>
+                      </button>
+                      <button
+                        class="swipe-action swipe-action-warning"
+                        title="Добавить как шаблон"
+                        @click="fillFromTemplate(row)"
+                      >
+                        <n-icon :component="CopyOutline" :size="20" />
+                        <span class="swipe-action-label">Шаблон</span>
+                      </button>
+                      <button
+                        class="swipe-action swipe-action-danger"
+                        title="Удалить"
+                        @click="confirmDeleteRow(row)"
+                      >
+                        <n-icon :component="TrashOutline" :size="20" />
+                        <span class="swipe-action-label">Удалить</span>
+                      </button>
+                    </template>
+                    <!-- n-card embedded — единый visual style с Forecast'овыми
+                     карточками (тот же surface bg, border, radius от Naive
+                     темы). Flex-разметка живёт во вложенном `.tx-row`. -->
+                    <n-card
+                      size="small"
+                      :bordered="true"
+                      embedded
+                      :style="
+                        bulkMode && selectedIds.has(row.id) ? `background:${primaryColor}1f` : ''
+                      "
+                    >
+                      <div class="tx-row" :class="{ hidden: row.hidden }">
+                        <div class="tx-card-left">
+                          <!-- Avatar ↔ bulk-circle fade-swap; см. theme.css
+                           `.bulk-icon-*`. mode="out-in" даёт sequential
+                           fade-out → fade-in вместо одновременного. -->
+                          <Transition name="bulk-icon" mode="out-in">
+                            <div
+                              v-if="bulkMode"
+                              key="bulk"
+                              class="bulk-circle"
+                              :class="{ checked: selectedIds.has(row.id) }"
+                            >
+                              <svg
+                                v-if="selectedIds.has(row.id)"
+                                width="14"
+                                height="14"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="3"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                              >
+                                <polyline points="20 6 9 17 4 12" />
+                              </svg>
+                            </div>
+                            <UserAvatar
+                              v-else
+                              key="avatar"
+                              :display-name="row.created_by?.display_name || ''"
+                              :avatar-url="row.created_by?.avatar_url || ''"
+                              :size="32"
+                            />
+                          </Transition>
+                        </div>
+                        <div class="tx-card-body">
+                          <div class="tx-card-row1">
+                            <span class="tx-card-date">
+                              {{ new Date(row.date).toLocaleDateString('ru-RU') }}
+                            </span>
+                            <CategoryLabel
+                              class="tx-card-category"
+                              :name="row.category"
+                              :category="catStore.findByName('income', row.category)"
+                              :size="14"
+                            />
+                          </div>
+                          <div v-if="row.source || row.description" class="tx-card-desc">
+                            {{ [row.source, row.description].filter(Boolean).join(' · ') }}
+                          </div>
+                        </div>
+                        <div
+                          class="tx-card-amount"
+                          :style="{
+                            color: incomeColor,
+                            filter: valuesHidden ? 'blur(7px)' : 'none',
+                          }"
+                        >
+                          +{{ row.amount.toLocaleString('ru-RU') }} ₽
+                        </div>
+                      </div>
+                    </n-card>
+                  </SwipeableCard>
+                </TransitionGroup>
+                <n-pagination
+                  v-if="store.total > store.limit"
+                  v-model:page="mobilePage"
+                  :page-count="Math.ceil(store.total / store.limit)"
+                  :page-slot="5"
+                  size="small"
+                  style="justify-content: center; margin-top: 12px"
+                  @update:page="store.setPage"
+                />
+              </div>
+            </n-card>
+          </div>
+        </Transition>
+        <!-- /mobile-history wrap -->
       </template>
     </SplitPane>
+
+    <!-- Mobile FAB — поверх списка истории, открывает add-вид. Скрыт во
+         время add/edit, потому что они уже видны вместо списка. -->
+    <!-- В bulk-mode на mobile FAB-«+» подменяется на ряд action-FAB'ов
+         (mirror Android Scaffold floatingActionButton — IncomeScreen.kt).
+         `<Transition mode="out-in">` делает sequential fade+scale свап
+         (см. theme.css `.fab-swap-*`). -->
+    <Transition name="fab-swap" mode="out-in">
+      <FabButton
+        v-if="isMobile && !mobileAdding && !mobileEditing && !bulkMode"
+        key="add"
+        title="Добавить доход"
+        @click="enterMobileAdd"
+      />
+      <BulkFabRow
+        v-else-if="isMobile && bulkMode && !mobileAdding && !mobileEditing"
+        key="bulk"
+        :actions="mobileBulkActions"
+      />
+    </Transition>
 
     <!-- Initial balance modal -->
     <n-modal
@@ -207,7 +484,8 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, h } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, h } from 'vue'
+import { useRoute } from 'vue-router'
 function toLocalDateString(ts) {
   const d = new Date(ts)
   const offset = d.getTimezoneOffset()
@@ -220,9 +498,11 @@ import {
   NGridItem,
   NForm,
   NFormItem,
+  NAutoComplete,
   NInput,
   NInputNumber,
   NSelect,
+  NTag,
   NDatePicker,
   NButton,
   NDataTable,
@@ -232,16 +512,21 @@ import {
   NTooltip,
   NModal,
   NSpin,
+  NEmpty,
+  NPagination,
+  NPopover,
   NList,
   NListItem,
   NIcon,
 } from 'naive-ui'
 import {
+  ArrowBackOutline,
   CheckmarkOutline,
   CloseOutline,
   CopyOutline,
   EyeOffOutline,
   EyeOutline,
+  FunnelOutline,
   TrashOutline,
 } from '@vicons/ionicons5'
 import { useTransactionsStore } from '@/stores/transactions'
@@ -252,7 +537,18 @@ import SplitPane from '@/components/SplitPane.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
 import TilePeriodPicker from '@/components/TilePeriodPicker.vue'
 import ConfirmActionButton from '@/components/ConfirmActionButton.vue'
+import FabButton from '@/components/FabButton.vue'
+import BulkFabRow from '@/components/BulkFabRow.vue'
+import SwipeableCard from '@/components/SwipeableCard.vue'
+import CategoryLabel from '@/components/CategoryLabel.vue'
+import { historyOptions, pushHistory } from '@/utils/inputHistory'
 import { users as usersApi, transactions as txApi } from '@/api'
+import {
+  useAdaptiveTable,
+  plainTextCell,
+  renderActionsPopover,
+  renderActionButton,
+} from '@/utils/adaptiveTable'
 
 const store = useTransactionsStore('income')
 const { palette, valuesHidden, primaryColor } = storeToRefs(useThemeStore())
@@ -262,8 +558,96 @@ const formRef = ref(null)
 const saving = ref(false)
 const filterRange = ref(null)
 const filterCategories = ref([])
+const route = useRoute()
 
 const form = ref({ amount: null, date: Date.now(), category: '', source: '', description: '' })
+
+// LocalStorage-кэш недавно введённых «Источников» (NAutoComplete options).
+// Re-load после submit'a — чтобы только что добавленное значение всплыло в
+// списке без перезагрузки страницы. Ref, не computed: handler в submit()
+// должен иметь возможность мутировать после pushHistory.
+const sourceHistoryOptions = ref(historyOptions('income-source'))
+function refreshSourceHistory() {
+  sourceHistoryOptions.value = historyOptions('income-source')
+}
+
+// ── Mobile add/edit nav ─────────────────────────────────────────────
+// На мобильном левый pane (форма + initial balance) спрятан, история
+// видна сразу. «+ Добавить» открывает add-вид; тап по карточке записи
+// открывает edit-вид (та же форма, pre-fill). Submit-success возвращает
+// в историю. Долгий тап на карточке включает bulk-режим + select.
+const windowWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1024)
+const isMobile = computed(() => windowWidth.value < 768)
+const mobileAdding = ref(false)
+const mobileEditing = ref(null) // row being edited, null otherwise
+const mobilePage = computed(() => store.page)
+
+// Responsive desktop-таблица: ниже 740px ширины ResizeObserver включает
+// compact-режим — actions сворачиваются в «•••» popover, pencil-карандашики
+// скрываются, текстовые колонки получают ellipsis с tooltip'ом.
+const { paneRef: tablePaneRef, compact: tableCompact } = useAdaptiveTable()
+
+function onWinResize() {
+  windowWidth.value = window.innerWidth
+}
+onMounted(() => window.addEventListener('resize', onWinResize))
+onUnmounted(() => window.removeEventListener('resize', onWinResize))
+
+function enterMobileAdd() {
+  mobileEditing.value = null
+  form.value = { amount: null, date: Date.now(), category: '', source: '', description: '' }
+  mobileAdding.value = true
+}
+
+function enterMobileEdit(row) {
+  mobileAdding.value = false
+  mobileEditing.value = row
+  form.value = {
+    amount: row.amount,
+    date: new Date(row.date).getTime(),
+    category: row.category,
+    source: row.source || '',
+    description: row.description || '',
+  }
+}
+
+function exitMobileAddEdit() {
+  mobileAdding.value = false
+  mobileEditing.value = null
+}
+
+// ── Card events (long-press / tap эмитят SwipeableCard) ─────────────
+function onCardLongPress(id) {
+  if (!bulkMode.value) bulkMode.value = true
+  toggleSelect(id)
+}
+
+function onCardTap(row) {
+  if (bulkMode.value) {
+    toggleSelect(row.id)
+    return
+  }
+  enterMobileEdit(row)
+}
+
+function confirmDeleteRow(row) {
+  if (!window.confirm('Удалить запись?')) return
+  store.remove(row.id)
+}
+
+async function deleteEditingRow() {
+  if (!mobileEditing.value) return
+  saving.value = true
+  try {
+    await store.remove(mobileEditing.value.id)
+    message.success('Запись удалена')
+    exitMobileAddEdit()
+  } catch (e) {
+    message.error(e.message)
+  } finally {
+    saving.value = false
+  }
+}
 
 // ── Initial balance ───────────────────────────────────────────────────────────
 
@@ -388,6 +772,52 @@ function renderCategoryOption({ node, option }) {
   ])
 }
 
+// `render-label` swaps the dropdown row text (and, for non-tag selects, the
+// selected-value display in the trigger) for the inline icon + name. Single-
+// tag selects also call this for the in-input chip via Naive's internal
+// rendering, so we don't need a separate `render-tag` there — adding one was
+// the root cause of the empty-placeholder chip bug.
+function renderCategoryLabel(option) {
+  return h(CategoryLabel, {
+    name: option.value,
+    category: catStore.findByName('income', option.value),
+    size: 14,
+  })
+}
+
+// Multi-select filter pills: wrap CategoryLabel inside NTag so the chip
+// inherits Naive's small-size dimensions and matches the date-picker
+// height next to it. Guarded against empty option — Naive can invoke
+// render-tag with a placeholder ghost option, which previously produced a
+// stray empty chip with a close button.
+function renderCategoryTag({ option, handleClose }) {
+  if (!option || option.value == null || option.value === '') return null
+  // No margin / style overrides — Naive applies its own internal spacing
+  // between tag pills inside n-select's tag area. Adding `margin: 2px 0`
+  // (the previous attempt) pushed n-select's control height past the
+  // sibling n-date-picker's, breaking the row baseline.
+  return h(
+    NTag,
+    {
+      size: 'small',
+      round: false,
+      closable: !!handleClose,
+      onClose: (e) => {
+        e?.stopPropagation?.()
+        handleClose?.()
+      },
+    },
+    {
+      default: () =>
+        h(CategoryLabel, {
+          name: option.value,
+          category: catStore.findByName('income', option.value),
+          size: 12,
+        }),
+    },
+  )
+}
+
 const rules = {
   amount: [{ required: true, type: 'number', message: 'Введите сумму', trigger: 'blur' }],
   date: [{ required: true, type: 'number', message: 'Выберите дату', trigger: 'change' }],
@@ -406,17 +836,31 @@ async function submit() {
     if (cat && !catStore.bySection.income.find((c) => c.name === cat)) {
       await catStore.add('income', cat).catch(() => {})
     }
-    await store.create({
-      type: 'income',
+    const payload = {
       amount: form.value.amount,
       date: toLocalDateString(form.value.date).split('T')[0],
       category: cat,
       source: form.value.source,
       description: form.value.description,
-    })
+    }
+    if (mobileEditing.value) {
+      await store.update(mobileEditing.value.id, payload)
+      message.success('Сохранено')
+    } else {
+      await store.create({ type: 'income', ...payload })
+      message.success('Доход добавлен')
+    }
     catStore.recordUse('income', cat)
-    message.success('Доход добавлен')
+    // Кладём «Источник» в localStorage-историю для autocomplete'a на
+    // следующем добавлении (см. utils/inputHistory.js). Пустые значения
+    // отфильтрует сам pushHistory.
+    pushHistory('income-source', form.value.source)
+    refreshSourceHistory()
     form.value = { amount: null, date: Date.now(), category: '', source: '', description: '' }
+    if (isMobile.value) {
+      mobileAdding.value = false
+      mobileEditing.value = null
+    }
   } catch (e) {
     message.error(e.message)
   } finally {
@@ -441,7 +885,14 @@ function fillFromTemplate(row) {
     source: row.source || '',
     description: row.description || '',
   }
-  message.info('Форма заполнена по шаблону')
+  if (isMobile.value) {
+    // На мобилке форма скрыта пока не нажат FAB-«+» / тап по записи —
+    // см. ExpensesView.fillFromTemplate для развёрнутой мотивации.
+    mobileEditing.value = null
+    mobileAdding.value = true
+  } else {
+    message.info('Форма заполнена по шаблону')
+  }
 }
 
 function fmtLocalDate(ts) {
@@ -456,6 +907,20 @@ function applyFilters() {
     f.to = fmtLocalDate(filterRange.value[1])
   }
   store.setFilters(f)
+}
+
+// Сколько фильтров активно — для badge на мобильной кнопке «Фильтр».
+const activeFilterCount = computed(() => {
+  let n = 0
+  if (filterRange.value) n += 1
+  if (filterCategories.value?.length) n += 1
+  return n
+})
+
+function resetFilters() {
+  filterRange.value = null
+  filterCategories.value = []
+  applyFilters()
 }
 
 // ── Inline cell editing ───────────────────────────────────────────────────────
@@ -684,6 +1149,46 @@ async function bulkDelete() {
   }
 }
 
+// Mobile-only bulk action FAB-row (см. BulkFabRow.vue). Динамически
+// строим список — пустую `selectedIds` отдаём пустой массив, чтобы row
+// не маячил без причины. Cancel-FAB не requires confirm (он не
+// destructive); delete — да, чтобы случайный тап не снес выбор.
+const mobileBulkActions = computed(() => {
+  if (!selectedIds.value.size) {
+    return [
+      {
+        icon: CloseOutline,
+        title: 'Отмена выбора',
+        variant: 'default',
+        onClick: exitBulkMode,
+      },
+    ]
+  }
+  return [
+    {
+      icon: allSelectedHidden.value ? EyeOutline : EyeOffOutline,
+      title: allSelectedHidden.value ? 'Показать выбранные' : 'Скрыть выбранные',
+      variant: 'primary',
+      loading: bulkBusy.value,
+      onClick: bulkToggleHidden,
+    },
+    {
+      icon: TrashOutline,
+      title: 'Удалить выбранные',
+      variant: 'danger',
+      confirm: true,
+      loading: bulkBusy.value,
+      onClick: bulkDelete,
+    },
+    {
+      icon: CloseOutline,
+      title: 'Отмена выбора',
+      variant: 'default',
+      onClick: exitBulkMode,
+    },
+  ]
+})
+
 const selectionCheckbox = (row) => {
   const sel = selectedIds.value.has(row.id)
   return h(
@@ -716,284 +1221,220 @@ const selectionCheckbox = (row) => {
 
 // ── Columns ───────────────────────────────────────────────────────────────────
 
-const columns = computed(() => [
-  {
-    title: '',
-    key: 'created_by',
-    width: 36,
-    align: 'center',
-    render: (row) => {
-      if (bulkMode.value) return selectionCheckbox(row)
-      if (!row.created_by) {
+// Шаблон редактируемой ячейки. Editing → input + ok/cancel; wide → content
+// (flex:1) + pencil top-right; compact → только displayNode (Naive's column
+// ellipsis truncate'ит без обёртки).
+function renderCell(row, field, displayNode, inputNode, opts = {}) {
+  if (isEditing(row.id, field)) {
+    return h('div', { style: 'display:flex;align-items:center;gap:2px;min-width:0' }, [
+      inputNode,
+      okBtn(() => confirmCellEdit(row, field)),
+      cancelBtn(cancelCellEdit),
+    ])
+  }
+  if (tableCompact.value || opts.hidePencil) return displayNode
+  return h('div', { style: 'display:flex;align-items:flex-start;gap:4px;min-width:0;width:100%' }, [
+    h('span', { style: 'flex:1;min-width:0' }, [displayNode]),
+    pencilBtn(() => startCellEdit(row.id, field, opts.editValue ?? row[field] ?? '')),
+  ])
+}
+
+const columns = computed(() => {
+  const compact = tableCompact.value
+  return [
+    {
+      title: '',
+      key: 'created_by',
+      width: 36,
+      align: 'center',
+      render: (row) => {
+        if (bulkMode.value) return selectionCheckbox(row)
+        if (!row.created_by) {
+          return h(NTooltip, null, {
+            trigger: () => userPlaceholder(() => openReassign(row)),
+            default: () => 'Назначить автора',
+          })
+        }
         return h(NTooltip, null, {
-          trigger: () => userPlaceholder(() => openReassign(row)),
-          default: () => 'Назначить автора',
+          trigger: () =>
+            h(
+              'div',
+              {
+                style: 'cursor:pointer',
+                onClick: () => openReassign(row),
+              },
+              h(UserAvatar, {
+                displayName: row.created_by.display_name,
+                avatarUrl: row.created_by.avatar_url || '',
+                size: 24,
+              }),
+            ),
+          default: () => `${row.created_by.display_name} · нажмите для смены`,
         })
-      }
-      return h(NTooltip, null, {
-        trigger: () =>
-          h(
-            'div',
-            {
-              style: 'cursor:pointer',
-              onClick: () => openReassign(row),
+      },
+    },
+    {
+      title: 'Дата',
+      key: 'date',
+      width: 100,
+      render: (row) => new Date(row.date).toLocaleDateString('ru-RU'),
+    },
+    {
+      title: 'Категория',
+      key: 'category',
+      minWidth: compact ? 70 : 120,
+      ...(compact ? { ellipsis: { tooltip: true } } : {}),
+      render: (row) => {
+        const display = row.category
+          ? h(CategoryLabel, {
+              name: row.category,
+              category: catStore.findByName('income', row.category),
+              size: 14,
+            })
+          : plainTextCell('—')
+        return renderCell(
+          row,
+          'category',
+          display,
+          h(NSelect, {
+            value: editCellValue.value,
+            options: categoryOptions.value,
+            filterable: true,
+            tag: true,
+            renderOption: renderCategoryOption,
+            renderLabel: renderCategoryLabel,
+            onCreate: (val) => ({ label: val, value: val, id: null, is_default: false }),
+            size: 'small',
+            to: 'body',
+            style: 'min-width:140px',
+            'onUpdate:value': async (v) => {
+              editCellValue.value = v
+              const isNew = v && !catStore.bySection.income.find((c) => c.name === v)
+              if (isNew) await catStore.add('income', v)
             },
-            h(UserAvatar, {
-              displayName: row.created_by.display_name,
-              avatarUrl: row.created_by.avatar_url || '',
-              size: 24,
-            }),
-          ),
-        default: () => `${row.created_by.display_name} · нажмите для смены`,
-      })
-    },
-  },
-  {
-    title: 'Дата',
-    key: 'date',
-    width: 100,
-    render: (row) => new Date(row.date).toLocaleDateString('ru-RU'),
-  },
-  {
-    title: 'Категория',
-    key: 'category',
-    width: 140,
-    render: (row) => {
-      if (isEditing(row.id, 'category')) {
-        return h(
-          NSpace,
-          { size: 2, wrap: false, align: 'center' },
-          {
-            default: () => [
-              h(NSelect, {
-                value: editCellValue.value,
-                options: categoryOptions.value,
-                filterable: true,
-                tag: true,
-                renderOption: renderCategoryOption,
-                onCreate: (val) => ({ label: val, value: val, id: null, is_default: false }),
-                size: 'small',
-                to: 'body',
-                style: 'width:110px',
-                'onUpdate:value': async (v) => {
-                  editCellValue.value = v
-                  const isNew = v && !catStore.bySection.income.find((c) => c.name === v)
-                  if (isNew) await catStore.add('income', v)
-                },
-              }),
-              okBtn(() => confirmCellEdit(row, 'category')),
-              cancelBtn(cancelCellEdit),
-            ],
-          },
+          }),
         )
-      }
-      return h(
-        NSpace,
-        { size: 2, wrap: false, align: 'center' },
-        {
-          default: () => [
-            h('span', {}, row.category),
-            pencilBtn(() => startCellEdit(row.id, 'category', row.category)),
-          ],
-        },
-      )
+      },
     },
-  },
-  {
-    title: 'Источник',
-    key: 'source',
-    width: 150,
-    render: (row) => {
-      if (isEditing(row.id, 'source')) {
-        return h(
-          NSpace,
-          { size: 2, wrap: false, align: 'center' },
+    {
+      title: 'Источник',
+      key: 'source',
+      minWidth: compact ? 70 : 120,
+      ...(compact ? { ellipsis: { tooltip: true } } : {}),
+      render: (row) =>
+        renderCell(
+          row,
+          'source',
+          plainTextCell(row.source || ''),
+          h(NInput, {
+            value: editCellValue.value,
+            size: 'small',
+            style: 'min-width:140px',
+            'onUpdate:value': (v) => {
+              editCellValue.value = v
+            },
+            onKeydown: (e) => {
+              if (e.key === 'Enter') confirmCellEdit(row, 'source')
+              if (e.key === 'Escape') cancelCellEdit()
+            },
+          }),
+        ),
+    },
+    {
+      title: 'Описание',
+      key: 'description',
+      minWidth: compact ? 70 : 120,
+      ...(compact ? { ellipsis: { tooltip: true } } : {}),
+      render: (row) =>
+        renderCell(
+          row,
+          'description',
+          plainTextCell(row.description || ''),
+          h(NInput, {
+            value: editCellValue.value,
+            size: 'small',
+            style: 'min-width:140px',
+            'onUpdate:value': (v) => {
+              editCellValue.value = v
+            },
+            onKeydown: (e) => {
+              if (e.key === 'Enter') confirmCellEdit(row, 'description')
+              if (e.key === 'Escape') cancelCellEdit()
+            },
+          }),
+        ),
+    },
+    {
+      title: 'Сумма',
+      key: 'amount',
+      width: compact ? 110 : 150,
+      render: (row) => {
+        const amountNode = h(
+          NText,
           {
-            default: () => [
-              h(NInput, {
-                value: editCellValue.value,
-                size: 'small',
-                style: 'width:110px',
-                'onUpdate:value': (v) => {
-                  editCellValue.value = v
-                },
-                onKeydown: (e) => {
-                  if (e.key === 'Enter') confirmCellEdit(row, 'source')
-                  if (e.key === 'Escape') cancelCellEdit()
-                },
-              }),
-              okBtn(() => confirmCellEdit(row, 'source')),
-              cancelBtn(cancelCellEdit),
-            ],
+            style: `color:${incomeColor.value};font-weight:600;transition:filter .25s${valuesHidden.value ? ';filter:blur(7px);user-select:none' : ''};white-space:nowrap`,
           },
+          { default: () => `+${row.amount.toLocaleString('ru-RU')} ₽` },
         )
-      }
-      return h(
-        NSpace,
-        { size: 2, wrap: false, align: 'center' },
-        {
-          default: () => [
-            h('span', {}, row.source || ''),
-            pencilBtn(() => startCellEdit(row.id, 'source', row.source || '')),
-          ],
-        },
-      )
+        return renderCell(
+          row,
+          'amount',
+          amountNode,
+          h(NInputNumber, {
+            value: editCellValue.value,
+            min: 0.01,
+            precision: 2,
+            size: 'small',
+            style: 'width:120px',
+            'onUpdate:value': (v) => {
+              editCellValue.value = v
+            },
+            onKeydown: (e) => {
+              if (e.key === 'Enter') confirmCellEdit(row, 'amount')
+              if (e.key === 'Escape') cancelCellEdit()
+            },
+          }),
+          { editValue: row.amount },
+        )
+      },
     },
-  },
-  {
-    title: 'Описание',
-    key: 'description',
-    render: (row) => {
-      if (isEditing(row.id, 'description')) {
-        return h(
-          NSpace,
-          { size: 2, wrap: false, align: 'center' },
+    {
+      title: '',
+      key: 'actions',
+      width: compact ? 44 : 100,
+      align: 'right',
+      render: (row) => {
+        const actions = [
           {
-            default: () => [
-              h(NInput, {
-                value: editCellValue.value,
-                size: 'small',
-                style: 'min-width:120px',
-                'onUpdate:value': (v) => {
-                  editCellValue.value = v
-                },
-                onKeydown: (e) => {
-                  if (e.key === 'Enter') confirmCellEdit(row, 'description')
-                  if (e.key === 'Escape') cancelCellEdit()
-                },
-              }),
-              okBtn(() => confirmCellEdit(row, 'description')),
-              cancelBtn(cancelCellEdit),
-            ],
+            icon: row.hidden ? EyeOffOutline : EyeOutline,
+            label: row.hidden ? 'Показать' : 'Скрыть',
+            type: row.hidden ? 'warning' : 'default',
+            onClick: () => store.toggle(row.id, !row.hidden),
           },
-        )
-      }
-      return h(
-        NSpace,
-        { size: 2, wrap: false, align: 'center' },
-        {
-          default: () => [
-            h('span', {}, row.description || ''),
-            pencilBtn(() => startCellEdit(row.id, 'description', row.description || '')),
-          ],
-        },
-      )
-    },
-  },
-  {
-    title: 'Сумма',
-    key: 'amount',
-    width: 165,
-    align: 'right',
-    render: (row) => {
-      if (isEditing(row.id, 'amount')) {
-        return h(
-          NSpace,
-          { size: 2, wrap: false, align: 'center', justify: 'end' },
           {
-            default: () => [
-              h(NInputNumber, {
-                value: editCellValue.value,
-                min: 0.01,
-                precision: 2,
-                size: 'small',
-                style: 'width:100px',
-                'onUpdate:value': (v) => {
-                  editCellValue.value = v
-                },
-                onKeydown: (e) => {
-                  if (e.key === 'Enter') confirmCellEdit(row, 'amount')
-                  if (e.key === 'Escape') cancelCellEdit()
-                },
-              }),
-              okBtn(() => confirmCellEdit(row, 'amount')),
-              cancelBtn(cancelCellEdit),
-            ],
+            icon: CopyOutline,
+            label: 'Добавить как шаблон',
+            type: 'info',
+            onClick: () => fillFromTemplate(row),
           },
+          {
+            icon: TrashOutline,
+            label: 'Удалить',
+            type: 'error',
+            confirm: 'Удалить запись?',
+            onClick: () => store.remove(row.id),
+          },
+        ]
+        if (compact) return renderActionsPopover(actions)
+        return h(
+          'div',
+          { style: 'display:flex;justify-content:flex-end;align-items:center;gap:2px' },
+          actions.map((a) => renderActionButton(a)),
         )
-      }
-      return h(
-        NSpace,
-        { size: 2, wrap: false, align: 'center', justify: 'end' },
-        {
-          default: () => [
-            h(
-              NText,
-              {
-                style: `color:${incomeColor.value};font-weight:600;transition:filter .25s${valuesHidden.value ? ';filter:blur(7px);user-select:none' : ''}`,
-              },
-              { default: () => `+${row.amount.toLocaleString('ru-RU')} ₽` },
-            ),
-            pencilBtn(() => startCellEdit(row.id, 'amount', row.amount)),
-          ],
-        },
-      )
+      },
     },
-  },
-  {
-    title: '',
-    key: 'actions',
-    width: 100,
-    align: 'center',
-    render: (row) =>
-      h(
-        NSpace,
-        { size: 2, justify: 'center', wrap: false },
-        {
-          default: () => [
-            h(NTooltip, null, {
-              trigger: () =>
-                h(
-                  NButton,
-                  {
-                    size: 'small',
-                    quaternary: true,
-                    type: row.hidden ? 'warning' : 'default',
-                    onClick: () => store.toggle(row.id, !row.hidden),
-                  },
-                  {
-                    icon: () =>
-                      h(NIcon, null, {
-                        default: () => h(row.hidden ? EyeOffOutline : EyeOutline),
-                      }),
-                  },
-                ),
-              default: () => (row.hidden ? 'Показать' : 'Скрыть'),
-            }),
-            h(NTooltip, null, {
-              trigger: () =>
-                h(
-                  NButton,
-                  {
-                    size: 'small',
-                    quaternary: true,
-                    type: 'info',
-                    onClick: () => fillFromTemplate(row),
-                  },
-                  { icon: () => h(NIcon, null, { default: () => h(CopyOutline) }) },
-                ),
-              default: () => 'Добавить как шаблон',
-            }),
-            h(
-              NPopconfirm,
-              { onPositiveClick: () => store.remove(row.id) },
-              {
-                trigger: () =>
-                  h(
-                    NButton,
-                    { size: 'small', type: 'error', quaternary: true },
-                    {
-                      icon: () => h(NIcon, null, { default: () => h(TrashOutline) }),
-                    },
-                  ),
-                default: () => 'Удалить запись?',
-              },
-            ),
-          ],
-        },
-      ),
-  },
-])
+  ]
+})
 
 const pagination = computed(() => ({
   page: store.page,
@@ -1002,9 +1443,226 @@ const pagination = computed(() => ({
   showSizePicker: false,
 }))
 
+// When arriving from a Statistics pie-slice drilldown, the route carries
+// `categories` (comma-separated) + `from`/`to` (ISO date). Hydrate the
+// local filter refs so the popover/inline filter UI also reflects the
+// active filter, then push the filter through to the store.
+function hydrateFromQuery() {
+  const q = route.query || {}
+  const cats = typeof q.categories === 'string' ? q.categories : ''
+  const from = typeof q.from === 'string' ? q.from : ''
+  const to = typeof q.to === 'string' ? q.to : ''
+  if (!cats && !from && !to) return false
+  filterCategories.value = cats ? cats.split(',').filter(Boolean) : []
+  if (from && to) {
+    filterRange.value = [new Date(from).getTime(), new Date(to).getTime()]
+  } else {
+    filterRange.value = null
+  }
+  applyFilters()
+  return true
+}
+
+watch(
+  () => route.query,
+  () => {
+    if (route.path === '/income') hydrateFromQuery()
+  },
+)
+
 onMounted(() => {
-  store.setFilters({ type: 'income' })
   catStore.load('income')
+  const hydrated = hydrateFromQuery()
+  if (!hydrated) store.setFilters({ type: 'income' })
   loadInitialBalance()
 })
 </script>
+
+<style scoped>
+/* Mobile-only n-card header content: back-arrow + title in the same row,
+   gives the add-form the same one-frame look as AdminCategoriesView's
+   editor (single bordered surface, no extra header above the card). */
+.card-back-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.card-back-header :deep(.n-button) {
+  /* small extra inset так, чтобы стрелка не липла к рамке/заголовку */
+  margin-right: 2px;
+}
+
+/* Card header с inline + кнопкой (как в UsersAdminView): заголовок слева,
+   кнопка «+ Добавить» справа. */
+.card-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+}
+
+/* Edit-режим: Удалить + Сохранить в одну строку (flex: 1 каждой). */
+.form-actions-row {
+  display: flex;
+  gap: 8px;
+}
+
+/* Mobile filter popover — компактные стек'и контролов. */
+.filter-popover {
+  width: min(280px, calc(100vw - 32px));
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.filter-popover-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+  /* На тёмной теме var(--text-3) сливался с фоном — берём --text-1 для
+     read'ability, цвет автоматом подхватывается через `currentColor`. */
+  color: var(--text-1, currentColor);
+  opacity: 0.85;
+  margin: 6px 0 2px;
+}
+
+/* Mobile card-list (replaces NDataTable). Tap = edit-view, long-press =
+   bulk-mode + select. Скрытые записи (`row.hidden`) дополнительно
+   притуплены чтобы соответствовать desktop'ому отображению. */
+.tx-cards,
+.tx-cards-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+/* Flex-разметка содержимого n-card. n-card сам красит фон/рамку/радиус
+   через тему Naive (как в Forecast) — здесь только layout строки. */
+.tx-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  -webkit-tap-highlight-color: transparent;
+}
+/* Hidden-записи: затемняем только содержимое, фон n-card остаётся
+   непрозрачным — иначе во время swipe цветной action просвечивает. */
+.tx-row.hidden > * {
+  opacity: 0.45;
+}
+/* n-card транзишен radius'а правых углов + сглаживание в square при
+   swipe (тот же приём, что в Forecast). */
+:deep(.sc-content) .n-card {
+  transition: border-radius 0.2s ease-out;
+}
+:deep(.sc-content.revealed) .n-card {
+  border-top-right-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+}
+.tx-card-left {
+  flex-shrink: 0;
+  width: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.tx-card-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+.tx-card-row1 {
+  display: flex;
+  /* `center` (not `baseline`): CategoryLabel is `inline-flex` with its own
+     `line-height: 1`, so its baseline is computed from the icon box, not
+     the text — baseline alignment lands the category label visibly above
+     the date sibling. `center` aligns by box midline and matches Android. */
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  line-height: 1.2;
+}
+.tx-card-date {
+  color: var(--text-3, rgba(127, 127, 127, 0.8));
+  font-variant-numeric: tabular-nums;
+  /* Date is a fixed 10-char string — keep it on one line so narrow cards
+     don't break "17.05.2026" across two lines. */
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.tx-card-category {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.tx-card-desc {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-3, rgba(127, 127, 127, 0.75));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tx-card-amount {
+  flex-shrink: 0;
+  font-weight: 600;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  transition: filter 0.25s;
+  user-select: none;
+}
+
+/* Swipe-reveal action buttons под карточкой записи. Каждая ~60px,
+   три помещаются в reveal-зоне SwipeableCard (180px по умолчанию). */
+.swipe-action {
+  width: 60px;
+  height: 100%;
+  border: 0;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  color: #fff;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.swipe-action-label {
+  font-size: 10px;
+  line-height: 1;
+  color: #fff;
+}
+/* Naive UI палитра — Hide=info (синий, нейтральный toggle), Template=warning
+   (оранжевый, привлекает внимание т.к. меняет форму), Delete=error. См.
+   ExpensesView.vue для развёрнутой семантики. */
+.swipe-action-info {
+  background: #2080f0;
+}
+.swipe-action-warning {
+  background: #f0a020;
+}
+.swipe-action-danger {
+  background: #d03050;
+}
+
+/* Bulk-mode marker (replaces author avatar on selected cards). */
+.bulk-circle {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid var(--text-3, rgba(127, 127, 127, 0.65));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  background: transparent;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+.bulk-circle.checked {
+  background: var(--primary, #2080f0);
+  border-color: var(--primary, #2080f0);
+}
+</style>

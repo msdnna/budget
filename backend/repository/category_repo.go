@@ -241,7 +241,18 @@ func (r *CategoryRepository) Update(ctx context.Context, id string, req models.U
 	if req.IconScale != nil {
 		set["icon_scale"] = *req.IconScale
 	}
+	unset := bson.M{}
+	if req.MonthlyLimit.Present {
+		if req.MonthlyLimit.Valid {
+			set["monthly_limit"] = req.MonthlyLimit.Value
+		} else {
+			unset["monthly_limit"] = ""
+		}
+	}
 	update := bson.M{"$set": set, "$inc": bson.M{"version": 1}}
+	if len(unset) > 0 {
+		update["$unset"] = unset
+	}
 	res := r.col.FindOneAndUpdate(ctx,
 		bson.M{"_id": id, "deleted_at": nil},
 		update,
@@ -292,6 +303,47 @@ func (r *CategoryRepository) Delete(ctx context.Context, id string, baseVersion 
 		return nil, err
 	}
 	return &c, nil
+}
+
+// FindByName returns the non-deleted category for (section, name) or nil if
+// no such row exists. ErrNoDocuments → returned as (nil, nil) so callers can
+// branch on absence without inspecting the error.
+func (r *CategoryRepository) FindByName(ctx context.Context, section, name string) (*models.Category, error) {
+	var c models.Category
+	err := r.col.FindOne(ctx, bson.M{
+		"section":    section,
+		"name":       name,
+		"deleted_at": nil,
+	}).Decode(&c)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &c, nil
+}
+
+// EnsureInSection guarantees a non-deleted (section, name) category exists,
+// returning the existing row or inserting a fresh one with the supplied
+// color/icon. Idempotent. Used by the wishlist-link handler to clone the
+// wishlist category visuals into expense when a user attaches an existing
+// expense to a forecast item that has no expense-side equivalent yet.
+func (r *CategoryRepository) EnsureInSection(ctx context.Context, section, name, color, icon string, modifiedBy *models.UserInfo) (*models.Category, error) {
+	if existing, err := r.FindByName(ctx, section, name); err != nil {
+		return nil, err
+	} else if existing != nil {
+		return existing, nil
+	}
+	cat, err := r.Create(ctx, section, name, color, icon, modifiedBy)
+	if err != nil {
+		if mongo.IsDuplicateKeyError(err) {
+			// Lost the race; fetch the winner.
+			return r.FindByName(ctx, section, name)
+		}
+		return nil, err
+	}
+	return &cat, nil
 }
 
 func (r *CategoryRepository) FindByID(ctx context.Context, id string) (*models.Category, error) {

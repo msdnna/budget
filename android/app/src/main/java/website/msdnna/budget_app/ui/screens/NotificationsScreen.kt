@@ -27,6 +27,10 @@ import website.msdnna.budget_app.notifications.NotificationPrefs
 fun NotificationsScreen(
     primaryColor: Color,
     notifPrefs: NotificationPrefs,
+    categoryLimitAlerts: Boolean,
+    globalLimitAlerts: Boolean,
+    onCategoryLimitAlertsChange: (Boolean) -> Unit,
+    onGlobalLimitAlertsChange: (Boolean) -> Unit,
     onNotifPrefsChange: (NotificationPrefs) -> Unit,
     onClose: () -> Unit,
 ) {
@@ -60,6 +64,27 @@ fun NotificationsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
+            // Limit-alert toggles. Toggled push events surface when a sync
+            // pull brings a new category- or global-limit notification —
+            // server-driven, so no time-picker is needed (the backend
+            // decides «when»; the user only picks whether to be paged).
+            LimitAlertRow(
+                label = "Превышение лимита по категории",
+                description = "Push, когда расход выводит категорию за её месячный лимит.",
+                enabled = categoryLimitAlerts,
+                primaryColor = primaryColor,
+                onToggle = onCategoryLimitAlertsChange,
+            )
+            LimitAlertRow(
+                label = "Превышение общего лимита",
+                description = "Push, когда сумма по всем категориям с лимитом превышает общий лимит.",
+                enabled = globalLimitAlerts,
+                primaryColor = primaryColor,
+                onToggle = onGlobalLimitAlertsChange,
+            )
+
+            HorizontalDivider()
+
             NotifRow(
                 label = "Напоминание о расходах",
                 enabled = np.expensesEnabled,
@@ -123,6 +148,43 @@ private data class TimePickerTarget(
     val minute: Int,
     val onPick: (Int, Int) -> Unit,
 )
+
+@Composable
+private fun LimitAlertRow(
+    label: String,
+    description: String,
+    enabled: Boolean,
+    primaryColor: Color,
+    onToggle: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(label, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+            Spacer(Modifier.height(2.dp))
+            Text(
+                description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Switch(
+            checked = enabled,
+            onCheckedChange = onToggle,
+            // Match the reminder rows below — solid `primaryColor` thumb
+            // on a 40 %-alpha track; using a solid track on these rows
+            // alone made the limit-alert toggles read as a different
+            // control than the reminders right under them.
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = primaryColor,
+                checkedTrackColor = primaryColor.copy(alpha = 0.4f),
+            ),
+        )
+    }
+}
 
 private fun frequencyLabel(f: NotificationFrequency) = when (f) {
     NotificationFrequency.DAILY -> "Ежедневно"

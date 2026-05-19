@@ -24,6 +24,7 @@ class AppPreferences(private val context: Context) {
         val DISPLAY_NAME = stringPreferencesKey("display_name")
         val AVATAR_URL = stringPreferencesKey("avatar_url")
         val USER_ID = stringPreferencesKey("user_id")
+        val IS_ADMIN = booleanPreferencesKey("is_admin")
 
         val DARK_MODE = booleanPreferencesKey("dark_mode")
         val SERVER_HISTORY = stringPreferencesKey("server_history")
@@ -41,6 +42,8 @@ class AppPreferences(private val context: Context) {
         val NOTIF_INCOME_MINUTE = intPreferencesKey("notif_income_minute")
         val NOTIF_INCOME_DOW = intPreferencesKey("notif_income_dow")
         val NOTIF_INCOME_DAY = intPreferencesKey("notif_income_day")
+        val NOTIF_CATEGORY_LIMIT_ENABLED = booleanPreferencesKey("notif_category_limit_enabled")
+        val NOTIF_GLOBAL_LIMIT_ENABLED = booleanPreferencesKey("notif_global_limit_enabled")
 
         val LAST_SYNC_TOKEN = stringPreferencesKey("last_sync_token")
 
@@ -89,8 +92,17 @@ class AppPreferences(private val context: Context) {
     val userId: Flow<String> = context.dataStore.data
         .map { prefs -> prefs[USER_ID] ?: "" }
 
+    val isAdmin: Flow<Boolean> = context.dataStore.data
+        .map { prefs -> prefs[IS_ADMIN] ?: false }
+
     val avatarUrl: Flow<String?> = context.dataStore.data
         .map { prefs -> prefs[AVATAR_URL]?.takeIf { it.isNotBlank() } }
+
+    val notifCategoryLimitEnabled: Flow<Boolean> = context.dataStore.data
+        .map { prefs -> prefs[NOTIF_CATEGORY_LIMIT_ENABLED] ?: true }
+
+    val notifGlobalLimitEnabled: Flow<Boolean> = context.dataStore.data
+        .map { prefs -> prefs[NOTIF_GLOBAL_LIMIT_ENABLED] ?: true }
 
     val notifPrefs: Flow<NotificationPrefs> = context.dataStore.data.map { prefs ->
         NotificationPrefs(
@@ -148,6 +160,7 @@ class AppPreferences(private val context: Context) {
         userId: String,
         displayName: String,
         avatarUrl: String?,
+        isAdmin: Boolean,
     ) {
         context.dataStore.edit { prefs ->
             prefs[AUTH_TOKEN] = token
@@ -156,6 +169,7 @@ class AppPreferences(private val context: Context) {
             prefs[USER_ID] = userId
             prefs[DISPLAY_NAME] = displayName
             if (avatarUrl != null) prefs[AVATAR_URL] = avatarUrl else prefs.remove(AVATAR_URL)
+            prefs[IS_ADMIN] = isAdmin
         }
     }
 
@@ -176,6 +190,7 @@ class AppPreferences(private val context: Context) {
             prefs.remove(USER_ID)
             prefs.remove(DISPLAY_NAME)
             prefs.remove(AVATAR_URL)
+            prefs.remove(IS_ADMIN)
         }
     }
 
@@ -187,6 +202,7 @@ class AppPreferences(private val context: Context) {
             prefs.remove(USER_ID)
             prefs.remove(DISPLAY_NAME)
             prefs.remove(AVATAR_URL)
+            prefs.remove(IS_ADMIN)
             prefs.remove(PIN_HASH)
             prefs.remove(PIN_SALT)
             prefs.remove(BIOMETRIC_ENABLED)
@@ -234,6 +250,14 @@ class AppPreferences(private val context: Context) {
 
     suspend fun setPinSetupPrompted(prompted: Boolean) {
         context.dataStore.edit { it[PIN_SETUP_PROMPTED] = prompted }
+    }
+
+    suspend fun setNotifCategoryLimitEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[NOTIF_CATEGORY_LIMIT_ENABLED] = enabled }
+    }
+
+    suspend fun setNotifGlobalLimitEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[NOTIF_GLOBAL_LIMIT_ENABLED] = enabled }
     }
 
     suspend fun setNotifPrefs(np: NotificationPrefs) {

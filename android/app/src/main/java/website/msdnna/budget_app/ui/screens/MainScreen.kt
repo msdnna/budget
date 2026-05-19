@@ -1,5 +1,6 @@
 package website.msdnna.budget_app.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -32,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import java.util.Calendar
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
@@ -55,6 +57,8 @@ import website.msdnna.budget_app.ui.components.OptionalUpdateProgressDialog
 import website.msdnna.budget_app.ui.components.UpdateBanner
 import website.msdnna.budget_app.ui.theme.AppTheme
 import website.msdnna.budget_app.ui.theme.AppThemes
+import website.msdnna.budget_app.ui.viewmodels.ExpensesViewModel
+import website.msdnna.budget_app.ui.viewmodels.IncomeViewModel
 
 private data class NavItem(val label: String, val icon: ImageVector, val route: String)
 
@@ -111,6 +115,57 @@ fun MainScreen(
 ) {
     val pagerState = rememberPagerState(initialPage = 0) { NAV_ITEMS.size }
     val currentRoute = NAV_ITEMS[pagerState.currentPage].route
+    val scope = rememberCoroutineScope()
+
+    // Shared income/expense VMs — same key as the per-page calls in
+    // IncomeScreen/ExpensesScreen so all three sites resolve to the same
+    // viewModel-store entry. Used by the Statistics → Income/Expenses
+    // donut-slice drilldown below, which needs to mutate filter state on
+    // a different page than the one currently driving the pager.
+    val expensesVm = viewModel<ExpensesViewModel>(
+        key = "expenses:$serverUrl",
+        factory = ExpensesViewModel.factory(serverUrl),
+    )
+    val incomeVm = viewModel<IncomeViewModel>(
+        key = "income:$serverUrl",
+        factory = IncomeViewModel.factory(serverUrl),
+    )
+
+    // Tracks the destination page-index of an in-flight Statistics-donut
+    // drilldown. While non-null AND the pager is settled on that page,
+    // Android back returns to Statistics and wipes the filter we applied.
+    // Cleared when the user navigates away manually (swipe / nav-bar tap):
+    // once they wander off, the "came from stats" semantics no longer hold.
+    var statsDrilldownTarget by remember { mutableStateOf<Int?>(null) }
+    LaunchedEffect(pagerState.settledPage) {
+        val target = statsDrilldownTarget ?: return@LaunchedEffect
+        if (pagerState.settledPage != target) statsDrilldownTarget = null
+    }
+
+    // Back from a Statistics-donut drilldown: clear the filter we applied,
+    // hop the pager back to Statistics. Registered at the outer scope so
+    // per-page BackHandlers (e.g. ExpensesScreen's selection-mode handler)
+    // get priority — those register later in the composition and therefore
+    // take precedence when both are enabled. Disabled outside the drilldown
+    // case so system back still exits the app normally.
+    BackHandler(
+        enabled = statsDrilldownTarget != null &&
+            pagerState.currentPage == statsDrilldownTarget,
+    ) {
+        val target = statsDrilldownTarget
+        statsDrilldownTarget = null
+        when (target) {
+            1 -> {
+                incomeVm.setFilterCategories(emptySet())
+                incomeVm.setDateRange(null, null)
+            }
+            2 -> {
+                expensesVm.setFilterCategories(emptySet())
+                expensesVm.setDateRange(null, null)
+            }
+        }
+        scope.launch { pagerState.animateScrollToPage(0) }
+    }
     // For TopAppBar title and conditional actions: use targetPage so a
     // bottom-nav tap (animateScrollToPage) snaps the title to the destination
     // instead of cycling through every intermediate page on the way there.
@@ -118,12 +173,18 @@ fun MainScreen(
     var showSettings by remember { mutableStateOf(false) }
     var showConflicts by remember { mutableStateOf(false) }
     var showNotifications by remember { mutableStateOf(false) }
+    var showNotificationsHistory by remember { mutableStateOf(false) }
+    var showCategoryLimits by remember { mutableStateOf(false) }
     var showSecurity by remember { mutableStateOf(false) }
     // Detail-request navigation: list overlay vs single-request overlay vs
     // "all" mode reachable from settings (showAll=true -> tabs).
     var showDetailRequestsList by remember { mutableStateOf(false) }
     var detailRequestsListShowAll by remember { mutableStateOf(false) }
     var openDetailRequestId by remember { mutableStateOf<String?>(null) }
+    // (id, name) of the wishlist/regular item being linked to an existing
+    // expense. Null hides the overlay. After a successful link we invalidate
+    // the forecast & wishlist caches so the new state surfaces immediately.
+    var linkExpenseTarget by remember { mutableStateOf<Pair<String, String>?>(null) }
 
     // Refresh reachability whenever an overlay screen becomes visible. Each
     // overlay is a separate state flag, but only the becoming-visible edge
@@ -133,16 +194,66 @@ fun MainScreen(
     LaunchedEffect(showSettings) { if (showSettings) ReachabilityGate.refresh() }
     LaunchedEffect(showConflicts) { if (showConflicts) ReachabilityGate.refresh() }
     LaunchedEffect(showNotifications) { if (showNotifications) ReachabilityGate.refresh() }
+    LaunchedEffect(showNotificationsHistory) {
+        if (showNotificationsHistory) {
+            ReachabilityGate.refresh()
+            // Re-pull on every open: limit-overflow alerts arrive via the
+            // sync engine on the next pull cycle, which may not have fired
+            // since the badge first lit up.
+            if (serverUrl.isNotBlank()) {
+                runCatching {
+                    website.msdnna.budget_app.data.repository.NotificationHistoryRepository
+                        .refreshFromServer(serverUrl)
+                }
+            }
+        }
+    }
+    LaunchedEffect(showCategoryLimits) {
+        if (showCategoryLimits) {
+            ReachabilityGate.refresh()
+            if (serverUrl.isNotBlank()) {
+                website.msdnna.budget_app.data.repository.LimitsProgressRepository
+                    .refresh(serverUrl)
+            }
+        }
+    }
     LaunchedEffect(showSecurity) { if (showSecurity) ReachabilityGate.refresh() }
     LaunchedEffect(showDetailRequestsList) { if (showDetailRequestsList) ReachabilityGate.refresh() }
     LaunchedEffect(openDetailRequestId) { if (openDetailRequestId != null) ReachabilityGate.refresh() }
 
     val currentUserId by prefs.userId.collectAsStateWithLifecycle(initialValue = "")
+    val isAdmin by prefs.isAdmin.collectAsStateWithLifecycle(initialValue = false)
     val drItems by DetailRequestStore.items.collectAsStateWithLifecycle()
     val myOpenDrCount = drItems.count { it.status == "open" && it.assignee?.userId == currentUserId }
+    val notificationsUnread by website.msdnna.budget_app.data.repository.NotificationHistoryRepository
+        .observeUnreadCount().collectAsStateWithLifecycle(initialValue = 0)
     LaunchedEffect(serverUrl, currentUserId) {
         if (currentUserId.isNotBlank()) DetailRequestStore.refresh()
     }
+    // Collect filter state from both shared VMs so the filter icon can
+    // surface an active-filter count badge. The badge counts non-empty
+    // category set + date-range pair (each contributes 1) — same model
+    // the web "Reset filters" affordance uses.
+    val expFilterCats by expensesVm.filterCats.collectAsStateWithLifecycle()
+    val expFilterFrom by expensesVm.filterFrom.collectAsStateWithLifecycle()
+    val expFilterTo by expensesVm.filterTo.collectAsStateWithLifecycle()
+    // «Показать закрытые запросы» on the Expenses screen is also a filter —
+    // it widens the included-rows set, so the badge should reflect it.
+    // Income has no equivalent toggle.
+    val expIncludeDetailed by expensesVm.includeDetailed.collectAsStateWithLifecycle()
+    val incFilterCats by incomeVm.filterCats.collectAsStateWithLifecycle()
+    val incFilterFrom by incomeVm.filterFrom.collectAsStateWithLifecycle()
+    val incFilterTo by incomeVm.filterTo.collectAsStateWithLifecycle()
+    val activeFilterCount = when (targetRoute) {
+        "expenses" -> {
+            expFilterCats.size +
+                (if (expFilterFrom != null && expFilterTo != null) 1 else 0) +
+                (if (expIncludeDetailed) 1 else 0)
+        }
+        "income" -> incFilterCats.size + (if (incFilterFrom != null && incFilterTo != null) 1 else 0)
+        else -> 0
+    }
+
     var valuesHidden by remember { mutableStateOf(false) }
     // Income / Expenses share a "filters drawer" that's collapsed by default;
     // the header button below toggles it. Shared across both routes so a user
@@ -157,7 +268,6 @@ fun MainScreen(
     var updateState by remember { mutableStateOf<UpdateState>(UpdateState.None) }
     var bannerDismissed by remember { mutableStateOf(false) }
     var downloadProgress by remember { mutableStateOf<DownloadProgress?>(null) }
-    val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
     // canInstall depends on a system permission the user grants outside our app.
@@ -309,6 +419,45 @@ fun MainScreen(
                             }
                         }
                     }
+                    // Bell — global, always visible. Same Box+IconButton
+                    // pattern as DR badge so the unread count sits inside
+                    // the action slot's bounds (M3 BadgedBox clips against
+                    // the TopAppBar top edge on Material3 1.x).
+                    Box(
+                        modifier = Modifier.size(48.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        IconButton(onClick = { showNotificationsHistory = true }) {
+                            Icon(
+                                Icons.Default.Notifications,
+                                "Уведомления",
+                            )
+                        }
+                        if (notificationsUnread > 0) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .offset(x = (-4).dp, y = 6.dp)
+                                    .clip(androidx.compose.foundation.shape.CircleShape)
+                                    // Hardcoded bright red — MD3 dark `colorScheme.error`
+                                    // resolves to a darker pink-red where small 10sp
+                                    // white text reads as washed-out grey. The DR
+                                    // badge alongside uses a similar hardcoded orange
+                                    // for the same readability reason.
+                                    .background(Color(0xFFEF4444))
+                                    .defaultMinSize(minWidth = 16.dp, minHeight = 16.dp)
+                                    .padding(horizontal = 4.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    if (notificationsUnread > 9) "9+" else notificationsUnread.toString(),
+                                    color = Color.White,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                            }
+                        }
+                    }
                     androidx.compose.animation.AnimatedVisibility(
                         visible = targetRoute == "income" || targetRoute == "expenses",
                         enter = androidx.compose.animation.fadeIn(animationSpec = tween(200)) +
@@ -316,18 +465,45 @@ fun MainScreen(
                         exit = androidx.compose.animation.fadeOut(animationSpec = tween(160)) +
                             androidx.compose.animation.shrinkHorizontally(animationSpec = tween(180), clip = false),
                     ) {
-                        IconButton(onClick = { filtersVisible = !filtersVisible }) {
-                            // Outlined variants match the visual weight of the
-                            // eye/settings glyphs alongside (the filled
-                            // FilterAlt sat heavier than its neighbours in
-                            // light theme and lighter in dark — both broke
-                            // visual balance).
-                            Icon(
-                                if (filtersVisible) Icons.Outlined.FilterAltOff else Icons.Outlined.FilterAlt,
-                                if (filtersVisible) "Скрыть фильтры" else "Показать фильтры",
-                                tint = if (filtersVisible) primaryColor
-                                else LocalContentColor.current,
-                            )
+                        // Box + offset badge mirrors the bell/DR badge layout
+                        // so the count chip sits inside the 48dp action slot
+                        // (M3 BadgedBox clips against the TopAppBar top edge).
+                        Box(
+                            modifier = Modifier.size(48.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            IconButton(onClick = { filtersVisible = !filtersVisible }) {
+                                // Outlined variants match the visual weight of the
+                                // eye/settings glyphs alongside (the filled
+                                // FilterAlt sat heavier than its neighbours in
+                                // light theme and lighter in dark — both broke
+                                // visual balance).
+                                Icon(
+                                    if (filtersVisible) Icons.Outlined.FilterAltOff else Icons.Outlined.FilterAlt,
+                                    if (filtersVisible) "Скрыть фильтры" else "Показать фильтры",
+                                    tint = if (filtersVisible) primaryColor
+                                    else LocalContentColor.current,
+                                )
+                            }
+                            if (activeFilterCount > 0) {
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .offset(x = (-4).dp, y = 6.dp)
+                                        .clip(androidx.compose.foundation.shape.CircleShape)
+                                        .background(primaryColor)
+                                        .defaultMinSize(minWidth = 16.dp, minHeight = 16.dp)
+                                        .padding(horizontal = 4.dp),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Text(
+                                        if (activeFilterCount > 9) "9+" else activeFilterCount.toString(),
+                                        color = Color.White,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                    )
+                                }
+                            }
                         }
                     }
                     IconButton(onClick = { valuesHidden = !valuesHidden }) {
@@ -399,7 +575,24 @@ fun MainScreen(
             ) { page ->
                 key(NAV_ITEMS[page].route) {
                     when (NAV_ITEMS[page].route) {
-                        "statistics" -> StatisticsScreen(serverUrl, primaryColor, valuesHidden, pieUnitRuble)
+                        "statistics" -> StatisticsScreen(
+                            serverUrl = serverUrl,
+                            primaryColor = primaryColor,
+                            valuesHidden = valuesHidden,
+                            pieUnitRuble = pieUnitRuble,
+                            onDrilldownExpense = { category, from, to ->
+                                expensesVm.setFilterCategories(setOf(category))
+                                expensesVm.setDateRange(from, to)
+                                statsDrilldownTarget = 2
+                                scope.launch { pagerState.animateScrollToPage(2) }
+                            },
+                            onDrilldownIncome = { category, from, to ->
+                                incomeVm.setFilterCategories(setOf(category))
+                                incomeVm.setDateRange(from, to)
+                                statsDrilldownTarget = 1
+                                scope.launch { pagerState.animateScrollToPage(1) }
+                            },
+                        )
                         "income" -> IncomeScreen(
                             serverUrl, primaryColor, valuesHidden,
                             filtersVisible = filtersVisible,
@@ -409,12 +602,15 @@ fun MainScreen(
                             serverUrl, primaryColor, valuesHidden,
                             filtersVisible = filtersVisible,
                             currentUserId = currentUserId,
+                            isAdmin = isAdmin,
                             onSelectionCountChange = { selectionCounts["expenses"] = it },
                             onOpenDetailRequest = { id -> openDetailRequestId = id },
+                            onOpenCategoryLimits = { showCategoryLimits = true },
                         )
                         "forecast" -> ForecastScreen(
                             serverUrl, primaryColor,
-                            onSelectionCountChange = { selectionCounts["forecast"] = it }
+                            onSelectionCountChange = { selectionCounts["forecast"] = it },
+                            onLinkExisting = { id, name -> linkExpenseTarget = id to name },
                         )
                         "export" -> ExportScreen(serverUrl, primaryColor)
                     }
@@ -462,13 +658,51 @@ fun MainScreen(
     }
 
     androidx.compose.animation.AnimatedVisibility(
+        visible = showNotificationsHistory,
+        enter = androidx.compose.animation.slideInHorizontally(initialOffsetX = { it }) + androidx.compose.animation.fadeIn(),
+        exit = androidx.compose.animation.slideOutHorizontally(targetOffsetX = { it }) + androidx.compose.animation.fadeOut(),
+    ) {
+        NotificationsHistoryScreen(
+            primaryColor = primaryColor,
+            serverUrl = serverUrl,
+            onClose = { showNotificationsHistory = false },
+        )
+    }
+
+    androidx.compose.animation.AnimatedVisibility(
+        visible = showCategoryLimits,
+        enter = androidx.compose.animation.slideInHorizontally(initialOffsetX = { it }) + androidx.compose.animation.fadeIn(),
+        exit = androidx.compose.animation.slideOutHorizontally(targetOffsetX = { it }) + androidx.compose.animation.fadeOut(),
+    ) {
+        CategoryLimitsScreen(
+            primaryColor = primaryColor,
+            serverUrl = serverUrl,
+            onClose = { showCategoryLimits = false },
+        )
+    }
+
+    androidx.compose.animation.AnimatedVisibility(
         visible = showNotifications,
         enter = androidx.compose.animation.slideInHorizontally(initialOffsetX = { it }) + androidx.compose.animation.fadeIn(),
         exit = androidx.compose.animation.slideOutHorizontally(targetOffsetX = { it }) + androidx.compose.animation.fadeOut(),
     ) {
+        val categoryLimitAlerts by prefs.notifCategoryLimitEnabled
+            .collectAsStateWithLifecycle(initialValue = true)
+        val globalLimitAlerts by prefs.notifGlobalLimitEnabled
+            .collectAsStateWithLifecycle(initialValue = true)
         NotificationsScreen(
             primaryColor = primaryColor,
             notifPrefs = notifPrefs,
+            categoryLimitAlerts = categoryLimitAlerts,
+            globalLimitAlerts = globalLimitAlerts,
+            onCategoryLimitAlertsChange = { enabled ->
+                scope.launch { prefs.setNotifCategoryLimitEnabled(enabled) }
+                if (enabled) onRequestNotifPermission()
+            },
+            onGlobalLimitAlertsChange = { enabled ->
+                scope.launch { prefs.setNotifGlobalLimitEnabled(enabled) }
+                if (enabled) onRequestNotifPermission()
+            },
             onNotifPrefsChange = { np ->
                 scope.launch {
                     prefs.setNotifPrefs(np)
@@ -551,6 +785,39 @@ fun MainScreen(
             },
             onClose = { showDetailRequestsList = false },
         )
+    }
+
+    // Link-existing-expense overlay — same slide+fade pattern as DR screens.
+    val linkTarget = linkExpenseTarget
+    androidx.compose.animation.AnimatedVisibility(
+        visible = linkTarget != null,
+        enter = androidx.compose.animation.slideInHorizontally(initialOffsetX = { it }) + androidx.compose.animation.fadeIn(),
+        exit = androidx.compose.animation.slideOutHorizontally(targetOffsetX = { it }) + androidx.compose.animation.fadeOut(),
+    ) {
+        if (linkTarget != null) {
+            LinkExpenseScreen(
+                serverUrl = serverUrl,
+                wishlistId = linkTarget.first,
+                wishlistName = linkTarget.second,
+                primaryColor = primaryColor,
+                onLinked = {
+                    // Forecast + wishlist + categories all need a refresh: the
+                    // server may have just cloned a wishlist category into
+                    // expense, and the just-linked tx must drop out of the
+                    // unlinked-candidates pool on the next open.
+                    scope.launch {
+                        runCatching {
+                            website.msdnna.budget_app.data.repository.CategoryRepository
+                                .loadAll(serverUrl)
+                        }
+                        runCatching {
+                            website.msdnna.budget_app.data.sync.SyncWorker.enqueue(context)
+                        }
+                    }
+                },
+                onClose = { linkExpenseTarget = null },
+            )
+        }
     }
 
     val openDrId = openDetailRequestId
