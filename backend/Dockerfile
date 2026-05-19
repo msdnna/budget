@@ -8,7 +8,8 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main .
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main . \
+ && CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o create_user ./cmd/create_user
 
 FROM alpine:3.21
 
@@ -17,6 +18,7 @@ RUN apk add --no-cache ca-certificates tzdata font-dejavu
 WORKDIR /app
 
 COPY --from=builder /app/main .
+COPY --from=builder /app/create_user .
 
 EXPOSE 8080
 

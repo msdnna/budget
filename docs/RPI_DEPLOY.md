@@ -116,11 +116,17 @@ curl http://localhost/api/health # должен ответить {"status":"ok"}
 
 ### Создание первого пользователя
 
+Prod-образ распространяется на distroless без шелла, поэтому отдельная утилита
+`create_user` лежит рядом с серверным бинарём и вызывается напрямую:
+
 ```bash
-docker compose -f docker-compose.rpi.yml exec backend /app/main \
-  -create-user -email you@example.com -password '...' -name 'Trav'
+docker compose -f docker-compose.rpi.yml exec backend /app/create_user \
+  -login alice -password 'secret' -name 'Alice Smith'
 ```
-(Команда та же, что в prod — backend-бинарь умеет CLI-режим.)
+
+Опционально: `-avatar 'https://…'` и `-admin` (первому пользователю обычно
+имеет смысл выдать админку, чтобы он мог создавать остальных через
+`/settings/users` в Web UI).
 
 ## 6. Бэкапы
 
