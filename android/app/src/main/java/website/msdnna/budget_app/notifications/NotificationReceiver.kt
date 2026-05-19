@@ -7,8 +7,13 @@ import android.content.Context
 import android.content.Intent
 import androidx.core.app.NotificationCompat
 import java.util.Calendar
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import website.msdnna.budget_app.MainActivity
 import website.msdnna.budget_app.R
+import website.msdnna.budget_app.data.repository.NotificationHistoryRepository
 
 class NotificationReceiver : BroadcastReceiver() {
 
@@ -16,6 +21,11 @@ class NotificationReceiver : BroadcastReceiver() {
         const val CHANNEL_ID = "budget_reminders"
         private const val ID_EXPENSES = 2001
         private const val ID_INCOME = 2002
+
+        // BroadcastReceivers run on the main thread with a limited window —
+        // history-row inserts go through a process-scoped IO scope so the
+        // receiver returns promptly after firing the system push.
+        private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -32,15 +42,25 @@ class NotificationReceiver : BroadcastReceiver() {
         when (action) {
             NotificationScheduler.ACTION_EXPENSES -> {
                 show(context, ID_EXPENSES, "Расходы", "Не забудьте внести расходы")
+                appendHistory("expenses_reminder", "Расходы", "Не забудьте внести расходы")
                 NotificationScheduler.scheduleExpenses(
                     context, frequency, hour, minute, dayOfWeek, dayOfMonth,
                 )
             }
             NotificationScheduler.ACTION_INCOME -> {
                 show(context, ID_INCOME, "Доходы", "Не забудьте внести доходы")
+                appendHistory("income_reminder", "Доходы", "Не забудьте внести доходы")
                 NotificationScheduler.scheduleIncome(
                     context, frequency, hour, minute, dayOfWeek, dayOfMonth,
                 )
+            }
+        }
+    }
+
+    private fun appendHistory(type: String, title: String, body: String) {
+        ioScope.launch {
+            runCatching {
+                NotificationHistoryRepository.appendLocalReminder(type, title, body)
             }
         }
     }

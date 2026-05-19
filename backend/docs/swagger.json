@@ -27,6 +27,113 @@
                 },
                 "type": "object"
             },
+            "handlers.CategoryLimitProgress": {
+                "properties": {
+                    "category_id": {
+                        "type": "string"
+                    },
+                    "color": {
+                        "type": "string"
+                    },
+                    "icon": {
+                        "type": "string"
+                    },
+                    "limit": {
+                        "type": "number"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "percent": {
+                        "type": "number"
+                    },
+                    "spent": {
+                        "type": "number"
+                    }
+                },
+                "type": "object"
+            },
+            "handlers.LimitsProgressResponse": {
+                "properties": {
+                    "categories": {
+                        "items": {
+                            "$ref": "#/components/schemas/handlers.CategoryLimitProgress"
+                        },
+                        "type": "array",
+                        "uniqueItems": false
+                    },
+                    "period": {
+                        "type": "string"
+                    },
+                    "total_limit": {
+                        "type": "number"
+                    },
+                    "total_percent": {
+                        "type": "number"
+                    },
+                    "total_spent": {
+                        "type": "number"
+                    }
+                },
+                "type": "object"
+            },
+            "handlers.NotificationDTO": {
+                "properties": {
+                    "category_id": {
+                        "type": "string"
+                    },
+                    "category_name": {
+                        "description": "CategoryName / Limit / Spent snapshot the values at the moment of\ngeneration so historical notifications stay readable even after the\ncategory is renamed or its limit changes.",
+                        "type": "string"
+                    },
+                    "created_at": {
+                        "type": "string"
+                    },
+                    "id": {
+                        "type": "string"
+                    },
+                    "limit": {
+                        "type": "number"
+                    },
+                    "period": {
+                        "description": "YYYY-MM",
+                        "type": "string"
+                    },
+                    "read": {
+                        "description": "Read is a per-user view layer computed from ReadBy; clients render\nthe badge state from this instead of having to scan the array.",
+                        "type": "boolean"
+                    },
+                    "read_by": {
+                        "items": {
+                            "type": "string"
+                        },
+                        "type": "array",
+                        "uniqueItems": false
+                    },
+                    "spent": {
+                        "type": "number"
+                    },
+                    "type": {
+                        "$ref": "#/components/schemas/models.NotificationType"
+                    }
+                },
+                "type": "object"
+            },
+            "handlers.NotificationsListResponse": {
+                "properties": {
+                    "data": {
+                        "items": {
+                            "$ref": "#/components/schemas/handlers.NotificationDTO"
+                        },
+                        "type": "array",
+                        "uniqueItems": false
+                    },
+                    "unread_count": {
+                        "type": "integer"
+                    }
+                },
+                "type": "object"
+            },
             "handlers.StatisticsOverviewResponse": {
                 "properties": {
                     "expenseByCategory": {
@@ -52,6 +159,32 @@
                     },
                     "summary": {
                         "$ref": "#/components/schemas/models.SummaryData"
+                    }
+                },
+                "type": "object"
+            },
+            "models.AdminUser": {
+                "properties": {
+                    "avatar_url": {
+                        "type": "string"
+                    },
+                    "blocked_at": {
+                        "type": "string"
+                    },
+                    "created_at": {
+                        "type": "string"
+                    },
+                    "display_name": {
+                        "type": "string"
+                    },
+                    "id": {
+                        "type": "string"
+                    },
+                    "is_admin": {
+                        "type": "boolean"
+                    },
+                    "login": {
+                        "type": "string"
                     }
                 },
                 "type": "object"
@@ -82,6 +215,10 @@
                     },
                     "last_modified_by": {
                         "$ref": "#/components/schemas/models.UserInfo"
+                    },
+                    "monthly_limit": {
+                        "description": "MonthlyLimit caps spending for an expense category over the current\ncalendar month (1st–end). Nil = no limit tracked. Only meaningful for\nsection=\"expense\"; ignored for income/wishlist.",
+                        "type": "number"
                     },
                     "name": {
                         "type": "string"
@@ -155,6 +292,21 @@
                 },
                 "type": "object"
             },
+            "models.ChangePasswordRequest": {
+                "properties": {
+                    "new_password": {
+                        "type": "string"
+                    },
+                    "old_password": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "new_password",
+                    "old_password"
+                ],
+                "type": "object"
+            },
             "models.CreateCategoryRequest": {
                 "properties": {
                     "color": {
@@ -223,6 +375,28 @@
                     "category",
                     "date",
                     "type"
+                ],
+                "type": "object"
+            },
+            "models.CreateUserRequest": {
+                "properties": {
+                    "display_name": {
+                        "type": "string"
+                    },
+                    "is_admin": {
+                        "type": "boolean"
+                    },
+                    "login": {
+                        "type": "string"
+                    },
+                    "password": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "display_name",
+                    "login",
+                    "password"
                 ],
                 "type": "object"
             },
@@ -437,6 +611,31 @@
                 },
                 "type": "object"
             },
+            "models.NotificationType": {
+                "enum": [
+                    "category_limit_exceeded",
+                    "global_limit_exceeded"
+                ],
+                "type": "string",
+                "x-enum-varnames": [
+                    "NotificationCategoryLimitExceeded",
+                    "NotificationGlobalLimitExceeded"
+                ]
+            },
+            "models.NullableFloat": {
+                "properties": {
+                    "present": {
+                        "type": "boolean"
+                    },
+                    "valid": {
+                        "type": "boolean"
+                    },
+                    "value": {
+                        "type": "number"
+                    }
+                },
+                "type": "object"
+            },
             "models.RefreshRequest": {
                 "properties": {
                     "refresh_token": {
@@ -502,6 +701,17 @@
                         "type": "boolean"
                     }
                 },
+                "type": "object"
+            },
+            "models.SetPasswordRequest": {
+                "properties": {
+                    "password": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "password"
+                ],
                 "type": "object"
             },
             "models.SummaryData": {
@@ -773,6 +983,9 @@
                     "icon_scale": {
                         "type": "number"
                     },
+                    "monthly_limit": {
+                        "$ref": "#/components/schemas/models.NullableFloat"
+                    },
                     "name": {
                         "type": "string"
                     }
@@ -807,6 +1020,23 @@
                     },
                     "wishlist_id": {
                         "description": "Pointer so an empty string (\"\") is distinguishable from absent — empty\nstring unlinks the transaction from its wishlist item.",
+                        "type": "string"
+                    }
+                },
+                "type": "object"
+            },
+            "models.UpdateUserRequest": {
+                "properties": {
+                    "blocked": {
+                        "type": "boolean"
+                    },
+                    "display_name": {
+                        "type": "string"
+                    },
+                    "is_admin": {
+                        "type": "boolean"
+                    },
+                    "login": {
                         "type": "string"
                     }
                 },
@@ -930,6 +1160,385 @@
         "url": ""
     },
     "paths": {
+        "/admin/users": {
+            "get": {
+                "description": "Возвращает login/is_admin/blocked_at/created_at в дополнение к публичным полям. Не-удалённые пользователи (включая заблокированных).",
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "items": {
+                                        "$ref": "#/components/schemas/models.AdminUser"
+                                    },
+                                    "type": "array"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Список пользователей с админ-полями (admin)",
+                "tags": [
+                    "users"
+                ]
+            },
+            "post": {
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "oneOf": [
+                                    {
+                                        "type": "object"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/models.CreateUserRequest",
+                                        "summary": "body",
+                                        "description": "Тело"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "description": "Тело",
+                    "required": true
+                },
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.AdminUser"
+                                }
+                            }
+                        },
+                        "description": "Created"
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Bad Request"
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "login already taken"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Создать пользователя (admin)",
+                "tags": [
+                    "users"
+                ]
+            }
+        },
+        "/admin/users/{id}": {
+            "delete": {
+                "description": "Помечает `deleted_at`. UserInfo-снимки в существующих записях остаются валидными. Нельзя удалить самого себя или последнего админа.",
+                "parameters": [
+                    {
+                        "description": "User ID",
+                        "in": "path",
+                        "name": "id",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "boolean"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Soft-удалить пользователя (admin)",
+                "tags": [
+                    "users"
+                ]
+            },
+            "patch": {
+                "description": "Partial PATCH: login / display_name / is_admin / blocked. Safeguards: нельзя снять админку или заблокировать самого себя, нельзя снять админку с последнего админа.",
+                "parameters": [
+                    {
+                        "description": "User ID",
+                        "in": "path",
+                        "name": "id",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "oneOf": [
+                                    {
+                                        "type": "object"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/models.UpdateUserRequest",
+                                        "summary": "body",
+                                        "description": "Тело"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "description": "Тело",
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.AdminUser"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Bad Request"
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Not Found"
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Conflict"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Обновить пользователя (admin)",
+                "tags": [
+                    "users"
+                ]
+            }
+        },
+        "/admin/users/{id}/avatar": {
+            "delete": {
+                "parameters": [
+                    {
+                        "description": "User ID",
+                        "in": "path",
+                        "name": "id",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.AdminUser"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Удалить аватар (admin)",
+                "tags": [
+                    "users"
+                ]
+            },
+            "post": {
+                "description": "PNG / JPEG / SVG, до 512KB. Сохраняется inline в коллекции users.",
+                "parameters": [
+                    {
+                        "description": "User ID",
+                        "in": "path",
+                        "name": "id",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "title": "file",
+                                "type": "file"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "type": "object"
+                            }
+                        }
+                    },
+                    "description": "Файл",
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.AdminUser"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Загрузить аватар пользователя (admin)",
+                "tags": [
+                    "users"
+                ]
+            }
+        },
+        "/admin/users/{id}/password": {
+            "post": {
+                "parameters": [
+                    {
+                        "description": "User ID",
+                        "in": "path",
+                        "name": "id",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "oneOf": [
+                                    {
+                                        "type": "object"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/models.SetPasswordRequest",
+                                        "summary": "body",
+                                        "description": "Тело"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "description": "Тело",
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "boolean"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Сменить пароль другого пользователя (admin)",
+                "tags": [
+                    "users"
+                ]
+            }
+        },
         "/auth/login": {
             "post": {
                 "description": "Возвращает access (24ч) + refresh (30д). Refresh обменивается на новую пару через `/auth/refresh` пока он сам жив. Тот же текст ошибки для несуществующего логина и неверного пароля (anti-enumeration).",
@@ -1034,6 +1643,81 @@
                     }
                 ],
                 "summary": "Текущий пользователь",
+                "tags": [
+                    "auth"
+                ]
+            }
+        },
+        "/auth/password": {
+            "post": {
+                "description": "Требует старый пароль. После смены текущая JWT-пара остаётся валидной до истечения; рекомендуется перелогиниться.",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "oneOf": [
+                                    {
+                                        "type": "object"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/models.ChangePasswordRequest",
+                                        "summary": "body",
+                                        "description": "Тело"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "description": "Тело",
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "boolean"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Bad Request"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Старый пароль не подходит"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Сменить собственный пароль (self)",
                 "tags": [
                     "auth"
                 ]
@@ -1287,6 +1971,55 @@
                     }
                 ],
                 "summary": "Категории всех секций одним запросом",
+                "tags": [
+                    "categories"
+                ]
+            }
+        },
+        "/categories/limits-progress": {
+            "get": {
+                "description": "Возвращает по каждой expense-категории с заданным `monthly_limit`: сколько потрачено за период, процент. Общая сумма лимитов и трат суммируется только по категориям с лимитом. По умолчанию — текущий календарный месяц.",
+                "parameters": [
+                    {
+                        "description": "YYYY-MM (по умолчанию — текущий месяц)",
+                        "in": "query",
+                        "name": "month",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.LimitsProgressResponse"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Прогресс по лимитам категорий за месяц",
                 "tags": [
                     "categories"
                 ]
@@ -2431,6 +3164,149 @@
                 ]
             }
         },
+        "/notifications": {
+            "get": {
+                "description": "Каждое уведомление — family-wide; флаг `read` — per-user (учитывается, входит ли user_id в `read_by`).",
+                "parameters": [
+                    {
+                        "description": "Сколько записей вернуть (≤100, default=50)",
+                        "in": "query",
+                        "name": "limit",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.NotificationsListResponse"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Список уведомлений (newest-first)",
+                "tags": [
+                    "notifications"
+                ]
+            }
+        },
+        "/notifications/read-all": {
+            "post": {
+                "description": "Добавляет user_id в `read_by` каждого уведомления, где его ещё нет.",
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "boolean"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Пометить все уведомления прочитанными",
+                "tags": [
+                    "notifications"
+                ]
+            }
+        },
+        "/notifications/{id}/read": {
+            "post": {
+                "parameters": [
+                    {
+                        "description": "Notification ID",
+                        "in": "path",
+                        "name": "id",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "boolean"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Пометить одно уведомление прочитанным",
+                "tags": [
+                    "notifications"
+                ]
+            }
+        },
         "/statistics/by-category": {
             "get": {
                 "description": "Сумма, доля и количество транзакций в разрезе категории. По умолчанию `type=expense`.",
@@ -3291,6 +4167,42 @@
                 ]
             }
         },
+        "/users/{id}/avatar": {
+            "get": {
+                "parameters": [
+                    {
+                        "description": "User ID",
+                        "in": "path",
+                        "name": "id",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "image/png": {
+                                "schema": {
+                                    "type": "file"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Отдать аватар пользователя (raw bytes)",
+                "tags": [
+                    "users"
+                ]
+            }
+        },
         "/version": {
             "get": {
                 "description": "Публичный эндпоинт. `android_latest` / `android_min_required` берутся из env-переменных бэкенда — клиент-обновление и gate-проверка.",
@@ -3580,6 +4492,104 @@
                     }
                 ],
                 "summary": "Обновить wishlist-итем",
+                "tags": [
+                    "wishlist"
+                ]
+            }
+        },
+        "/wishlist/{id}/link/{tx_id}": {
+            "post": {
+                "description": "Фиксирует существующую транзакцию как оплату/покупку. Категория транзакции приводится к категории wishlist-итема; недостающая категория клонируется в expense с цветом/иконкой. `once`-итемы дополнительно помечаются `purchased=true`.",
+                "parameters": [
+                    {
+                        "description": "Wishlist ID",
+                        "in": "path",
+                        "name": "id",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Transaction ID",
+                        "in": "path",
+                        "name": "tx_id",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.Transaction"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Bad Request"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized"
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Not Found"
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Транзакция уже связана"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Привязать существующий расход к wishlist/regular-итему",
                 "tags": [
                     "wishlist"
                 ]

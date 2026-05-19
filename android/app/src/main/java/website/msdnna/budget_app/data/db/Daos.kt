@@ -258,3 +258,37 @@ interface CategoryDao {
     @Query("DELETE FROM categories WHERE id = :id")
     suspend fun deleteHard(id: String)
 }
+
+@Dao
+interface NotificationHistoryDao {
+    /** Newest first; cap at a reasonable view-size — older rows can be
+     *  purged by a background prune step if the table grows unbounded. */
+    @Query("SELECT * FROM notification_history ORDER BY created_at DESC LIMIT :limit")
+    fun observeRecent(limit: Int = 100): Flow<List<NotificationHistoryEntity>>
+
+    @Query("SELECT COUNT(*) FROM notification_history WHERE read_local = 0")
+    fun observeUnreadCount(): Flow<Int>
+
+    @Query("SELECT * FROM notification_history WHERE server_id = :serverId LIMIT 1")
+    suspend fun findByServerId(serverId: String): NotificationHistoryEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(row: NotificationHistoryEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAll(rows: List<NotificationHistoryEntity>)
+
+    @Query("UPDATE notification_history SET read_local = 1 WHERE read_local = 0")
+    suspend fun markAllRead()
+
+    @Query("UPDATE notification_history SET read_local = 1 WHERE id = :id")
+    suspend fun markRead(id: String)
+
+    @Query("UPDATE notification_history SET pushed_at = :pushedAt WHERE id = :id")
+    suspend fun markPushed(id: String, pushedAt: Long)
+
+    /** Hard-purge anything older than the cutoff timestamp. Called sparingly
+     *  by the sync worker; the bell view itself only shows the latest N. */
+    @Query("DELETE FROM notification_history WHERE created_at < :cutoff")
+    suspend fun pruneOlderThan(cutoff: Long)
+}

@@ -9,6 +9,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 import website.msdnna.budget_app.data.AppContainer
 import website.msdnna.budget_app.data.api.RetrofitClient
 import website.msdnna.budget_app.data.db.SyncStatus
@@ -107,5 +109,34 @@ object CategoryRepository {
             )
         )
         SyncWorker.enqueue(AppContainer.appContext)
+    }
+
+    /**
+     * Admin-only PATCH on `/api/categories/:id` for the monthly_limit field.
+     * Online-only: the sync engine doesn't carry partial updates for
+     * categories, and only admins can mutate this anyway. Pass a number to
+     * set, or null to clear (sends a literal `null` so the backend's
+     * NullableFloat unmarshaler treats it as "explicit clear", not
+     * "leave unchanged"). Updates Room on success so the bar refreshes
+     * immediately without waiting for the next sync pull.
+     */
+    suspend fun patchMonthlyLimit(serverUrl: String, id: String, newLimit: Double?): Category? {
+        // Manual JSON build so Gson doesn't drop the `null` value. The
+        // backend uses `{"monthly_limit": null}` to mean "clear" and
+        // `{"monthly_limit": N}` to mean "set to N"; absent key = leave
+        // unchanged (which we never want here — every call to this
+        // function is an explicit user action on the limit field).
+        val literal = newLimit?.let { it.toString() } ?: "null"
+        val body = """{"monthly_limit":$literal}"""
+            .toRequestBody("application/json; charset=utf-8".toMediaType())
+        val updated = try {
+            RetrofitClient.getService(serverUrl).patchCategory(id, body)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            return null
+        }
+        dao.upsert(updated.toEntity(SyncStatus.SYNCED))
+        return updated
     }
 }

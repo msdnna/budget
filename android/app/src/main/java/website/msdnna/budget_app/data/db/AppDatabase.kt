@@ -8,14 +8,20 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [TransactionEntity::class, WishlistEntity::class, CategoryEntity::class],
-    version = 5,
+    entities = [
+        TransactionEntity::class,
+        WishlistEntity::class,
+        CategoryEntity::class,
+        NotificationHistoryEntity::class,
+    ],
+    version = 6,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun transactions(): TransactionDao
     abstract fun wishlist(): WishlistDao
     abstract fun categories(): CategoryDao
+    abstract fun notifications(): NotificationHistoryDao
 
     companion object {
         @Volatile private var instance: AppDatabase? = null
@@ -56,13 +62,47 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        // v5 → v6: category monthly_limit (nullable — null = no limit
+        // tracked) + new notification_history table backing the in-app
+        // bell. The column is nullable so we can distinguish "no limit set"
+        // from "limit of 0₽" (sentinel-free, mirrors backend semantics).
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE categories ADD COLUMN monthly_limit REAL")
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS notification_history (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        server_id TEXT,
+                        type TEXT NOT NULL,
+                        period TEXT NOT NULL DEFAULT '',
+                        category_id TEXT,
+                        category_name TEXT,
+                        `limit` REAL NOT NULL DEFAULT 0,
+                        spent REAL NOT NULL DEFAULT 0,
+                        title TEXT NOT NULL DEFAULT '',
+                        body TEXT NOT NULL DEFAULT '',
+                        created_at INTEGER NOT NULL,
+                        read_local INTEGER NOT NULL DEFAULT 0,
+                        pushed_at INTEGER
+                    )
+                    """.trimIndent()
+                )
+            }
+        }
+
         fun get(context: Context): AppDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
                 AppDatabase::class.java,
                 "msdnna_budget.db",
-            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
-                .build().also { instance = it }
+            ).addMigrations(
+                MIGRATION_1_2,
+                MIGRATION_2_3,
+                MIGRATION_3_4,
+                MIGRATION_4_5,
+                MIGRATION_5_6,
+            ).build().also { instance = it }
         }
     }
 }

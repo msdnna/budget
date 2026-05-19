@@ -92,6 +92,10 @@ jobs:
           context: backend
           file: backend/Dockerfile.prod
           push: true
+          # Multi-arch so the same image runs on x86_64 dev hosts and
+          # arm64 home servers (Raspberry Pi 4/5). arm64 leg cross-builds
+          # via QEMU — slow but acceptable on release tags.
+          platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |

@@ -72,10 +72,18 @@ describe('theme store', () => {
     }
   })
 
-  it('themeOverrides exposes only `common` in light mode', () => {
+  it('themeOverrides exposes common + Button + Radio (text-on-primary) in light mode', () => {
+    // Button + Radio overrides несут принудительный textColor*, считаемый по
+    // luminance активного primary-цвета — чтобы выбранный n-radio-button
+    // оставался читаемым на оранжевом/бирюзовом так же, как и primary-кнопка.
     const t = useThemeStore()
-    expect(Object.keys(t.themeOverrides)).toEqual(['common'])
+    expect(Object.keys(t.themeOverrides).sort()).toEqual(['Button', 'Radio', 'common'])
     expect(t.themeOverrides.common.primaryColor).toBe(t.activeTheme.primary)
+    expect(t.themeOverrides.Button.textColorPrimary).toMatch(/^#(?:fff|ffffff|1f1f1f)$/)
+    expect(t.themeOverrides.Radio.buttonTextColorActive).toBe(
+      t.themeOverrides.Button.textColorPrimary,
+    )
+    expect(t.themeOverrides.Radio.buttonColorActive).toBe(t.activeTheme.primary)
   })
 
   it('themeOverrides includes Naive component overrides in dark mode', () => {

@@ -1,0 +1,13 @@
+[Unit]
+Description=msdnna-budget: trigger daily MongoDB backup
+
+[Timer]
+# Daily at 03:30 local. Persistent=true catches the run if the Pi was off at
+# 03:30 (e.g. brief power blip) — it'll fire on next boot instead of skipping.
+OnCalendar=*-*-* 03:30:00
+Persistent=true
+RandomizedDelaySec=5min
+Unit=budget-backup.service
+
+[Install]
+WantedBy=timers.target

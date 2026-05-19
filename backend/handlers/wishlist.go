@@ -14,12 +14,13 @@ import (
 )
 
 type WishlistHandler struct {
-	repo   *repository.WishlistRepository
-	txRepo *repository.TransactionRepository
+	repo    *repository.WishlistRepository
+	txRepo  *repository.TransactionRepository
+	catRepo *repository.CategoryRepository
 }
 
-func NewWishlistHandler(repo *repository.WishlistRepository, txRepo *repository.TransactionRepository) *WishlistHandler {
-	return &WishlistHandler{repo: repo, txRepo: txRepo}
+func NewWishlistHandler(repo *repository.WishlistRepository, txRepo *repository.TransactionRepository, catRepo *repository.CategoryRepository) *WishlistHandler {
+	return &WishlistHandler{repo: repo, txRepo: txRepo, catRepo: catRepo}
 }
 
 // Create godoc
@@ -233,4 +234,104 @@ func (h *WishlistHandler) UnlinkPeriod(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"unlinked": n})
+}
+
+// LinkExisting attaches an existing expense transaction to a wishlist/regular
+// item. The transaction's category is overwritten with the wishlist item's
+// category (so it surfaces under the same expense pie slice that «Куплено»/
+// «Оплачено» would produce). If that category does not yet exist in the
+// expense section, it is cloned with the wishlist category's color/icon. For
+// `once`-frequency items the wishlist's `purchased` flag is also set.
+//
+// Validates: tx exists and not soft-deleted, tx.Type == expense, tx is not
+// already linked to another wishlist item, tx is neither a child of a
+// detail-request nor a closed-request parent.
+//
+// @Summary      Привязать существующий расход к wishlist/regular-итему
+// @Description  Фиксирует существующую транзакцию как оплату/покупку. Категория транзакции приводится к категории wishlist-итема; недостающая категория клонируется в expense с цветом/иконкой. `once`-итемы дополнительно помечаются `purchased=true`.
+// @Tags         wishlist
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id     path      string  true  "Wishlist ID"
+// @Param        tx_id  path      string  true  "Transaction ID"
+// @Success      200    {object}  models.Transaction
+// @Failure      400    {object}  map[string]string
+// @Failure      401    {object}  map[string]string
+// @Failure      404    {object}  map[string]string
+// @Failure      409    {object}  map[string]string  "Транзакция уже связана"
+// @Router       /wishlist/{id}/link/{tx_id} [post]
+func (h *WishlistHandler) LinkExisting(c *gin.Context) {
+	id := c.Param("id")
+	txID := c.Param("tx_id")
+
+	item, err := h.repo.FindByID(c.Request.Context(), id)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "wishlist item not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	tx, err := h.txRepo.FindByID(c.Request.Context(), txID)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "transaction not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	if tx.Type != models.Expense {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "only expense transactions can be linked"})
+		return
+	}
+	if tx.WishlistID != "" {
+		c.JSON(http.StatusConflict, gin.H{"error": "transaction already linked to a wishlist item"})
+		return
+	}
+	if tx.ParentID != "" || tx.ExcludedFromStats || tx.DetailRequestStatus == "closed" {
+		c.JSON(http.StatusConflict, gin.H{"error": "transaction is part of a detail-request"})
+		return
+	}
+
+	// Clone the wishlist's category into expense if missing. Defensive lookups
+	// on the wishlist-side category metadata so we have visuals to copy; if the
+	// wishlist category row was deleted we fall back to empty color/icon so the
+	// expense category at least exists (admin can re-color later).
+	var color, icon string
+	if h.catRepo != nil {
+		if wlCat, lookupErr := h.catRepo.FindByName(c.Request.Context(), "wishlist", item.Category); lookupErr == nil && wlCat != nil {
+			color = wlCat.Color
+			icon = wlCat.Icon
+		}
+		if _, ensureErr := h.catRepo.EnsureInSection(c.Request.Context(), "expense", item.Category, color, icon, userInfoFromCtx(c)); ensureErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": ensureErr.Error()})
+			return
+		}
+	}
+
+	update := bson.M{
+		"wishlist_id": item.ID,
+		"category":    item.Category,
+	}
+	updated, err := h.txRepo.Update(c.Request.Context(), txID, update, 0, userInfoFromCtx(c))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// once-frequency items represent a single purchase — flip purchased on
+	// link so the wishlist row reflects the new state. Recurring items stay
+	// as-is (paid_this_period is derived from the linked tx itself).
+	if item.Frequency == models.FrequencyOnce || item.Frequency == "" {
+		purchased := true
+		if !item.Purchased {
+			_, _ = h.repo.Update(c.Request.Context(), item.ID, bson.M{"purchased": purchased}, 0, userInfoFromCtx(c))
+		}
+	}
+
+	c.JSON(http.StatusOK, updated)
 }

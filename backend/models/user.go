@@ -13,8 +13,16 @@ type User struct {
 	PasswordHash string             `bson:"password_hash" json:"-"`
 	DisplayName  string             `bson:"display_name" json:"display_name"`
 	AvatarURL    string             `bson:"avatar_url,omitempty" json:"avatar_url,omitempty"`
-	IsAdmin      bool               `bson:"is_admin,omitempty" json:"is_admin"`
-	CreatedAt    time.Time          `bson:"created_at" json:"created_at"`
+	// AvatarMime / AvatarData store uploaded avatars inline (мирорит подход
+	// CategoryIcon: для семейного приложения файлов мало, отдельная коллекция
+	// — оверкилл). Когда заполнены, AvatarURL указывает на
+	// `/api/users/<id>/avatar?v=<ts>` и сериализуется в UserInfo нормально.
+	AvatarMime string     `bson:"avatar_mime,omitempty" json:"-"`
+	AvatarData []byte     `bson:"avatar_data,omitempty" json:"-"`
+	IsAdmin    bool       `bson:"is_admin,omitempty" json:"is_admin"`
+	BlockedAt  *time.Time `bson:"blocked_at,omitempty" json:"blocked_at,omitempty"`
+	DeletedAt  *time.Time `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
+	CreatedAt  time.Time  `bson:"created_at" json:"created_at"`
 }
 
 // UserInfo is embedded in records (denormalized snapshot at creation time).
@@ -67,4 +75,42 @@ type RefreshResponse struct {
 	Token        string    `json:"token"`
 	RefreshToken string    `json:"refresh_token"`
 	ExpiresAt    time.Time `json:"expires_at"`
+}
+
+// ── Admin user-management payloads ──────────────────────────────
+
+// AdminUser — расширенный вид пользователя для админ-управления.
+type AdminUser struct {
+	ID          string     `json:"id"`
+	Login       string     `json:"login"`
+	DisplayName string     `json:"display_name"`
+	AvatarURL   string     `json:"avatar_url,omitempty"`
+	IsAdmin     bool       `json:"is_admin"`
+	BlockedAt   *time.Time `json:"blocked_at,omitempty"`
+	CreatedAt   time.Time  `json:"created_at"`
+}
+
+type CreateUserRequest struct {
+	Login       string `json:"login" binding:"required"`
+	Password    string `json:"password" binding:"required"`
+	DisplayName string `json:"display_name" binding:"required"`
+	IsAdmin     bool   `json:"is_admin"`
+}
+
+// UpdateUserRequest — частичное обновление. Pointer-семантика: nil = не
+// трогать, "" / false — применить как новое значение.
+type UpdateUserRequest struct {
+	Login       *string `json:"login,omitempty"`
+	DisplayName *string `json:"display_name,omitempty"`
+	IsAdmin     *bool   `json:"is_admin,omitempty"`
+	Blocked     *bool   `json:"blocked,omitempty"`
+}
+
+type SetPasswordRequest struct {
+	Password string `json:"password" binding:"required"`
+}
+
+type ChangePasswordRequest struct {
+	OldPassword string `json:"old_password" binding:"required"`
+	NewPassword string `json:"new_password" binding:"required"`
 }

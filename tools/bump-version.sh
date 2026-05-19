@@ -49,7 +49,7 @@ if [ "$SERVICE" = "android" ]; then
 
   # Update ANDROID_LATEST default in both docker-compose files so the backend
   # advertises the new APK to existing installs after a redeploy.
-  for f in "$ROOT/docker-compose.yml" "$ROOT/docker-compose.prod.yml"; do
+  for f in "$ROOT/docker-compose.yml" "$ROOT/docker-compose.prod.yml" "$ROOT/docker-compose.rpi.yml"; do
     if [ -f "$f" ]; then
       sed -i -E "s|(ANDROID_LATEST=\\\$\\{ANDROID_LATEST:-)[^}]+(\\})|\\1$NEW\\2|" "$f"
       echo "  $(basename "$f") → ANDROID_LATEST default = $NEW"

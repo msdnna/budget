@@ -57,6 +57,7 @@ func main() {
 	catRepo := repository.NewCategoryRepository(db)
 	iconRepo := repository.NewCategoryIconRepository(db)
 	drRepo := repository.NewDetailRequestRepository(db)
+	notifRepo := repository.NewNotificationRepository(db)
 
 	seedCtx, seedCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer seedCancel()
@@ -69,7 +70,7 @@ func main() {
 
 	txHandler := handlers.NewTransactionHandler(txRepo)
 	statsHandler := handlers.NewStatisticsHandler(txRepo, wlRepo)
-	wlHandler := handlers.NewWishlistHandler(wlRepo, txRepo)
+	wlHandler := handlers.NewWishlistHandler(wlRepo, txRepo, catRepo)
 	exportHandler := handlers.NewExportHandler(txRepo, wlRepo, cfg.FontPath)
 	authHandler := handlers.NewAuthHandler(userRepo, cfg)
 	catHandler := handlers.NewCategoryHandler(catRepo)
@@ -77,6 +78,11 @@ func main() {
 	syncHandler := handlers.NewSyncHandler(txRepo, wlRepo, catRepo)
 	versionHandler := handlers.NewVersionHandler(appVersion)
 	drHandler := handlers.NewDetailRequestHandler(drRepo, txRepo, userRepo)
+	userAdminHandler := handlers.NewUserAdminHandler(userRepo)
+	limitsHandler := handlers.NewLimitsHandler(catRepo, txRepo)
+	notifHandler := handlers.NewNotificationHandler(notifRepo)
+	limitChecker := handlers.NewLimitChecker(catRepo, txRepo, notifRepo)
+	txHandler.SetLimitChecker(limitChecker)
 
 	r := gin.Default()
 	if err := r.SetTrustedProxies([]string{"127.0.0.1", "::1"}); err != nil {
@@ -111,7 +117,9 @@ func main() {
 		protected.Use(middleware.Auth(cfg))
 		{
 			protected.GET("/auth/me", authHandler.Me)
+			protected.POST("/auth/password", userAdminHandler.ChangeOwnPassword)
 			protected.GET("/users", authHandler.ListUsers)
+			protected.GET("/users/:id/avatar", userAdminHandler.ServeAvatar)
 
 			protected.POST("/transactions", txHandler.Create)
 			protected.GET("/transactions", txHandler.List)
@@ -129,9 +137,11 @@ func main() {
 			protected.PUT("/wishlist/:id", wlHandler.Update)
 			protected.DELETE("/wishlist/:id", wlHandler.Delete)
 			protected.POST("/wishlist/:id/unlink-period", wlHandler.UnlinkPeriod)
+			protected.POST("/wishlist/:id/link/:tx_id", wlHandler.LinkExisting)
 
 			protected.GET("/categories", catHandler.List)
 			protected.GET("/categories/all", catHandler.ListAll)
+			protected.GET("/categories/limits-progress", limitsHandler.Progress)
 			protected.POST("/categories", catHandler.Create)
 			protected.DELETE("/categories/:id", catHandler.Delete)
 
@@ -147,6 +157,14 @@ func main() {
 				admin.POST("/icons", iconHandler.Upload)
 				admin.GET("/icons", iconHandler.List)
 				admin.DELETE("/icons/:id", iconHandler.Delete)
+
+				admin.GET("/admin/users", userAdminHandler.AdminList)
+				admin.POST("/admin/users", userAdminHandler.Create)
+				admin.PATCH("/admin/users/:id", userAdminHandler.Update)
+				admin.DELETE("/admin/users/:id", userAdminHandler.Delete)
+				admin.POST("/admin/users/:id/password", userAdminHandler.SetPassword)
+				admin.POST("/admin/users/:id/avatar", userAdminHandler.UploadAvatar)
+				admin.DELETE("/admin/users/:id/avatar", userAdminHandler.DeleteAvatar)
 			}
 
 			protected.GET("/export/excel", exportHandler.Excel)
@@ -154,6 +172,10 @@ func main() {
 
 			protected.GET("/sync/pull", syncHandler.Pull)
 			protected.POST("/sync/push", syncHandler.Push)
+
+			protected.GET("/notifications", notifHandler.List)
+			protected.POST("/notifications/read-all", notifHandler.ReadAll)
+			protected.POST("/notifications/:id/read", notifHandler.Read)
 
 			protected.POST("/detail-requests", drHandler.Create)
 			protected.GET("/detail-requests", drHandler.List)

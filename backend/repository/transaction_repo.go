@@ -713,7 +713,13 @@ func buildTransactionFilter(f models.TransactionFilter) bson.M {
 	if !f.IncludeDetailed {
 		filter["detail_request_status"] = bson.M{"$ne": "closed"}
 	}
-	if f.Type != "" {
+	if f.Unlinked {
+		filter["type"] = string(models.Expense)
+		filter["wishlist_id"] = bson.M{"$in": []any{nil, ""}}
+		filter["parent_id"] = bson.M{"$in": []any{nil, ""}}
+		filter["excluded_from_stats"] = bson.M{"$ne": true}
+		filter["detail_request_status"] = bson.M{"$ne": "closed"}
+	} else if f.Type != "" {
 		filter["type"] = f.Type
 	}
 	if len(f.Categories) > 0 {

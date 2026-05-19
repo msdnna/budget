@@ -27,6 +27,7 @@ data class LoginResponse(
     @SerializedName("user_id") val userId: String = "",
     @SerializedName("display_name") val displayName: String = "",
     @SerializedName("avatar_url") val avatarUrl: String? = null,
+    @SerializedName("is_admin") val isAdmin: Boolean = false,
     @SerializedName("expires_at") val expiresAt: String = ""
 )
 
@@ -209,6 +210,8 @@ data class Category(
     val color: String? = null,
     val icon: String? = null,
     @SerializedName("icon_scale") val iconScale: Double = 0.0,
+    // monthly_limit — null = no limit, only meaningful on expense categories.
+    @SerializedName("monthly_limit") val monthlyLimit: Double? = null,
     @SerializedName("is_default") val isDefault: Boolean = true,
     @SerializedName("created_at") val createdAt: String = "",
     val version: Int = 0,
@@ -268,4 +271,44 @@ data class SyncOperationResult(
 data class SyncPushResponse(
     val results: List<SyncOperationResult> = emptyList(),
     @SerializedName("server_time") val serverTime: String = "",
+)
+
+// ===== Category limits (Phase 5) =====
+
+data class CategoryLimitProgress(
+    @SerializedName("category_id") val categoryId: String = "",
+    val name: String = "",
+    val color: String? = null,
+    val icon: String? = null,
+    val limit: Double = 0.0,
+    val spent: Double = 0.0,
+    val percent: Double = 0.0,
+)
+
+data class LimitsProgressResponse(
+    val period: String = "",
+    val categories: List<CategoryLimitProgress> = emptyList(),
+    @SerializedName("total_limit") val totalLimit: Double = 0.0,
+    @SerializedName("total_spent") val totalSpent: Double = 0.0,
+    @SerializedName("total_percent") val totalPercent: Double = 0.0,
+)
+
+// ===== Notifications (Phase 5) =====
+
+data class ServerNotification(
+    val id: String = "",
+    val type: String = "", // "category_limit_exceeded" | "global_limit_exceeded"
+    val period: String = "", // YYYY-MM
+    @SerializedName("category_id") val categoryId: String = "",
+    @SerializedName("category_name") val categoryName: String = "",
+    val limit: Double = 0.0,
+    val spent: Double = 0.0,
+    @SerializedName("read_by") val readBy: List<String>? = null,
+    @SerializedName("created_at") val createdAt: String = "",
+    val read: Boolean = false, // per-user view, computed by the server
+)
+
+data class NotificationsListResponse(
+    val data: List<ServerNotification> = emptyList(),
+    @SerializedName("unread_count") val unreadCount: Int = 0,
 )

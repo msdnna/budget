@@ -1,5 +1,10 @@
 <template>
-  <n-config-provider :theme="naiveTheme" :theme-overrides="themeOverrides">
+  <n-config-provider
+    :theme="naiveTheme"
+    :theme-overrides="themeOverrides"
+    :locale="ruRU"
+    :date-locale="dateRuRU"
+  >
     <n-message-provider>
       <n-notification-provider>
         <n-layout style="min-height: 100vh">
@@ -204,6 +209,8 @@
                   </n-popover>
                   <!-- Detail-requests bell -->
                   <DetailRequestBell v-if="auth.isAuthenticated" />
+                  <!-- Limit-overflow notifications bell -->
+                  <NotificationBell v-if="auth.isAuthenticated" />
                   <!-- Hide/show values toggle -->
                   <n-tooltip trigger="hover" placement="bottom">
                     <template #trigger>
@@ -290,10 +297,16 @@
                 </template>
                 <!-- Mobile detail-requests bell -->
                 <DetailRequestBell v-if="auth.isAuthenticated" />
-                <!-- Mobile theme picker -->
+                <!-- Mobile notifications bell -->
+                <NotificationBell v-if="auth.isAuthenticated" />
+                <!-- Mobile visuals menu — single popover wrapping the four
+                     visual toggles (theme color, hide values, pie unit,
+                     dark mode). Saves three header slots so the row fits
+                     on narrow phones without the wraparound that pushed
+                     `15 мая 2026 г.` onto its own line. -->
                 <n-popover trigger="click" placement="bottom-end" :show-arrow="false">
                   <template #trigger>
-                    <n-button quaternary circle size="small" :title="'Цвет темы'">
+                    <n-button quaternary circle size="small" title="Внешний вид">
                       <template #icon>
                         <n-icon size="18" :style="{ color: primaryColor }">
                           <ColorPaletteOutline />
@@ -301,68 +314,50 @@
                       </template>
                     </n-button>
                   </template>
-                  <div style="padding: 6px 2px">
-                    <div
-                      :style="{
-                        fontSize: '11px',
-                        color: palette.text3,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.05em',
-                        marginBottom: '8px',
-                      }"
-                    >
-                      Цвет темы
+                  <div class="visuals-menu">
+                    <div class="visuals-menu-section">
+                      <div class="visuals-menu-label" :style="{ color: palette.text3 }">
+                        Цвет темы
+                      </div>
+                      <div class="theme-dots">
+                        <div
+                          v-for="t in COLOR_THEMES"
+                          :key="t.key"
+                          class="theme-dot"
+                          :title="t.name"
+                          :style="dotStyle(t)"
+                          @click="selectTheme(t)"
+                        />
+                      </div>
                     </div>
-                    <div class="theme-dots">
-                      <div
-                        v-for="t in COLOR_THEMES"
-                        :key="t.key"
-                        class="theme-dot"
-                        :title="t.name"
-                        :style="dotStyle(t)"
-                        @click="selectTheme(t)"
-                      />
-                    </div>
-                  </div>
-                </n-popover>
-                <!-- Mobile hide/show values -->
-                <n-tooltip trigger="hover" placement="bottom">
-                  <template #trigger>
-                    <n-button quaternary circle size="small" @click="toggleValuesHidden">
-                      <template #icon>
+                    <div class="visuals-menu-section">
+                      <button type="button" class="visuals-menu-row" @click="toggleValuesHidden">
                         <n-icon size="16">
                           <EyeOutline v-if="valuesHidden" />
                           <EyeOffOutline v-else />
                         </n-icon>
-                      </template>
-                    </n-button>
-                  </template>
-                  {{ valuesHidden ? 'Показать суммы' : 'Скрыть суммы' }}
-                </n-tooltip>
-                <!-- Mobile pie chart unit toggle -->
-                <n-tooltip trigger="hover" placement="bottom">
-                  <template #trigger>
-                    <n-button quaternary circle size="small" @click="togglePieChartUnit">
-                      <span style="font-size: 12px; font-weight: 700; line-height: 1">
-                        {{ pieChartUnit === 'percent' ? '%' : '₽' }}
-                      </span>
-                    </n-button>
-                  </template>
-                  {{ pieChartUnit === 'percent' ? 'Диаграммы: проценты' : 'Диаграммы: рубли' }}
-                </n-tooltip>
-                <n-tooltip trigger="hover" placement="bottom">
-                  <template #trigger>
-                    <n-button quaternary circle size="small" @click="toggleDarkMode">
-                      <template #icon>
+                        <span>{{ valuesHidden ? 'Показать суммы' : 'Скрыть суммы' }}</span>
+                      </button>
+                      <button type="button" class="visuals-menu-row" @click="togglePieChartUnit">
+                        <span class="visuals-menu-glyph">
+                          {{ pieChartUnit === 'percent' ? '%' : '₽' }}
+                        </span>
+                        <span>
+                          {{
+                            pieChartUnit === 'percent' ? 'Диаграммы: проценты' : 'Диаграммы: рубли'
+                          }}
+                        </span>
+                      </button>
+                      <button type="button" class="visuals-menu-row" @click="toggleDarkMode">
                         <n-icon size="16">
                           <SunnyOutline v-if="isDark" />
                           <MoonOutline v-else />
                         </n-icon>
-                      </template>
-                    </n-button>
-                  </template>
-                  {{ isDark ? 'Светлая тема' : 'Тёмная тема' }}
-                </n-tooltip>
+                        <span>{{ isDark ? 'Светлая тема' : 'Тёмная тема' }}</span>
+                      </button>
+                    </div>
+                  </div>
+                </n-popover>
                 <!-- Mobile info popover -->
                 <n-popover trigger="click" placement="bottom-end" :show-arrow="false">
                   <template #trigger>
@@ -392,6 +387,7 @@
 
             <n-layout-content style="padding: 16px; padding-bottom: 80px">
               <AuthGate @login="showLogin = true">
+                <SettingsTabs v-if="isSettingsRoute" />
                 <router-view />
               </AuthGate>
             </n-layout-content>
@@ -402,7 +398,7 @@
                 v-for="item in mobileNavItems"
                 :key="item.key"
                 class="mobile-nav-item"
-                :class="{ active: activeKey === item.key }"
+                :class="{ active: mobileActiveKey === item.key }"
                 @click="navigate(item.key)"
               >
                 <n-icon :component="item.icon" size="22" />
@@ -450,6 +446,8 @@ import {
   NSpace,
   NPopover,
   NTooltip,
+  ruRU,
+  dateRuRU,
 } from 'naive-ui'
 import {
   TrendingUpOutline,
@@ -475,8 +473,10 @@ import UserAvatar from '@/components/UserAvatar.vue'
 import AuthGate from '@/components/AuthGate.vue'
 import MbLogo from '@/components/MbLogo.vue'
 import DetailRequestBell from '@/components/DetailRequestBell.vue'
+import NotificationBell from '@/components/NotificationBell.vue'
 import DetailRequestModal from '@/components/DetailRequestModal.vue'
 import DetailRequestCreateModal from '@/components/DetailRequestCreateModal.vue'
+import SettingsTabs from '@/components/SettingsTabs.vue'
 import { useDetailRequestsStore } from '@/stores/detailRequests'
 
 // ── Version info ──────────────────────────────────────────────────
@@ -584,6 +584,7 @@ const currentTitle = computed(() => {
     export: 'Экспорт',
     settings: 'Настройки',
     'settings/categories': 'Настройки · Категории',
+    'settings/users': 'Настройки · Пользователи',
   }
   return map[activeKey.value] ?? 'Статистика'
 })
@@ -612,7 +613,10 @@ const menuOptions = computed(() => {
       label: 'Настройки',
       key: 'settings',
       icon: icon(SettingsOutline),
-      children: [{ label: 'Категории', key: 'settings/categories' }],
+      children: [
+        { label: 'Категории', key: 'settings/categories' },
+        { label: 'Пользователи', key: 'settings/users' },
+      ],
     })
   }
   return items
@@ -630,6 +634,8 @@ const mobileNavItems = computed(() => {
     { label: 'Экспорт', key: 'export', icon: CloudDownloadOutline },
   ]
   if (auth.isAdmin) {
+    // Mobile bottom-nav «Настройки» открывает дефолтную вкладку
+    // (Категории), внутренний tab-strip переключает между подразделами.
     items.push({
       label: 'Настройки',
       key: 'settings/categories',
@@ -638,6 +644,15 @@ const mobileNavItems = computed(() => {
   }
   return items
 })
+
+// Bottom-nav active-state matcher: и для /settings/categories, и для
+// /settings/users подсвечиваем единственную «Настройки» вкладку.
+const mobileActiveKey = computed(() => {
+  if (activeKey.value.startsWith('settings/')) return 'settings/categories'
+  return activeKey.value
+})
+
+const isSettingsRoute = computed(() => activeKey.value.startsWith('settings/'))
 </script>
 
 <style scoped>
@@ -713,6 +728,53 @@ const mobileNavItems = computed(() => {
 .version-val {
   opacity: 0.6;
   font-variant-numeric: tabular-nums;
+}
+
+/* ── Mobile visuals menu ───────────────────────────────────────── */
+.visuals-menu {
+  padding: 4px 2px;
+  width: min(220px, calc(100vw - 32px));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.visuals-menu-section + .visuals-menu-section {
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.visuals-menu-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+.visuals-menu-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 6px;
+  border-radius: 6px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  transition: background 0.12s;
+}
+.visuals-menu-row:hover {
+  background: var(--hover);
+}
+.visuals-menu-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
 }
 
 /* ── Color picker dots ─────────────────────────────────────────── */

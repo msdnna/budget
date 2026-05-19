@@ -27,8 +27,14 @@ const routes = [
   {
     path: '/settings/categories',
     component: () => import('@/views/AdminCategoriesView.vue'),
-    meta: { title: 'Категории', adminOnly: true },
+    meta: { title: 'Управление категориями', adminOnly: true },
   },
+  {
+    path: '/settings/users',
+    component: () => import('@/views/UsersAdminView.vue'),
+    meta: { title: 'Управление пользователями', adminOnly: true },
+  },
+  { path: '/settings', redirect: '/settings/categories' },
   // Backwards-compat redirect — earlier Phase 2 build used `/admin`.
   { path: '/admin', redirect: '/settings/categories' },
 ]

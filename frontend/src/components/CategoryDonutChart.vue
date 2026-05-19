@@ -1,7 +1,39 @@
 <template>
   <div class="cdc">
     <div ref="chartWrap" class="cdc-chart">
-      <v-chart ref="chartRef" :option="chartOption" autoresize />
+      <v-chart ref="chartRef" :option="chartOption" autoresize @click="onSliceClick" />
+      <!-- Back button: shown only after the user expanded the synthetic
+           "Прочее" wedge (which hides every non-grouped category). One tap
+           restores the original visible set so the donut returns to the
+           pre-expand state. Sits in the donut hole; click is captured here
+           and not passed through to ECharts. -->
+      <button
+        v-if="otherExpanded"
+        type="button"
+        class="cdc-back-btn"
+        :style="{
+          background: palette.surface,
+          borderColor: palette.border,
+          color: palette.text2,
+        }"
+        title="Назад"
+        @click.stop="exitOtherExpand"
+      >
+        <svg
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.25"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <polyline points="15 18 9 12 15 6" />
+        </svg>
+        <span>Назад</span>
+      </button>
       <div
         v-for="b in iconOverlays"
         :key="`${b.name}-${animKey}`"
@@ -17,13 +49,19 @@
         v-for="row in legendRows"
         :key="row.name"
         class="cdc-row"
-        :class="{ 'cdc-row-hidden': row.hidden }"
+        :class="{ 'cdc-row-hidden': row.hidden, 'cdc-row-with-limit': row.limit }"
         role="button"
         tabindex="0"
         @click="toggleHidden(row.name)"
         @keydown.enter.prevent="toggleHidden(row.name)"
         @keydown.space.prevent="toggleHidden(row.name)"
       >
+        <!-- Badge sits as a direct child of .cdc-row so its flex parent's
+             align-items: center vertically centres the icon across the
+             *entire* row height — including the limit bar on a second
+             line. When the badge lived inside .cdc-row-main it only
+             centred within the top sub-row, anchoring the icon to the top
+             edge of limited rows. -->
         <div class="cdc-row-badge" :style="{ backgroundColor: row.color }">
           <n-icon v-if="row.iconComp" :component="row.iconComp" :size="18" color="#fff" />
           <img
@@ -34,17 +72,68 @@
             alt=""
           />
         </div>
-        <div class="cdc-row-text">
-          <div class="cdc-row-name">{{ row.name }}</div>
-        </div>
-        <div class="cdc-row-meta">
-          <!-- Amount blurs in hidden mode (rather than disappearing) so the
-               row layout stays stable — same UX as the StatisticsView
-               summary cards. Percent is non-sensitive, never masked. -->
-          <span class="cdc-row-amount" :class="{ 'cdc-row-amount-hidden': valuesHidden }">
-            {{ row.amount.toLocaleString('ru') }} ₽
-          </span>
-          <span class="cdc-row-pct">{{ row.percent }}%</span>
+        <div class="cdc-row-content">
+          <div class="cdc-row-main">
+            <div class="cdc-row-text">
+              <div class="cdc-row-name">{{ row.name }}</div>
+              <!-- Count caption lives under the name for non-limited rows.
+                   Limited rows show it under the bar instead (see below) so
+                   the name line stays compact next to the limit progress.
+                   `hideCount` suppresses it entirely for charts where the
+                   tx count would be misleading (Forecast). -->
+              <div v-if="!row.limit && !hideCount" class="cdc-row-count">
+                Количество транзакций: {{ row.count }}
+              </div>
+            </div>
+            <div class="cdc-row-meta">
+              <!-- Amount blurs in hidden mode (rather than disappearing) so
+                   the row layout stays stable — same UX as the StatisticsView
+                   summary cards. For limited rows the chart-share percent
+                   moves into a hover tooltip; without a limit it stays as
+                   the small line under the amount. -->
+              <n-tooltip v-if="row.limit" trigger="hover" placement="top">
+                <template #trigger>
+                  <span class="cdc-row-amount" :class="{ 'cdc-row-amount-hidden': valuesHidden }">
+                    {{ row.amount.toLocaleString('ru') }} ₽
+                  </span>
+                </template>
+                Доля в диаграмме: {{ row.percent }}%
+              </n-tooltip>
+              <span
+                v-else
+                class="cdc-row-amount"
+                :class="{ 'cdc-row-amount-hidden': valuesHidden }"
+              >
+                {{ row.amount.toLocaleString('ru') }} ₽
+              </span>
+              <span v-if="!row.limit" class="cdc-row-pct">{{ row.percent }}%</span>
+            </div>
+          </div>
+          <!-- Limit bar lives in the same flex-column as the main name+amount
+               line so the badge to the left centres vertically across both.
+               Under the bar: count (left) + spent/limit (right) share a
+               single line via space-between so the row stays compact. -->
+          <div v-if="row.limit" class="cdc-row-limit">
+            <n-progress
+              type="line"
+              :percentage="Math.min(100, row.limit.percent)"
+              :show-indicator="false"
+              :color="limitProgressColor(row.limit.percent)"
+              :height="6"
+              :border-radius="3"
+            />
+            <div class="cdc-row-limit-foot">
+              <span v-if="!hideCount" class="cdc-row-count">
+                Количество транзакций: {{ row.count }}
+              </span>
+              <span v-else />
+              <span class="cdc-row-limit-text" :class="{ 'cdc-row-amount-hidden': valuesHidden }">
+                {{ formatMoney(row.limit.spent) }} / {{ formatMoney(row.limit.limit) }} ₽ ({{
+                  Math.round(row.limit.percent)
+                }}%)
+              </span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -58,7 +147,7 @@ import { PieChart } from 'echarts/charts'
 import { TooltipComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import VChart from 'vue-echarts'
-import { NIcon } from 'naive-ui'
+import { NIcon, NProgress, NTooltip } from 'naive-ui'
 import { categoryIcon, resolveCategoryColor } from '@/utils/categoryIcons'
 import { useIconCacheStore, parseCustomIconKey } from '@/stores/iconCache'
 
@@ -70,7 +159,21 @@ const props = defineProps({
   palette: { type: Object, required: true },
   unit: { type: String, default: 'percent' }, // 'percent' | 'ruble'
   valuesHidden: { type: Boolean, default: false },
+  // name → {spent, limit, percent}. Always reflects the *current* calendar
+  // month (limits-progress endpoint default) regardless of the filter the
+  // parent applies to the pie data itself — limit windows are fixed monthly
+  // by spec, so showing year-to-date over a monthly limit would be lying.
+  limitsByName: { type: Object, default: () => ({}) },
+  // Suppresses the "Количество транзакций: N" caption. Forecast view sets
+  // this because its breakdown mixes historical tx + projected wishlist
+  // items, so a single tx count would be misleading.
+  hideCount: { type: Boolean, default: false },
 })
+
+// `drilldown` fires when a real (non-grouped) slice is clicked. Parent uses
+// it to navigate to Income/Expenses with a per-category filter applied —
+// mirrors the Android pie-slice drilldown flow.
+const emit = defineEmits(['drilldown'])
 
 const chartWrap = useTemplateRef('chartWrap')
 const chartRef = ref(null)
@@ -86,12 +189,50 @@ const OTHER_KEY = '__other__'
 const OTHER_LABEL = 'Прочее'
 
 const hiddenSet = ref(new Set())
+// Stack of previous `hiddenSet` snapshots — pushed every time the user
+// clicks the synthetic "Прочее" wedge to expand its grouped categories.
+// Back button pops one level (not a wipe), so nested expands stay
+// reversible step-by-step. Empty stack = top-level view, back button
+// hidden. Snapshots are stored as plain Sets (immutable from our side,
+// since toggleHidden replaces the ref rather than mutating).
+const hiddenStack = ref([])
+const otherExpanded = computed(() => hiddenStack.value.length > 0)
+
 function toggleHidden(name) {
   // Mutate by replacement so reactivity fires.
   const next = new Set(hiddenSet.value)
   if (next.has(name)) next.delete(name)
   else next.add(name)
   hiddenSet.value = next
+}
+
+// Pie slice click: a real category emits `drilldown` to the parent
+// (StatisticsView routes to Income/Expenses with category+period filter
+// applied). The synthetic "Прочее" wedge is expanded in place by hiding
+// every category that *isn't* part of the grouped set — the small slices
+// balloon into proper wedges and become drilldown-tappable on the next
+// click. The previous `hiddenSet` is pushed onto a stack so the back
+// button can pop one level at a time (supports nested «Прочее» drill-ins).
+function onSliceClick(params) {
+  if (params?.componentType !== 'series') return
+  const slice = pieSlices.value.find((s) => s.name === params.name)
+  if (!slice) return
+  if (slice.name === OTHER_KEY) {
+    const grouped = new Set(slice.grouped || [])
+    const allLabels = enrichedAll.value.map((x) => x.name)
+    hiddenStack.value = [...hiddenStack.value, hiddenSet.value]
+    hiddenSet.value = new Set(allLabels.filter((n) => !grouped.has(n)))
+    return
+  }
+  emit('drilldown', slice.name)
+}
+
+function exitOtherExpand() {
+  if (hiddenStack.value.length === 0) return
+  const stack = hiddenStack.value
+  const prev = stack[stack.length - 1]
+  hiddenSet.value = prev instanceof Set ? prev : new Set()
+  hiddenStack.value = stack.slice(0, -1)
 }
 
 const iconCache = useIconCacheStore()
@@ -108,6 +249,9 @@ const enrichedAll = computed(() =>
     return {
       name: d.category,
       amount: Math.round(d.amount),
+      // Tx count surfaces as a "Количество транзакций: N" caption — under
+      // the name when there's no limit, under the bar when there is.
+      count: typeof d.count === 'number' ? d.count : 0,
       color: resolveCategoryColor({ name: d.category, color: meta.color }),
       iconComp: customId ? null : categoryIcon(meta.icon),
       customUrl: customId ? (iconCache.cache.get(customId) ?? null) : null,
@@ -173,13 +317,29 @@ const legendRows = computed(() => {
   const tot = totalAll.value || 1
   return enrichedAll.value.map((x) => {
     const pct = (x.amount / tot) * 100
+    const lim = props.limitsByName[x.name] || null
     return {
       ...x,
       hidden: hiddenSet.value.has(x.name),
       percent: pct < 10 ? pct.toFixed(1) : pct.toFixed(0),
+      limit: lim,
     }
   })
 })
+
+// Limit-progress tint mirrors AdminCategoriesView / ExpensesView: green
+// under 80%, amber 80-100%, red ≥100%. Theme-aware tokens via props.palette
+// keep the colors in sync with the rest of the UI's income/expense pair.
+function limitProgressColor(percent) {
+  if (percent >= 100) return props.palette.expense
+  if (percent >= 80) return '#F59E0B'
+  return props.palette.income
+}
+
+function formatMoney(value) {
+  if (value == null) return ''
+  return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(value)
+}
 
 const chartOption = computed(() => {
   const p = props.palette
@@ -340,10 +500,43 @@ function rowImgStyle(scale) {
   position: relative;
   flex: 0 0 320px;
   height: 320px;
+  cursor: pointer;
 }
 .cdc-chart :deep(.echarts) {
   width: 100% !important;
   height: 100% !important;
+}
+/* Back button parked in the donut hole. Absolute-centred inside the
+   chart wrap; sized to fit comfortably inside the inner radius (~52% of
+   the smaller dimension). Border + hover state pick up the surrounding
+   theme via CSS variables so it sits naturally in both light + dark. */
+.cdc-back-btn {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid;
+  border-radius: 999px;
+  cursor: pointer;
+  z-index: 2;
+  /* background / borderColor / color come from inline style bound to the
+     theme palette, so the chip reads naturally on both light + dark. */
+  transition:
+    opacity 0.15s,
+    transform 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.cdc-back-btn:hover {
+  opacity: 0.85;
+}
+.cdc-back-btn svg {
+  display: block;
 }
 .cdc-slice-icon {
   position: absolute;
@@ -419,6 +612,20 @@ function rowImgStyle(scale) {
   transition: opacity 0.15s;
   width: 100%;
 }
+.cdc-row-content {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cdc-row-main {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
 .cdc-row:hover {
   background: var(--cdc-scroll-thumb);
   opacity: 0.95;
@@ -428,6 +635,36 @@ function rowImgStyle(scale) {
 }
 .cdc-row-hidden .cdc-row-name {
   text-decoration: line-through;
+}
+/* Limit line — bar starts under the category name (badge is a sibling of
+   .cdc-row-content, so the bar is already offset by the badge's width
+   without explicit padding). Text right-aligned so it sits under amount. */
+.cdc-row-limit {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cdc-row-limit-text {
+  font-size: 11px;
+  opacity: 0.6;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  transition: filter 0.25s;
+}
+/* Count caption — same muted style as the limit/percent secondary text. */
+.cdc-row-count {
+  font-size: 11px;
+  opacity: 0.6;
+  font-variant-numeric: tabular-nums;
+}
+/* On limited rows the count sits to the left of the spent/limit text on a
+   shared line; `gap: 8px` keeps them apart if the row is narrow enough to
+   collide. */
+.cdc-row-limit-foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
 }
 .cdc-row-badge {
   width: 36px;

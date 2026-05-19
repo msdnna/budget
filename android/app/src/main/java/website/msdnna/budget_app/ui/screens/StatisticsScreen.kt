@@ -22,7 +22,21 @@ import website.msdnna.budget_app.ui.viewmodels.StatisticsViewModel
 import website.msdnna.budget_app.ui.viewmodels.StatsPeriod
 
 @Composable
-fun StatisticsScreen(serverUrl: String, primaryColor: Color, valuesHidden: Boolean = false, pieUnitRuble: Boolean = true) {
+fun StatisticsScreen(
+    serverUrl: String,
+    primaryColor: Color,
+    valuesHidden: Boolean = false,
+    pieUnitRuble: Boolean = true,
+    // Drilldown callbacks: invoked when the user taps a slice of the
+    // expense / income donut. Parent (MainScreen) is responsible for
+    // applying the filter on the destination VM, scrolling the pager,
+    // and arming the back-handler that returns to Statistics. Args:
+    // (categoryName, fromIso?, toIso?) — fromIso/toIso translate the
+    // current Stats period into a date filter on the Expenses/Income
+    // screens so the drilldown lands on a like-for-like time window.
+    onDrilldownExpense: ((String, String?, String?) -> Unit)? = null,
+    onDrilldownIncome: ((String, String?, String?) -> Unit)? = null,
+) {
     val vm = viewModel<StatisticsViewModel>(key = "stats:$serverUrl", factory = StatisticsViewModel.factory(serverUrl))
     val period by vm.period.collectAsState()
     val year by vm.year.collectAsState()
@@ -31,10 +45,44 @@ fun StatisticsScreen(serverUrl: String, primaryColor: Color, valuesHidden: Boole
     val to by vm.to.collectAsState()
     val state by vm.state.collectAsState()
 
+    // Resolve the current stats period into a (fromIso, toIso) pair —
+    // these become the date filter on the destination screen when the
+    // user drills down through a donut slice. For RANGE we pass through
+    // the user-selected range; for MONTH/YEAR we synthesise inclusive
+    // calendar bounds. Kept inline so it tracks period/year/month state.
+    val drilldownDateRange: Pair<String?, String?> = remember(period, year, month, from, to) {
+        when (period) {
+            StatsPeriod.MONTH -> {
+                val cal = java.util.Calendar.getInstance()
+                cal.set(year, month - 1, 1)
+                val last = cal.getActualMaximum(java.util.Calendar.DAY_OF_MONTH)
+                "%04d-%02d-01".format(year, month) to
+                    "%04d-%02d-%02d".format(year, month, last)
+            }
+            StatsPeriod.YEAR -> "%04d-01-01".format(year) to "%04d-12-31".format(year)
+            StatsPeriod.RANGE -> from to to
+        }
+    }
+
     val incomeColor = LocalIncomeColor.current
     val expenseColor = LocalExpenseColor.current
     val expenseCats by CategoryRepository.expense.collectAsState()
     val incomeCats by CategoryRepository.income.collectAsState()
+    // Limit progress for the current calendar month — keyed by category
+    // name (same key the chart uses). Refreshed by SyncEngine after each
+    // pull; we also poke it on screen mount in case the user reopens
+    // Statistics between sync cycles.
+    val limitsState by website.msdnna.budget_app.data.repository.LimitsProgressRepository
+        .state.collectAsState()
+    val limitsByName = remember(limitsState) {
+        limitsState?.categories.orEmpty().associateBy { it.name }
+    }
+    LaunchedEffect(serverUrl) {
+        if (serverUrl.isNotBlank()) {
+            website.msdnna.budget_app.data.repository.LimitsProgressRepository
+                .refresh(serverUrl)
+        }
+    }
 
     PullToRefreshBox(
         // isRefreshing stays false so the spinner only flashes during the
@@ -166,6 +214,7 @@ fun StatisticsScreen(serverUrl: String, primaryColor: Color, valuesHidden: Boole
                     if (state.expenseByCategory.isNotEmpty()) {
                         val expSlices = state.expenseByCategory.map { stat ->
                             val cat = expenseCats.firstOrNull { it.name == stat.category }
+                            val limit = limitsByName[stat.category]
                             PieSlice(
                                 label = stat.category,
                                 value = stat.amount.toFloat(),
@@ -173,6 +222,9 @@ fun StatisticsScreen(serverUrl: String, primaryColor: Color, valuesHidden: Boole
                                 iconKey = cat?.icon,
                                 customIconUrl = customIconUrl(serverUrl, cat?.icon),
                                 iconScale = normalizeIconScale(cat?.iconScale),
+                                limitTotal = limit?.limit,
+                                limitSpent = limit?.spent ?: 0.0,
+                                limitPercent = limit?.percent ?: 0.0,
                             )
                         }
                         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
@@ -184,6 +236,12 @@ fun StatisticsScreen(serverUrl: String, primaryColor: Color, valuesHidden: Boole
                                     centerText = "Расходы",
                                     pieUnitRuble = pieUnitRuble,
                                     valuesHidden = valuesHidden,
+                                    onCategoryDrilldown = onDrilldownExpense?.let { cb ->
+                                        { cat ->
+                                            val (f, t) = drilldownDateRange
+                                            cb(cat, f, t)
+                                        }
+                                    },
                                 )
                             }
                         }
@@ -210,6 +268,12 @@ fun StatisticsScreen(serverUrl: String, primaryColor: Color, valuesHidden: Boole
                                     centerText = "Доходы",
                                     pieUnitRuble = pieUnitRuble,
                                     valuesHidden = valuesHidden,
+                                    onCategoryDrilldown = onDrilldownIncome?.let { cb ->
+                                        { cat ->
+                                            val (f, t) = drilldownDateRange
+                                            cb(cat, f, t)
+                                        }
+                                    },
                                 )
                             }
                         }

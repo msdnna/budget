@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strconv"
@@ -16,11 +17,35 @@ import (
 )
 
 type TransactionHandler struct {
-	repo *repository.TransactionRepository
+	repo    *repository.TransactionRepository
+	limiter *LimitChecker // nil-safe; tests can leave it unset
 }
 
 func NewTransactionHandler(repo *repository.TransactionRepository) *TransactionHandler {
 	return &TransactionHandler{repo: repo}
+}
+
+// SetLimitChecker wires the limit-overflow notification trigger. Kept
+// separate from the constructor so existing tests that don't care about
+// notifications still build cleanly with NewTransactionHandler(repo).
+func (h *TransactionHandler) SetLimitChecker(c *LimitChecker) {
+	h.limiter = c
+}
+
+// runLimitCheck fires the limit check in the background. Only expense
+// transactions can move a spending limit, so income/initial_balance writes
+// skip it.
+func (h *TransactionHandler) runLimitCheck(txType models.TransactionType, category string) {
+	if h.limiter == nil || txType != models.Expense {
+		return
+	}
+	go func(cat string) {
+		// Detached context — request context may already be cancelled by
+		// the time the deferred limit check fires.
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		h.limiter.Run(ctx, cat)
+	}(category)
 }
 
 func userInfoFromCtx(c *gin.Context) *models.UserInfo {
@@ -77,6 +102,7 @@ func (h *TransactionHandler) Create(c *gin.Context) {
 		return
 	}
 
+	h.runLimitCheck(t.Type, t.Category)
 	c.JSON(http.StatusCreated, t)
 }
 
@@ -144,6 +170,10 @@ func (h *TransactionHandler) List(c *gin.Context) {
 
 	if v := c.Query("include_detailed"); v == "true" || v == "1" {
 		filter.IncludeDetailed = true
+	}
+
+	if v := c.Query("unlinked"); v == "true" || v == "1" {
+		filter.Unlinked = true
 	}
 
 	transactions, total, err := h.repo.Find(c.Request.Context(), filter)
@@ -225,6 +255,7 @@ func (h *TransactionHandler) Update(c *gin.Context) {
 		return
 	}
 
+	h.runLimitCheck(t.Type, t.Category)
 	c.JSON(http.StatusOK, t)
 }
 
@@ -241,13 +272,17 @@ func (h *TransactionHandler) Update(c *gin.Context) {
 // @Router       /transactions/{id} [delete]
 func (h *TransactionHandler) Delete(c *gin.Context) {
 	id := c.Param("id")
-	if _, err := h.repo.Delete(c.Request.Context(), id, 0, userInfoFromCtx(c)); err != nil {
+	deleted, err := h.repo.Delete(c.Request.Context(), id, 0, userInfoFromCtx(c))
+	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
+	}
+	if deleted != nil {
+		h.runLimitCheck(deleted.Type, deleted.Category)
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "deleted"})
 }

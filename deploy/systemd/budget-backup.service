@@ -1,0 +1,15 @@
+[Unit]
+Description=msdnna-budget: daily MongoDB backup
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+# Adjust ExecStart path to wherever you cloned the repo on the Pi.
+# Variables can be overridden here without editing the script itself.
+Environment=BACKUP_DIR=/var/backups/budget
+Environment=BACKUP_RETENTION=14
+ExecStart=/opt/budget/tools/rpi-backup.sh
+
+# Backup writes to /var/backups/budget — keep it readable only by root.
+UMask=0077

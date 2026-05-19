@@ -164,6 +164,10 @@ fun ForecastScreen(
     serverUrl: String,
     primaryColor: Color,
     onSelectionCountChange: (Int) -> Unit = {},
+    /** Open the «привязать существующий расход» overlay for the given
+     *  wishlist/regular item (id + display name). null-call disables the
+     *  swipe action in the parent. */
+    onLinkExisting: (id: String, name: String) -> Unit = { _, _ -> },
 ) {
     val vm = viewModel<ForecastViewModel>(key = "forecast:$serverUrl", factory = ForecastViewModel.factory(serverUrl))
     val uiState by vm.uiState.collectAsState()
@@ -346,9 +350,21 @@ fun ForecastScreen(
                                             fc.breakdown.sortedByDescending { it.amount }.forEach { stat ->
                                                 Row(
                                                     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                                    horizontalArrangement = Arrangement.SpaceBetween
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically,
                                                 ) {
-                                                    Text(stat.category, style = MaterialTheme.typography.bodyMedium)
+                                                    CategoryLabel(
+                                                        name = stat.category,
+                                                        // Forecast breakdown mixes expense + wishlist categories,
+                                                        // but the wishlist set is a superset that includes
+                                                        // expense names — picking from `expenseCategories` first
+                                                        // and falling back to the wishlist list lets us resolve
+                                                        // any category the row references.
+                                                        category = expenseCategories.firstOrNull { it.name == stat.category }
+                                                            ?: categories.firstOrNull { it.name == stat.category },
+                                                        serverUrl = serverUrl,
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                    )
                                                     Text(
                                                         "${formatMoney(stat.amount)} ₽",
                                                         style = MaterialTheme.typography.bodyMedium,
@@ -405,7 +421,13 @@ fun ForecastScreen(
                             },
                             onMarkPaid = { payRegular = regItem },
                             onCancelPaid = { vm.unlinkRegularPeriod(regItem.id) },
+                            onLinkExisting = { onLinkExisting(regItem.id, regItem.name) },
                             onDelete = { vm.deleteWishlistItem(regItem.id) },
+                            // Regular items reuse expense categories (the
+                            // backend stores them in the wishlist collection
+                            // but they're rendered alongside расходы).
+                            categories = expenseCategories,
+                            serverUrl = serverUrl,
                         )
                     }
                 }
@@ -432,8 +454,11 @@ fun ForecastScreen(
                             onSelectToggle = vm::toggleSelection,
                             onPurchase = { wl -> payWishlist = wl },
                             onUnpurchase = { id -> vm.unpurchaseWishlist(id) },
+                            onLinkExisting = { onLinkExisting(item.id, item.name) },
                             onDelete = vm::deleteWishlistItem,
                             onDetails = onShowDetails,
+                            categories = categories,
+                            serverUrl = serverUrl,
                         )
                     }
                 }
@@ -447,6 +472,7 @@ fun ForecastScreen(
         AddWishlistSheet(
             primaryColor = primaryColor,
             categories = categories,
+            serverUrl = serverUrl,
             onAddCategory = { name -> vm.addCategory(name) },
             onDeleteCategory = { id -> vm.deleteCategory(id) },
             onDismiss = { showAdd = false },
@@ -462,6 +488,7 @@ fun ForecastScreen(
             item = item,
             primaryColor = primaryColor,
             categories = categories,
+            serverUrl = serverUrl,
             onAddCategory = { name -> vm.addCategory(name) },
             onDeleteCategory = { id -> vm.deleteCategory(id) },
             onSave = { req -> vm.updateWishlistItem(item.id, req) },
@@ -498,6 +525,7 @@ fun ForecastScreen(
                 description = item.notes,
             ),
             categories = expenseCategories,
+            serverUrl = serverUrl,
             onAddCategory = { name -> vm.addExpenseCategory(name) },
             onDeleteCategory = { id -> vm.deleteExpenseCategory(id) },
             onDismiss = { payRegular = null },
@@ -521,6 +549,7 @@ fun ForecastScreen(
                 description = item.notes ?: "",
             ),
             categories = expenseCategories,
+            serverUrl = serverUrl,
             onAddCategory = { name -> vm.addExpenseCategory(name) },
             onDeleteCategory = { id -> vm.deleteExpenseCategory(id) },
             onDismiss = { payWishlist = null },
@@ -572,6 +601,7 @@ private fun ForecastSummarySkeleton() {
 
 private val ColourRegularPaid = Color(0xFF388E3C) // right action: «Оплачено»
 private val ColourRegularCancel = Color(0xFF757575) // left action:  «Отменить»
+private val ColourLinkExisting = Color(0xFF2080F0) // left action:  «Привязать»
 
 private fun frequencyUnit(freq: String): String = when (freq) {
     "quarterly" -> "₽/кв"
@@ -607,7 +637,10 @@ private fun SwipeableRegularItemCard(
     onSelectToggle: (id: String) -> Unit = {},
     onMarkPaid: () -> Unit,
     onCancelPaid: () -> Unit,
+    onLinkExisting: () -> Unit = {},
     onDelete: (id: String) -> Unit,
+    categories: List<website.msdnna.budget_app.data.model.Category> = emptyList(),
+    serverUrl: String = "",
 ) {
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
@@ -616,9 +649,11 @@ private fun SwipeableRegularItemCard(
     val payRevealDp = 88.dp
     val cancelRevealDp = 88.dp
     val deleteRevealDp = 88.dp
+    val linkRevealDp = 88.dp
 
     val leftRevealDp = payRevealDp
-    val rightRevealDp = if (item.paidThisPeriod) cancelRevealDp + deleteRevealDp else deleteRevealDp
+    val rightRevealDp =
+        (if (item.paidThisPeriod) cancelRevealDp else 0.dp) + linkRevealDp + deleteRevealDp
 
     val leftRevealPx = with(density) { leftRevealDp.toPx() }
     val rightRevealPx = with(density) { rightRevealDp.toPx() }
@@ -726,6 +761,26 @@ private fun SwipeableRegularItemCard(
                         }
                     }
                 }
+                // «Привязать» — открывает экран выбора несвязанного расхода.
+                // В отличие от destructive-действий рядом, подтверждение здесь
+                // не двухступенчатое: финальный конфирм происходит на экране
+                // выбора, по второй tap-у на выбранной строке.
+                Box(
+                    modifier = Modifier
+                        .width(linkRevealDp)
+                        .fillMaxHeight()
+                        .background(ColourLinkExisting)
+                        .clickable {
+                            snapTo(0f)
+                            onLinkExisting()
+                        },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(Icons.Default.Link, null, tint = Color.White, modifier = Modifier.size(22.dp))
+                        Text("Привязать", color = Color.White, fontSize = 10.sp)
+                    }
+                }
                 Box(
                     modifier = Modifier
                         .width(deleteRevealDp)
@@ -795,6 +850,20 @@ private fun SwipeableRegularItemCard(
                     }
                 )
         } else cardBaseModifier
+        // Dynamic corner shape — see SwipeableTransactionCard for the
+        // rationale; ×6 multiplier kills the rail-through-corner hairline
+        // by reaching 0dp inside the first ~17% of swipe.
+        val baseCorner = 12.dp
+        val rightSwipeProgress = ((offsetX.value / leftRevealPx) * 6f).coerceIn(0f, 1f)
+        val leftSwipeProgress = ((-offsetX.value / rightRevealPx) * 6f).coerceIn(0f, 1f)
+        val leftEdgeCorner = baseCorner * (1f - rightSwipeProgress)
+        val rightEdgeCorner = baseCorner * (1f - leftSwipeProgress)
+        val cardShape = androidx.compose.foundation.shape.RoundedCornerShape(
+            topStart = leftEdgeCorner,
+            bottomStart = leftEdgeCorner,
+            topEnd = rightEdgeCorner,
+            bottomEnd = rightEdgeCorner,
+        )
         Card(
             modifier = cardModifier
                 .combinedClickable(
@@ -804,6 +873,7 @@ private fun SwipeableRegularItemCard(
                     },
                     onLongClick = { if (!selectionMode) onLongPress(item.id) },
                 ),
+            shape = cardShape,
             colors = CardDefaults.cardColors(containerColor = animatedBg)
         ) {
             Row(
@@ -824,16 +894,24 @@ private fun SwipeableRegularItemCard(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            item.category.ifBlank { frequencyLabel(item.frequency) },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
                         if (item.category.isNotBlank()) {
+                            CategoryLabel(
+                                name = item.category,
+                                category = categories.firstOrNull { it.name == item.category },
+                                serverUrl = serverUrl,
+                                style = MaterialTheme.typography.bodySmall,
+                                textColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                             Text(
                                 "·", style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+                            Text(
+                                frequencyLabel(item.frequency),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        } else {
                             Text(
                                 frequencyLabel(item.frequency),
                                 style = MaterialTheme.typography.bodySmall,
@@ -900,17 +978,27 @@ fun SwipeableWishlistCard(
     /** Unlink the transaction created via [onPurchase] and reset the
      *  purchased flag — keeps the original tx in расходах. */
     onUnpurchase: (id: String) -> Unit = {},
+    /** Open the «привязать существующий расход» picker. */
+    onLinkExisting: () -> Unit = {},
     onDelete: (id: String) -> Unit,
-    onDetails: (WishlistItem) -> Unit = {}
+    onDetails: (WishlistItem) -> Unit = {},
+    categories: List<website.msdnna.budget_app.data.model.Category> = emptyList(),
+    serverUrl: String = "",
 ) {
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     val recurring = isRecurring(item.frequency)
 
-    // One-time items: right swipe → purchased; left swipe → delete
-    // Recurring items: left swipe → delete only
+    // One-time items: right swipe → purchased; left swipe → link+delete
+    // Recurring items: left swipe → link+delete (link is no-op once recurring
+    // handled by SwipeableRegularItemCard, but kept simple here too).
+    // «Привязать» прячется когда `purchased=true` — одну запись можно связать
+    // только с одной wishlist-позицией.
+    val showLink = !item.purchased
+    val linkRevealDp = 80.dp
+    val deleteRevealDp = 72.dp
     val leftRevealDp = if (!recurring) 80.dp else 0.dp
-    val rightRevealDp = 72.dp
+    val rightRevealDp = (if (showLink) linkRevealDp else 0.dp) + deleteRevealDp
 
     val leftRevealPx = with(density) { leftRevealDp.toPx() }
     val rightRevealPx = with(density) { rightRevealDp.toPx() }
@@ -981,37 +1069,61 @@ fun SwipeableWishlistCard(
                 }
             }
 
-            // ── Right background: Delete ──
-            Box(
+            // ── Right backgrounds: [Привязать?] + Удалить ──
+            Row(
                 modifier = Modifier
                     .width(rightRevealDp)
                     .fillMaxHeight()
-                    .align(Alignment.CenterEnd)
-                    .background(ColourWlDelete)
-                    .clickable {
-                        if (pendingDelete) {
-                            snapTo(0f)
-                            onDelete(item.id)
-                        } else {
-                            pendingDelete = true
-                        }
-                    },
-                contentAlignment = Alignment.Center
+                    .align(Alignment.CenterEnd),
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Default.Delete, null, tint = Color.White, modifier = Modifier.size(22.dp))
-                    AnimatedContent(
-                        targetState = pendingDelete,
-                        transitionSpec = {
-                            (fadeIn(tween(160)) + scaleIn(initialScale = 0.85f, animationSpec = tween(160))) togetherWith
-                                (fadeOut(tween(140)) + scaleOut(targetScale = 0.85f, animationSpec = tween(140)))
+                if (showLink) {
+                    Box(
+                        modifier = Modifier
+                            .width(linkRevealDp)
+                            .fillMaxHeight()
+                            .background(ColourLinkExisting)
+                            .clickable {
+                                snapTo(0f)
+                                onLinkExisting()
+                            },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Default.Link, null, tint = Color.White, modifier = Modifier.size(22.dp))
+                            Text("Привязать", color = Color.White, fontSize = 10.sp)
+                        }
+                    }
+                }
+                Box(
+                    modifier = Modifier
+                        .width(deleteRevealDp)
+                        .fillMaxHeight()
+                        .background(ColourWlDelete)
+                        .clickable {
+                            if (pendingDelete) {
+                                snapTo(0f)
+                                onDelete(item.id)
+                            } else {
+                                pendingDelete = true
+                            }
                         },
-                        label = "wlDeleteConfirm",
-                    ) { pending ->
-                        Text(
-                            if (pending) "Подтвердить?" else "Удалить",
-                            color = Color.White, fontSize = 10.sp
-                        )
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(Icons.Default.Delete, null, tint = Color.White, modifier = Modifier.size(22.dp))
+                        AnimatedContent(
+                            targetState = pendingDelete,
+                            transitionSpec = {
+                                (fadeIn(tween(160)) + scaleIn(initialScale = 0.85f, animationSpec = tween(160))) togetherWith
+                                    (fadeOut(tween(140)) + scaleOut(targetScale = 0.85f, animationSpec = tween(140)))
+                            },
+                            label = "wlDeleteConfirm",
+                        ) { pending ->
+                            Text(
+                                if (pending) "Подтвердить?" else "Удалить",
+                                color = Color.White, fontSize = 10.sp
+                            )
+                        }
                     }
                 }
             }
@@ -1061,8 +1173,28 @@ fun SwipeableWishlistCard(
             animationSpec = tween(durationMillis = 260),
             label = "wlCardBg",
         )
+        // Dynamic corners — same pattern as SwipeableTransactionCard;
+        // ×6 multiplier flattens the corner before the rail-through-corner
+        // sliver becomes visible. For recurring items the left reveal is
+        // disabled (leftRevealPx == 0); guard with takeIf to avoid NaN.
+        val baseCorner = 12.dp
+        val rightSwipeProgress = if (leftRevealPx > 0f) {
+            ((offsetX.value / leftRevealPx) * 6f).coerceIn(0f, 1f)
+        } else {
+            0f
+        }
+        val leftSwipeProgress = ((-offsetX.value / rightRevealPx) * 6f).coerceIn(0f, 1f)
+        val leftEdgeCorner = baseCorner * (1f - rightSwipeProgress)
+        val rightEdgeCorner = baseCorner * (1f - leftSwipeProgress)
+        val cardShape = androidx.compose.foundation.shape.RoundedCornerShape(
+            topStart = leftEdgeCorner,
+            bottomStart = leftEdgeCorner,
+            topEnd = rightEdgeCorner,
+            bottomEnd = rightEdgeCorner,
+        )
         Card(
             modifier = cardModifier,
+            shape = cardShape,
             colors = CardDefaults.cardColors(containerColor = animatedBg)
         ) {
             Row(
@@ -1091,10 +1223,12 @@ fun SwipeableWishlistCard(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            item.category,
+                        CategoryLabel(
+                            name = item.category,
+                            category = categories.firstOrNull { it.name == item.category },
+                            serverUrl = serverUrl,
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            textColor = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Text(
                             "·", color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1155,6 +1289,9 @@ fun WishlistInteractiveSheet(
     item: WishlistItem,
     primaryColor: Color,
     categories: List<Category> = emptyList(),
+    /** Powers the inline category icon next to the category row and the
+     *  edit-mode dropdown items — resolves `custom:<id>` keys to URLs. */
+    serverUrl: String = "",
     onAddCategory: suspend (String) -> Category? = { null },
     onDeleteCategory: suspend (String) -> Unit = {},
     onSave: suspend (UpdateWishlistRequest) -> Unit,
@@ -1240,7 +1377,22 @@ fun WishlistInteractiveSheet(
                         HorizontalDivider()
                         Spacer(Modifier.height(16.dp))
 
-                        WishlistDetailRow("Категория", item.category)
+                        WishlistDetailRow(
+                            label = "Категория",
+                            value = item.category,
+                            // Inline category icon — mirrors the transaction
+                            // detail sheet (расходы / доходы) so all
+                            // category references look the same.
+                            valueContent = {
+                                CategoryLabel(
+                                    name = item.category,
+                                    category = categories.firstOrNull { it.name == item.category },
+                                    serverUrl = serverUrl,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Medium,
+                                )
+                            },
+                        )
                         WishlistDetailRow("Периодичность", frequencyLabel(item.frequency))
                         // «Ежемес. вклад» is informational only and applies to
                         // quarterly/yearly schedules — for monthly the value is
@@ -1349,7 +1501,13 @@ fun WishlistInteractiveSheet(
                             ExposedDropdownMenu(expanded = catExpanded, onDismissRequest = { catExpanded = false }) {
                                 catFiltered.forEach { cat ->
                                     DropdownMenuItem(
-                                        text = { Text(cat.name) },
+                                        text = {
+                                            CategoryLabel(
+                                                name = cat.name,
+                                                category = cat,
+                                                serverUrl = serverUrl,
+                                            )
+                                        },
                                         onClick = {
                                             editCatInput = cat.name
                                             editCategory = cat.name
@@ -1499,7 +1657,14 @@ fun WishlistInteractiveSheet(
 }
 
 @Composable
-private fun WishlistDetailRow(label: String, value: String) {
+private fun WishlistDetailRow(
+    label: String,
+    value: String,
+    /** Override for the value column — used by the «Категория» row to render
+     *  a `CategoryLabel` (icon + name) instead of plain text. When null, the
+     *  function falls back to a plain `Text(value)`. */
+    valueContent: (@Composable () -> Unit)? = null,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -1513,12 +1678,17 @@ private fun WishlistDetailRow(label: String, value: String) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.weight(0.45f)
         )
-        Text(
-            value,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier.weight(0.55f)
-        )
+        Box(modifier = Modifier.weight(0.55f)) {
+            if (valueContent != null) {
+                valueContent()
+            } else {
+                Text(
+                    value,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                )
+            }
+        }
     }
 }
 
@@ -1529,10 +1699,12 @@ private fun WishlistDetailRow(label: String, value: String) {
 fun AddWishlistSheet(
     primaryColor: Color,
     categories: List<Category> = emptyList(),
+    /** Resolves `custom:<id>` category icons for the dropdown items. */
+    serverUrl: String = "",
     onAddCategory: suspend (String) -> Category? = { null },
     onDeleteCategory: suspend (String) -> Unit = {},
     onDismiss: () -> Unit,
-    onSave: (CreateWishlistRequest) -> Unit
+    onSave: (CreateWishlistRequest) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     // `kind` is a UI-only switch driving which form branch shows; on save
@@ -1642,7 +1814,13 @@ fun AddWishlistSheet(
                 ExposedDropdownMenu(expanded = catExpanded, onDismissRequest = { catExpanded = false }) {
                     catFiltered.forEach { cat ->
                         DropdownMenuItem(
-                            text = { Text(cat.name) },
+                            text = {
+                                CategoryLabel(
+                                    name = cat.name,
+                                    category = cat,
+                                    serverUrl = serverUrl,
+                                )
+                            },
                             onClick = {
                                 catInput = cat.name
                                 category = cat.name

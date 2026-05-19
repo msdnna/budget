@@ -37,6 +37,7 @@ type fixture struct {
 	catRepo     *repository.CategoryRepository
 	userRepo    *repository.UserRepository
 	drRepo      *repository.DetailRequestRepository
+	notifRepo   *repository.NotificationRepository
 	router      *gin.Engine
 	userID      string
 	displayName string
@@ -56,6 +57,7 @@ func newFixture(t *testing.T) *fixture {
 	catRepo := repository.NewCategoryRepository(db)
 	userRepo := repository.NewUserRepository(db)
 	drRepo := repository.NewDetailRequestRepository(db)
+	notifRepo := repository.NewNotificationRepository(db)
 
 	// Seed a real user with bcrypt-hashed password so /auth/login round-trips.
 	hash, err := bcrypt.GenerateFromPassword([]byte("hunter2"), bcrypt.MinCost)
@@ -73,12 +75,15 @@ func newFixture(t *testing.T) *fixture {
 
 	authH := handlers.NewAuthHandler(userRepo, cfg)
 	txH := handlers.NewTransactionHandler(txRepo)
-	wlH := handlers.NewWishlistHandler(wlRepo, txRepo)
+	wlH := handlers.NewWishlistHandler(wlRepo, txRepo, catRepo)
 	catH := handlers.NewCategoryHandler(catRepo)
 	syncH := handlers.NewSyncHandler(txRepo, wlRepo, catRepo)
 	statsH := handlers.NewStatisticsHandler(txRepo, wlRepo)
 	verH := handlers.NewVersionHandler("test-1.0.0")
 	drH := handlers.NewDetailRequestHandler(drRepo, txRepo, userRepo)
+	limitsH := handlers.NewLimitsHandler(catRepo, txRepo)
+	notifH := handlers.NewNotificationHandler(notifRepo)
+	txH.SetLimitChecker(handlers.NewLimitChecker(catRepo, txRepo, notifRepo))
 
 	r := gin.New()
 	api := r.Group("/api")
@@ -103,11 +108,18 @@ func newFixture(t *testing.T) *fixture {
 			auth.PUT("/wishlist/:id", wlH.Update)
 			auth.DELETE("/wishlist/:id", wlH.Delete)
 			auth.POST("/wishlist/:id/unlink-period", wlH.UnlinkPeriod)
+			auth.POST("/wishlist/:id/link/:tx_id", wlH.LinkExisting)
 
 			auth.GET("/categories", catH.List)
 			auth.GET("/categories/all", catH.ListAll)
+			auth.GET("/categories/limits-progress", limitsH.Progress)
 			auth.POST("/categories", catH.Create)
+			auth.PATCH("/categories/:id", catH.Update)
 			auth.DELETE("/categories/:id", catH.Delete)
+
+			auth.GET("/notifications", notifH.List)
+			auth.POST("/notifications/read-all", notifH.ReadAll)
+			auth.POST("/notifications/:id/read", notifH.Read)
 
 			auth.GET("/statistics/summary", statsH.Summary)
 			auth.GET("/statistics/by-category", statsH.ByCategory)
@@ -136,6 +148,7 @@ func newFixture(t *testing.T) *fixture {
 		catRepo:     catRepo,
 		userRepo:    userRepo,
 		drRepo:      drRepo,
+		notifRepo:   notifRepo,
 		router:      r,
 		userID:      u.ID.Hex(),
 		displayName: u.DisplayName,
@@ -465,6 +478,168 @@ func TestWishlist_CRUDAndUnlinkPeriod(t *testing.T) {
 	w = f.do(t, http.MethodPost, "/api/wishlist/nope/unlink-period", nil, true)
 	if w.Code != http.StatusNotFound {
 		t.Errorf("unlink-missing status=%d, want 404", w.Code)
+	}
+}
+
+// TestWishlist_LinkExisting covers the «привязать существующий расход» flow:
+// happy-path attach, category clone when the wishlist category doesn't exist
+// in the expense section, once-frequency `purchased` flip, and rejection of
+// already-linked / non-expense transactions.
+func TestWishlist_LinkExisting(t *testing.T) {
+	f := newFixture(t)
+	if err := f.catRepo.EnsureDefaults(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	// Seed a wishlist-only category that doesn't exist in expense section, so
+	// the link handler must clone it.
+	if _, err := f.catRepo.Create(context.Background(), "wishlist", "Хобби", "#FF00FF", "rocket", nil); err != nil {
+		t.Fatal(err)
+	}
+
+	// once-item with that wishlist-only category
+	w := f.do(t, http.MethodPost, "/api/wishlist", models.CreateWishlistRequest{
+		Name:          "Гитара",
+		EstimatedCost: 30000,
+		Category:      "Хобби",
+		Frequency:     models.FrequencyOnce,
+	}, true)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create item: %d body=%s", w.Code, w.Body.String())
+	}
+	item := decodeBody[models.WishlistItem](t, w)
+
+	// Unrelated expense already in the system, categorised differently. We'll
+	// attach it to the wishlist item and expect the category to flip to "Хобби"
+	// (and the "Хобби" category to spawn in the expense section).
+	tx := &models.Transaction{
+		Type:      models.Expense,
+		Amount:    28000,
+		Date:      time.Now(),
+		Category:  "Развлечения",
+		CreatedBy: &models.UserInfo{UserID: f.userID},
+	}
+	if err := f.txRepo.Create(context.Background(), tx); err != nil {
+		t.Fatal(err)
+	}
+
+	// Link
+	w = f.do(t, http.MethodPost, "/api/wishlist/"+item.ID+"/link/"+tx.ID, nil, true)
+	if w.Code != http.StatusOK {
+		t.Fatalf("link: %d body=%s", w.Code, w.Body.String())
+	}
+	linked := decodeBody[models.Transaction](t, w)
+	if linked.WishlistID != item.ID {
+		t.Errorf("WishlistID=%q want=%q", linked.WishlistID, item.ID)
+	}
+	if linked.Category != "Хобби" {
+		t.Errorf("Category=%q want=Хобби", linked.Category)
+	}
+
+	// Expense-section "Хобби" must now exist with cloned visuals.
+	cat, err := f.catRepo.FindByName(context.Background(), "expense", "Хобби")
+	if err != nil || cat == nil {
+		t.Fatalf("expense Хобби missing: %v", err)
+	}
+	if cat.Color != "#FF00FF" || cat.Icon != "rocket" {
+		t.Errorf("clone visuals: color=%q icon=%q", cat.Color, cat.Icon)
+	}
+
+	// Once-item should be flipped to purchased.
+	items, _ := f.wlRepo.FindAll(context.Background())
+	var found *models.WishlistItem
+	for i := range items {
+		if items[i].ID == item.ID {
+			found = &items[i]
+		}
+	}
+	if found == nil || !found.Purchased {
+		t.Errorf("expected purchased=true after link, got %+v", found)
+	}
+
+	// Re-linking the same tx → 409
+	w = f.do(t, http.MethodPost, "/api/wishlist/"+item.ID+"/link/"+tx.ID, nil, true)
+	if w.Code != http.StatusConflict {
+		t.Errorf("relink status=%d want=409", w.Code)
+	}
+
+	// Linking a non-expense tx → 400
+	income := &models.Transaction{
+		Type:     models.Income,
+		Amount:   1000,
+		Date:     time.Now(),
+		Category: "Зарплата",
+	}
+	if err := f.txRepo.Create(context.Background(), income); err != nil {
+		t.Fatal(err)
+	}
+	w = f.do(t, http.MethodPost, "/api/wishlist/"+item.ID+"/link/"+income.ID, nil, true)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("link income status=%d want=400", w.Code)
+	}
+
+	// Linking an unknown tx → 404
+	w = f.do(t, http.MethodPost, "/api/wishlist/"+item.ID+"/link/nope", nil, true)
+	if w.Code != http.StatusNotFound {
+		t.Errorf("link missing status=%d want=404", w.Code)
+	}
+}
+
+// TestTransactions_UnlinkedFilter ensures GET /transactions?unlinked=true
+// hides linked, parent, closed-DR, and non-expense rows so the picker only
+// surfaces eligible candidates.
+func TestTransactions_UnlinkedFilter(t *testing.T) {
+	f := newFixture(t)
+	now := time.Now()
+
+	mk := func(tx *models.Transaction) *models.Transaction {
+		if err := f.txRepo.Create(context.Background(), tx); err != nil {
+			t.Fatal(err)
+		}
+		return tx
+	}
+
+	eligible := mk(&models.Transaction{
+		Type: models.Expense, Amount: 100, Date: now, Category: "Продукты",
+	})
+	linked := mk(&models.Transaction{
+		Type: models.Expense, Amount: 200, Date: now, Category: "Продукты",
+		WishlistID: "some-wl",
+	})
+	income := mk(&models.Transaction{
+		Type: models.Income, Amount: 500, Date: now, Category: "Зарплата",
+	})
+	closedParent := mk(&models.Transaction{
+		Type: models.Expense, Amount: 300, Date: now, Category: "Прочее",
+		DetailRequestStatus: "closed", ExcludedFromStats: true,
+	})
+
+	w := f.do(t, http.MethodGet, "/api/transactions?unlinked=true&limit=50", nil, true)
+	if w.Code != http.StatusOK {
+		t.Fatalf("list: %d body=%s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Data []models.Transaction `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+
+	seen := map[string]bool{}
+	for _, tx := range resp.Data {
+		seen[tx.ID] = true
+	}
+	if !seen[eligible.ID] {
+		t.Error("eligible expense missing")
+	}
+	if seen[linked.ID] {
+		t.Error("linked expense leaked into unlinked list")
+	}
+	if seen[income.ID] {
+		t.Error("income leaked into unlinked list")
+	}
+	if seen[closedParent.ID] {
+		t.Error("closed-DR parent leaked into unlinked list")
 	}
 }
 

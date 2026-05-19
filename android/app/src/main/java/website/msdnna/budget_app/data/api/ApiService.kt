@@ -1,5 +1,6 @@
 package website.msdnna.budget_app.data.api
 
+import okhttp3.RequestBody
 import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.*
@@ -29,7 +30,8 @@ interface ApiService {
         @Query("type") type: String? = null,
         @Query("category") category: String? = null,
         @Query("from") from: String? = null,
-        @Query("to") to: String? = null
+        @Query("to") to: String? = null,
+        @Query("unlinked") unlinked: Boolean? = null
     ): TransactionListResponse
 
     @POST("transactions")
@@ -120,6 +122,33 @@ interface ApiService {
     @DELETE("categories/{id}")
     suspend fun deleteCategory(@Path("id") id: String): Response<Unit>
 
+    // PATCH /categories/{id} — admin-only. Caller passes a pre-built JSON
+    // body so it can emit a literal `null` for monthly_limit (default Gson
+    // drops null map values, which the backend would read as "leave
+    // unchanged"; we need "clear"). See CategoryRepository.patch.
+    @Headers("Content-Type: application/json; charset=utf-8")
+    @PATCH("categories/{id}")
+    suspend fun patchCategory(
+        @Path("id") id: String,
+        @Body body: RequestBody
+    ): website.msdnna.budget_app.data.model.Category
+
+    @GET("categories/limits-progress")
+    suspend fun getLimitsProgress(
+        @Query("month") month: String? = null
+    ): website.msdnna.budget_app.data.model.LimitsProgressResponse
+
+    @GET("notifications")
+    suspend fun getNotifications(
+        @Query("limit") limit: Int? = null
+    ): website.msdnna.budget_app.data.model.NotificationsListResponse
+
+    @POST("notifications/read-all")
+    suspend fun markAllNotificationsRead(): Map<String, @JvmSuppressWildcards Any>
+
+    @POST("notifications/{id}/read")
+    suspend fun markNotificationRead(@Path("id") id: String): Map<String, @JvmSuppressWildcards Any>
+
     @DELETE("wishlist/{id}")
     suspend fun deleteWishlistItem(@Path("id") id: String): Response<Unit>
 
@@ -127,6 +156,15 @@ interface ApiService {
      *  current period. Backs the «Отменить» action on Регулярные расходы. */
     @POST("wishlist/{id}/unlink-period")
     suspend fun unlinkWishlistPeriod(@Path("id") id: String): Map<String, @JvmSuppressWildcards Any>
+
+    /** Attach an existing expense transaction to a wishlist/regular item.
+     *  Server clones the wishlist category into expense if missing and (for
+     *  `once`-items) flips `purchased=true`. See backend api ≥ 1.21.0. */
+    @POST("wishlist/{id}/link/{tx_id}")
+    suspend fun linkWishlistToExpense(
+        @Path("id") id: String,
+        @Path("tx_id") txId: String
+    ): Transaction
 
     @GET("sync/pull")
     suspend fun syncPull(

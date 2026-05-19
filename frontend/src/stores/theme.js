@@ -120,6 +120,23 @@ function hslToHex(h, s, l) {
   return `#${toHex(r)}${toHex(g)}${toHex(b)}`
 }
 
+// Relative luminance per WCAG. Returns 0..1 — higher = lighter.
+function relLuminance(hex) {
+  const r = parseInt(hex.slice(1, 3), 16) / 255
+  const g = parseInt(hex.slice(3, 5), 16) / 255
+  const b = parseInt(hex.slice(5, 7), 16) / 255
+  const lin = (c) => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4))
+  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
+}
+
+// Текст на primary-кнопке: белый на тёмных, тёмный на светлых/средних
+// акцентах. Порог 0.30 — оранжевый (0.43), бирюзовый (0.34) ловятся в
+// «dark text» (на них белый мерцает). Холодные синий/зелёный/красный/
+// фиолетовый/розовый имеют luminance ниже 0.30 и остаются с белым текстом.
+function textOnPrimary(hex) {
+  return relLuminance(hex) > 0.3 ? '#1f1f1f' : '#ffffff'
+}
+
 function generatePalette(primaryHex, count = 8) {
   const [h, s] = hexToHsl(primaryHex)
   const sat = Math.min(Math.max(s, 52), 88)
@@ -136,6 +153,11 @@ export const useThemeStore = defineStore('theme', () => {
   const isDark = ref(localStorage.getItem('budget-dark-mode') === 'true')
 
   const primaryColor = computed(() => activeTheme.value.primary)
+  // Foreground colour to use on top of `primaryColor` for radio-button text,
+  // pill tabs, etc. Uses the same luminance threshold (0.30) as
+  // `themeOverrides.Button.textColorPrimary` so all primary-tinted surfaces
+  // stay readable on orange/teal as well as on blue/red/green.
+  const onPrimaryColor = computed(() => textOnPrimary(activeTheme.value.primary))
   const chartColors = computed(() => generatePalette(activeTheme.value.primary))
   const palette = computed(() => (isDark.value ? DARK : LIGHT))
 
@@ -152,8 +174,32 @@ export const useThemeStore = defineStore('theme', () => {
       primaryColorSuppl: p.suppl,
     }
 
+    // Primary-кнопки: текст всегда контрастен фону независимо от light/dark.
+    // Naive переопределяет textColor динамически и в dark-теме теряет
+    // читаемость на синем/зелёном/красном. Считаем сами по luminance.
+    const onPrimary = textOnPrimary(p.primary)
+    const buttonPrimaryText = {
+      textColorPrimary: onPrimary,
+      textColorHoverPrimary: onPrimary,
+      textColorPressedPrimary: onPrimary,
+      textColorFocusPrimary: onPrimary,
+    }
+    // Radio button (`<n-radio-button>` inside `<n-radio-group>`) doesn't pick
+    // up `Button.textColorPrimary` — it has its own theme key set. Selected
+    // radio sits on `p.primary`, so its text must mirror Button's onPrimary
+    // (white on cool primaries, dark on orange/teal/yellow).
+    const radioActive = {
+      buttonColorActive: p.primary,
+      buttonTextColorActive: onPrimary,
+      buttonBorderColorActive: p.primary,
+    }
+
     if (!isDark.value) {
-      return { common }
+      return {
+        common,
+        Button: buttonPrimaryText,
+        Radio: radioActive,
+      }
     }
 
     const d = DARK
@@ -173,6 +219,7 @@ export const useThemeStore = defineStore('theme', () => {
       },
       Button: {
         colorQuaternary: d.surfaceAlt,
+        ...buttonPrimaryText,
       },
       Layout: {
         color: d.bg,
@@ -260,7 +307,7 @@ export const useThemeStore = defineStore('theme', () => {
         itemBorderColor: d.border,
         itemTextColor: d.text2,
         itemTextColorHover: d.text1,
-        itemTextColorActive: '#ffffff',
+        itemTextColorActive: onPrimary,
       },
       Tag: { colorBorder: d.border },
       FormItem: { feedbackHeight: '20px' },
@@ -269,6 +316,7 @@ export const useThemeStore = defineStore('theme', () => {
       Radio: {
         colorChecked: p.primary,
         borderColorChecked: p.primary,
+        ...radioActive,
       },
       Popconfirm: { color: d.surfaceAlt },
       List: { color: 'transparent' },
@@ -335,6 +383,7 @@ export const useThemeStore = defineStore('theme', () => {
     activeTheme,
     isDark,
     primaryColor,
+    onPrimaryColor,
     chartColors,
     palette,
     naiveTheme,

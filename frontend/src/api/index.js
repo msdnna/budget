@@ -84,10 +84,34 @@ export const wishlist = {
   update: (id, data) => api.put(`/wishlist/${id}`, data),
   remove: (id) => api.delete(`/wishlist/${id}`),
   unlinkPeriod: (id) => api.post(`/wishlist/${id}/unlink-period`),
+  linkExisting: (id, txId) => api.post(`/wishlist/${id}/link/${txId}`),
 }
 
 export const users = {
   list: () => api.get('/users'),
+}
+
+export const adminUsers = {
+  list: () => api.get('/admin/users'),
+  create: (data) => api.post('/admin/users', data),
+  update: (id, patch) => api.patch(`/admin/users/${id}`, patch),
+  remove: (id) => api.delete(`/admin/users/${id}`),
+  setPassword: (id, password) => api.post(`/admin/users/${id}/password`, { password }),
+  uploadAvatar: (id, file) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    return api.post(`/admin/users/${id}/avatar`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  },
+  removeAvatar: (id) => api.delete(`/admin/users/${id}/avatar`),
+  // Аватар сервится через `/api/users/:id/avatar?v=<ts>` (URL приходит в
+  // `avatar_url`). При смене таймстамп меняется — собственный cache-buster.
+}
+
+export const authSelf = {
+  changePassword: (oldPassword, newPassword) =>
+    api.post('/auth/password', { old_password: oldPassword, new_password: newPassword }),
 }
 
 export const categories = {
@@ -96,6 +120,16 @@ export const categories = {
   create: (data) => api.post('/categories', data),
   update: (id, data) => api.patch(`/categories/${id}`, data),
   remove: (id) => api.delete(`/categories/${id}`),
+  // Progress against monthly_limit for every expense category that has one.
+  // `month` defaults to the current calendar month server-side.
+  limitsProgress: (month) =>
+    api.get('/categories/limits-progress', { params: month ? { month } : undefined }),
+}
+
+export const notifications = {
+  list: (limit) => api.get('/notifications', { params: limit ? { limit } : undefined }),
+  readAll: () => api.post('/notifications/read-all'),
+  read: (id) => api.post(`/notifications/${id}/read`),
 }
 
 export const icons = {

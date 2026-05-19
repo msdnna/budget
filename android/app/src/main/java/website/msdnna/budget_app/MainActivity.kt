@@ -144,8 +144,9 @@ class MainActivity : FragmentActivity() {
                     runCatching {
                         val me = RetrofitClient.getService(url).getMe()
                         val uid = (me["user_id"] as? String).orEmpty()
+                        val admin = me["is_admin"] as? Boolean ?: false
                         if (uid.isNotBlank()) {
-                            prefs.setAuth(token, refresh, uid, snap.name, snap.avatar)
+                            prefs.setAuth(token, refresh, uid, snap.name, snap.avatar, admin)
                         }
                     }
                 }
@@ -291,7 +292,7 @@ class MainActivity : FragmentActivity() {
                                     primaryColor = primaryColor,
                                     savedServerUrl = serverUrl.takeIf { !it.isNullOrBlank() },
                                     serverHistory = serverHistory,
-                                    onAuthenticated = { url, token, refreshToken, userId, name, avatar ->
+                                    onAuthenticated = { url, token, refreshToken, userId, name, avatar, isAdmin ->
                                         // Set token BEFORE state update so it's visible to ViewModel
                                         // init coroutines that start synchronously on recomposition.
                                         RetrofitClient.authToken = token
@@ -303,7 +304,7 @@ class MainActivity : FragmentActivity() {
                                         AppLock.unlock()
                                         scope.launch {
                                             prefs.setServerUrl(url)
-                                            prefs.setAuth(token, refreshToken, userId, name, avatar)
+                                            prefs.setAuth(token, refreshToken, userId, name, avatar, isAdmin)
                                             prefs.addToServerHistory(url)
                                         }
                                     }

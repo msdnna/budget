@@ -87,6 +87,14 @@ class ExpensesViewModel(private val serverUrl: String) : ViewModel() {
         _filterCats.value = emptySet()
         _page.value = 1
     }
+
+    /** Replace the active category filter set in one shot. Used by the
+     *  Statistics → Expenses drilldown, where the donut click already knows
+     *  the exact category(ies) to filter by. */
+    fun setFilterCategories(names: Set<String>) {
+        _filterCats.value = names
+        _page.value = 1
+    }
     fun setDateRange(from: String?, to: String?) {
         _filterFrom.value = from
         _filterTo.value = to

@@ -16,6 +16,20 @@
   display: none !important;
 }
 
+/* Bump the size of the «Сбросить» / «Подтвердить» buttons in the date-picker
+   footer. Naive's defaults are size="tiny" (~22px tall, 12px font) which
+   reads as cramped next to the calendar grid; small (~28px tall, 13px font)
+   is closer to the rest of the form controls in this app. The popup mounts
+   to body, so scoped CSS in App.vue can't reach it — global rule needed. */
+.n-date-panel-actions .n-button {
+  height: 28px;
+  font-size: 13px;
+  padding: 0 14px;
+}
+.n-date-panel-actions .n-button + .n-button {
+  margin-left: 8px;
+}
+
 /* Dark mode overrides via JS-controlled attribute */
 :root[data-theme='dark'] {
   --border: #333333;
@@ -24,4 +38,109 @@
   --nav-item: #aaaaaa;
   --divider: #444444;
   --divider-hover: #555555;
+}
+
+/* ────────────────────────────────────────────────────────────────────
+   Shared Vue <Transition> classes для mobile UX-анимаций. Объявлены
+   глобально (`theme.css` импортируется в `main.js`), а не в scoped
+   blocks — `<TransitionGroup tag="div">` теряет scope-атрибут
+   плодящего родителя, и leave-классы не цепляют listed-итемы.
+
+   Все длительности 120-220мс, animate только transform/opacity (GPU),
+   gated `@media (max-width: 767px)` где имеет смысл только на mobile.
+
+   `prefers-reduced-motion: reduce` отключает все наши transitions —
+   accessibility-стандарт + дёшево.
+   ──────────────────────────────────────────────────────────────────── */
+
+/* 1) mobile-slide: form ↔ history swap в Income/Expenses. */
+@media (max-width: 767px) {
+  .mobile-slide-enter-active,
+  .mobile-slide-leave-active {
+    transition:
+      transform 0.22s ease,
+      opacity 0.18s ease;
+  }
+  .mobile-slide-enter-from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+  .mobile-slide-leave-to {
+    transform: translateX(-24px);
+    opacity: 0;
+  }
+}
+
+/* 2) fab-swap: «+» FAB ↔ BulkFabRow. Используется с mode="out-in", так
+   что crossfade — это последовательный fade-out → fade-in. */
+.fab-swap-enter-active,
+.fab-swap-leave-active {
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease;
+}
+.fab-swap-enter-from,
+.fab-swap-leave-to {
+  opacity: 0;
+  transform: scale(0.85);
+}
+
+/* 3) bulk-icon: UserAvatar ↔ bulk-circle внутри карточки. */
+.bulk-icon-enter-active,
+.bulk-icon-leave-active {
+  transition: opacity 0.12s ease;
+}
+.bulk-icon-enter-from,
+.bulk-icon-leave-to {
+  opacity: 0;
+}
+
+/* 4) tx-list: collapse leave для удалённой карточки. `max-height`
+   достаточно высокий, чтобы не клиппить контент при leave-from'е, и
+   уезжает к 0 при leave-to. `overflow: hidden` на leave-active клиппит
+   контент пока высота схлопывается. */
+.tx-list-leave-active {
+  transition:
+    opacity 0.18s ease,
+    max-height 0.22s ease,
+    margin-bottom 0.22s ease,
+    transform 0.22s ease;
+  overflow: hidden;
+}
+.tx-list-leave-from {
+  max-height: 200px;
+  opacity: 1;
+}
+.tx-list-leave-to {
+  max-height: 0;
+  margin-bottom: 0;
+  opacity: 0;
+  transform: translateX(-12px);
+}
+
+/* 5) tab-fade: fade на содержимом таб'а в Forecast. mobile-only —
+   на desktop'е все три секции видны параллельно, fade не нужен. */
+@media (max-width: 767px) {
+  .tab-fade-enter-active,
+  .tab-fade-leave-active {
+    transition: opacity 0.14s ease;
+  }
+  .tab-fade-enter-from,
+  .tab-fade-leave-to {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mobile-slide-enter-active,
+  .mobile-slide-leave-active,
+  .fab-swap-enter-active,
+  .fab-swap-leave-active,
+  .bulk-icon-enter-active,
+  .bulk-icon-leave-active,
+  .tx-list-leave-active,
+  .tab-fade-enter-active,
+  .tab-fade-leave-active {
+    transition: none !important;
+  }
 }

@@ -113,6 +113,25 @@ class MappersTest {
     }
 
     @Test
+    fun `category roundtrip preserves monthly_limit incl null`() {
+        val withLimit = Category(
+            id = "cat-2",
+            section = "expense",
+            name = "Транспорт",
+            isDefault = false,
+            monthlyLimit = 5_000.0,
+            createdAt = "2026-01-01",
+            version = 1,
+            updatedAt = "2026-01-01",
+            deletedAt = null,
+        )
+        val withoutLimit = withLimit.copy(monthlyLimit = null)
+
+        assertThat(withLimit.toEntity().toModel().monthlyLimit).isEqualTo(5_000.0)
+        assertThat(withoutLimit.toEntity().toModel().monthlyLimit).isNull()
+    }
+
+    @Test
     fun `parseTransaction reads server JSON produced by toJson`() {
         val original = Transaction(
             id = "tx-9",
