@@ -32,7 +32,7 @@ func newAdminFixture(t *testing.T) *fixture {
 		t.Fatalf("seed admin: %v", err)
 	}
 
-	userAdminH := handlers.NewUserAdminHandler(f.userRepo)
+	userAdminH := handlers.NewUserAdminHandler(f.userRepo, f.db)
 	api := f.router.Group("/api")
 	auth := api.Group("/")
 	auth.Use(middleware.Auth(f.cfg))
@@ -266,6 +266,92 @@ func TestUserAdmin_AvatarUpload(t *testing.T) {
 	after := decodeBody[models.AdminUser](t, w)
 	if after.AvatarURL != "" {
 		t.Errorf("avatar still set: %+v", after)
+	}
+}
+
+// TestUserAdmin_AvatarBackfillsSnapshots проверяет, что после загрузки/удаления
+// аватара денормализованные снимки UserInfo в `transactions.created_by`
+// догоняют актуальное состояние пользователя. Иначе старые записи остаются с
+// пустым `avatar_url`, и UI рисует инициалы вместо аватара (баг с до-1.24).
+func TestUserAdmin_AvatarBackfillsSnapshots(t *testing.T) {
+	f := newAdminFixture(t)
+
+	// Создаём транзакцию ДО заливки аватара — snapshot должен быть пустым.
+	w := f.do(t, http.MethodPost, "/api/transactions", models.CreateTransactionRequest{
+		Type: models.Income, Amount: 100, Date: "2026-05-01", Category: "Salary",
+	}, true)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create tx: %d %s", w.Code, w.Body.String())
+	}
+	tx := decodeBody[models.Transaction](t, w)
+	if tx.CreatedBy == nil || tx.CreatedBy.AvatarURL != "" {
+		t.Fatalf("pre-upload snapshot expected empty avatar: %+v", tx.CreatedBy)
+	}
+
+	// Загрузка аватара → backfill должен дотянуться до txn.
+	png := []byte{
+		0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+		0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+		0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+		0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
+		0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41,
+		0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
+		0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,
+		0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
+		0x42, 0x60, 0x82,
+	}
+	body := &bytes.Buffer{}
+	mw := multipart.NewWriter(body)
+	fw, _ := mw.CreateFormFile("file", "a.png")
+	_, _ = fw.Write(png)
+	mw.Close()
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/users/"+f.userID+"/avatar", body)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	req.Header.Set("Authorization", "Bearer "+f.adminToken(t))
+	w = httptest.NewRecorder()
+	f.router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("upload avatar: %d %s", w.Code, w.Body.String())
+	}
+	user := decodeBody[models.AdminUser](t, w)
+
+	// Перечитываем tx через repo — snapshot должен совпадать с новым URL.
+	got, err := f.txRepo.FindByID(context.Background(), tx.ID)
+	if err != nil {
+		t.Fatalf("re-read tx: %v", err)
+	}
+	if got.CreatedBy == nil || got.CreatedBy.AvatarURL != user.AvatarURL {
+		t.Errorf("after upload: snapshot.avatar=%q, user.avatar=%q",
+			got.CreatedBy.AvatarURL, user.AvatarURL)
+	}
+
+	// Удаление аватара → snapshot должен очиститься.
+	w = f.doAdmin(t, http.MethodDelete, "/api/admin/users/"+f.userID+"/avatar", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("delete avatar: %d %s", w.Code, w.Body.String())
+	}
+	got, err = f.txRepo.FindByID(context.Background(), tx.ID)
+	if err != nil {
+		t.Fatalf("re-read tx after clear: %v", err)
+	}
+	if got.CreatedBy != nil && got.CreatedBy.AvatarURL != "" {
+		t.Errorf("after delete: snapshot.avatar=%q, want empty", got.CreatedBy.AvatarURL)
+	}
+
+	// Переименование display_name через PATCH /admin/users/:id → snapshot тоже.
+	newName := "Alice Reborn"
+	w = f.doAdmin(t, http.MethodPatch, "/api/admin/users/"+f.userID,
+		models.UpdateUserRequest{DisplayName: &newName})
+	if w.Code != http.StatusOK {
+		t.Fatalf("rename: %d %s", w.Code, w.Body.String())
+	}
+	got, err = f.txRepo.FindByID(context.Background(), tx.ID)
+	if err != nil {
+		t.Fatalf("re-read tx after rename: %v", err)
+	}
+	if got.CreatedBy == nil || got.CreatedBy.DisplayName != newName {
+		t.Errorf("after rename: snapshot.display_name=%q, want %q",
+			got.CreatedBy.DisplayName, newName)
 	}
 }
 

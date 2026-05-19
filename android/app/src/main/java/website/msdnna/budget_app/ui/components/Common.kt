@@ -49,6 +49,7 @@ import java.text.NumberFormat
 import java.util.Locale
 import kotlinx.coroutines.launch
 import website.msdnna.budget_app.R
+import website.msdnna.budget_app.data.api.RetrofitClient
 
 /**
  * Provides a single shared shimmer-pulse alpha to all `SkeletonBox` instances
@@ -306,6 +307,20 @@ private fun avatarBgColor(name: String): Color {
     return AVATAR_PALETTE[idx]
 }
 
+/**
+ * Backend issues avatar URLs as relative paths like `/api/users/<id>/avatar?v=<ts>`
+ * — `<img>`/axios in the web client absorb the page origin, but Coil's
+ * `AsyncImage` rejects host-less URLs outright. Prefix the active server root
+ * (sans trailing `/api/`) when we see one, leave fully-qualified URLs alone.
+ */
+private fun resolveAvatarModel(raw: String?): String? {
+    if (raw.isNullOrBlank()) return raw
+    if (!raw.startsWith("/")) return raw
+    val root = RetrofitClient.serverRoot
+    if (root.isBlank()) return null
+    return root + raw
+}
+
 @Composable
 fun UserAvatar(
     displayName: String,
@@ -318,22 +333,23 @@ fun UserAvatar(
             .take(2).joinToString("").ifEmpty { "?" }
     }
     val bgColor = remember(displayName) { avatarBgColor(displayName) }
-    var imageError by remember(avatarUrl) { mutableStateOf(false) }
+    val resolvedModel = remember(avatarUrl) { resolveAvatarModel(avatarUrl) }
+    var imageError by remember(resolvedModel) { mutableStateOf(false) }
 
     Box(
         modifier = Modifier.size(size).clip(CircleShape).background(bgColor),
         contentAlignment = Alignment.Center
     ) {
-        if (!avatarUrl.isNullOrBlank() && !imageError) {
+        if (!resolvedModel.isNullOrBlank() && !imageError) {
             AsyncImage(
-                model = avatarUrl,
+                model = resolvedModel,
                 contentDescription = displayName,
                 contentScale = ContentScale.Crop,
                 onError = { imageError = true },
                 modifier = Modifier.fillMaxSize()
             )
         }
-        if (avatarUrl.isNullOrBlank() || imageError) {
+        if (resolvedModel.isNullOrBlank() || imageError) {
             Text(
                 text = initials,
                 color = Color.White,

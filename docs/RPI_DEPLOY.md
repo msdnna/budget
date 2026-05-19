@@ -162,17 +162,26 @@ docker exec -i budget-mongodb mongorestore \
 
 ## 7. Обновление до нового релиза
 
-После публикации новой версии (вы запушили тег `api/v...` или `web/v...`, CI
-собрал и опубликовал образ):
+После публикации новой версии (вы запушили тег `api/v...`, `web/v...` или
+`android/v...`, CI собрал и опубликовал образ/APK):
 
 ```bash
 cd /opt/budget
 make rpi-update
-# git pull --ff-only → docker compose pull → docker compose up -d
+# git pull --ff-only → docker compose pull → rpi-fetch-apk → docker compose up -d
 ```
 
 `docker compose up -d` пересоздаёт только контейнеры с изменёнными образами;
 Mongo не трогается. Volume `mongodb_data` переживает обновления.
+
+**APK для in-app Android updates.** `rpi-update` дополнительно вызывает
+`tools/rpi-fetch-apk.sh`, который через `gh release download
+android/v<android/VERSION>` тянет подписанную APK в `./apks/` (где nginx её
+раздаёт по `/apks/`). Идемпотентно — если файл уже на месте, skip. Soft-fail
+если релиз ещё не доехал или `gh` не установлен (API/WEB всё равно
+поднимутся; APK можно дотянуть позже отдельным `make rpi-apk-fetch`).
+Требует `gh` CLI на Pi: `sudo apt install gh`, и `gh auth login` для
+приватного репо.
 
 Откатиться на пред. версию — пин `API_VERSION` / `WEB_VERSION`:
 ```bash

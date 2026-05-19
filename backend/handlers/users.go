@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -17,16 +18,47 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// Контекст бэкфилла UserInfo-снимков ограничен отдельно: основная операция
+// уже завершилась (avatar/display_name записан в users), а UpdateMany по
+// 5 коллекциям должна успеть прожевать даже большую базу. Если родительский
+// gin-контекст истекает раньше — backfill всё равно завершается, а 200 OK
+// клиенту уже ушёл.
+const backfillTimeout = 15 * time.Second
+
 // Размер аватарок берём такой же, как у category-иконок — UI рендерит
 // аватар максимум 96×96 (профиль) / 28-32 (списки), 512KB с большим запасом.
 const maxAvatarBytes = 512 * 1024
 
 type UserAdminHandler struct {
 	repo *repository.UserRepository
+	db   *mongo.Database
 }
 
-func NewUserAdminHandler(repo *repository.UserRepository) *UserAdminHandler {
-	return &UserAdminHandler{repo: repo}
+// NewUserAdminHandler. `db` нужен для `repository.BackfillUserInfo` —
+// денормализованные snapshot'ы UserInfo в transactions/wishlist/categories/
+// detail_requests/category_icons догоняются после смены аватара или
+// display_name. Без db backfill вызывать не из чего; nil допустим только в
+// тестах, где backfill не проверяется.
+func NewUserAdminHandler(repo *repository.UserRepository, db *mongo.Database) *UserAdminHandler {
+	return &UserAdminHandler{repo: repo, db: db}
+}
+
+// backfillSnapshots — обёртка над repository.BackfillUserInfo с отдельным
+// контекстом и логированием. Ошибки не прокидываются клиенту: основная
+// операция уже сохранилась, частично-стейлые snapshot'ы лечатся повторной
+// заливкой/правкой профиля. `h.db == nil` — тесты, которые не настраивают
+// backfill, пропускаем без шума.
+func (h *UserAdminHandler) backfillSnapshots(u *models.User) {
+	if h.db == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), backfillTimeout)
+	defer cancel()
+	if err := repository.BackfillUserInfo(ctx, h.db, u.ID.Hex(), u.DisplayName, u.AvatarURL); err != nil {
+		// Лог, но не fail — клиент уже видит обновлённый users-документ.
+		// Sentry/structured logger пока не подключён, fmt в stdout.
+		fmt.Printf("backfill UserInfo for %s failed: %v\n", u.ID.Hex(), err)
+	}
 }
 
 func toAdminUser(u *models.User) models.AdminUser {
@@ -187,6 +219,11 @@ func (h *UserAdminHandler) Update(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	// Денормализованные снимки догоняем только когда меняется display_name —
+	// прочие поля (login/is_admin/blocked) в UserInfo не входят.
+	if req.DisplayName != nil {
+		h.backfillSnapshots(u)
+	}
 	c.JSON(http.StatusOK, toAdminUser(u))
 }
 
@@ -315,6 +352,7 @@ func (h *UserAdminHandler) UploadAvatar(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	h.backfillSnapshots(u)
 	c.JSON(http.StatusOK, toAdminUser(u))
 }
 
@@ -337,6 +375,7 @@ func (h *UserAdminHandler) DeleteAvatar(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	h.backfillSnapshots(u)
 	c.JSON(http.StatusOK, toAdminUser(u))
 }
 
