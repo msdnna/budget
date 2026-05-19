@@ -134,6 +134,73 @@
                 },
                 "type": "object"
             },
+            "handlers.SetupStatusResponse": {
+                "properties": {
+                    "needs_setup": {
+                        "type": "boolean"
+                    }
+                },
+                "type": "object"
+            },
+            "handlers.Snapshot": {
+                "properties": {
+                    "app_version": {
+                        "type": "string"
+                    },
+                    "categories": {
+                        "items": {
+                            "$ref": "#/components/schemas/models.Category"
+                        },
+                        "type": "array",
+                        "uniqueItems": false
+                    },
+                    "detail_requests": {
+                        "items": {
+                            "$ref": "#/components/schemas/models.DetailRequest"
+                        },
+                        "type": "array",
+                        "uniqueItems": false
+                    },
+                    "exported_at": {
+                        "type": "string"
+                    },
+                    "exported_by": {
+                        "type": "string"
+                    },
+                    "icons": {
+                        "items": {
+                            "$ref": "#/components/schemas/handlers.exportIcon"
+                        },
+                        "type": "array",
+                        "uniqueItems": false
+                    },
+                    "schema_version": {
+                        "type": "integer"
+                    },
+                    "transactions": {
+                        "items": {
+                            "$ref": "#/components/schemas/models.Transaction"
+                        },
+                        "type": "array",
+                        "uniqueItems": false
+                    },
+                    "users": {
+                        "items": {
+                            "$ref": "#/components/schemas/handlers.exportUser"
+                        },
+                        "type": "array",
+                        "uniqueItems": false
+                    },
+                    "wishlist": {
+                        "items": {
+                            "$ref": "#/components/schemas/models.WishlistItem"
+                        },
+                        "type": "array",
+                        "uniqueItems": false
+                    }
+                },
+                "type": "object"
+            },
             "handlers.StatisticsOverviewResponse": {
                 "properties": {
                     "expenseByCategory": {
@@ -159,6 +226,120 @@
                     },
                     "summary": {
                         "$ref": "#/components/schemas/models.SummaryData"
+                    }
+                },
+                "type": "object"
+            },
+            "handlers.exportIcon": {
+                "properties": {
+                    "data_base64": {
+                        "type": "string"
+                    },
+                    "id": {
+                        "type": "string"
+                    },
+                    "mime_type": {
+                        "type": "string"
+                    },
+                    "size_bytes": {
+                        "type": "integer"
+                    },
+                    "uploaded_at": {
+                        "type": "string"
+                    },
+                    "uploaded_by": {
+                        "$ref": "#/components/schemas/models.UserInfo"
+                    }
+                },
+                "type": "object"
+            },
+            "handlers.exportUser": {
+                "properties": {
+                    "avatar_data_base64": {
+                        "type": "string"
+                    },
+                    "avatar_mime": {
+                        "type": "string"
+                    },
+                    "avatar_url": {
+                        "type": "string"
+                    },
+                    "blocked_at": {
+                        "type": "string"
+                    },
+                    "created_at": {
+                        "type": "string"
+                    },
+                    "display_name": {
+                        "type": "string"
+                    },
+                    "id": {
+                        "type": "string"
+                    },
+                    "is_admin": {
+                        "type": "boolean"
+                    },
+                    "login": {
+                        "type": "string"
+                    },
+                    "password_hash": {
+                        "type": "string"
+                    }
+                },
+                "type": "object"
+            },
+            "handlers.importRequest": {
+                "properties": {
+                    "mode": {
+                        "description": "Mode = \"merge\" (default) keeps existing rows on _id / login\ncollision; \"replace\" wipes everything except the caller before\nimporting. Default categories are re-seeded after replace by\nEnsureDefaults on the next backend boot — until then, the imported\ncategories are authoritative.",
+                        "type": "string"
+                    },
+                    "snapshot": {
+                        "$ref": "#/components/schemas/handlers.Snapshot"
+                    }
+                },
+                "type": "object"
+            },
+            "handlers.importStats": {
+                "properties": {
+                    "categories_imported": {
+                        "type": "integer"
+                    },
+                    "categories_skipped": {
+                        "type": "integer"
+                    },
+                    "detail_requests_imported": {
+                        "type": "integer"
+                    },
+                    "detail_requests_skipped": {
+                        "type": "integer"
+                    },
+                    "icons_imported": {
+                        "type": "integer"
+                    },
+                    "icons_skipped": {
+                        "type": "integer"
+                    },
+                    "mode": {
+                        "type": "string"
+                    },
+                    "transactions_imported": {
+                        "type": "integer"
+                    },
+                    "transactions_skipped": {
+                        "type": "integer"
+                    },
+                    "users_imported": {
+                        "type": "integer"
+                    },
+                    "users_skipped": {
+                        "type": "integer"
+                    },
+                    "wishlist_imported": {
+                        "type": "integer"
+                    },
+                    "wishlist_skipped": {
+                        "type": "integer"
                     }
                 },
                 "type": "object"
@@ -1160,6 +1341,91 @@
         "url": ""
     },
     "paths": {
+        "/admin/export": {
+            "get": {
+                "description": "Возвращает JSON-снимок всех коллекций (users с bcrypt, categories, icons base64, transactions, wishlist, detail_requests). Используется для переноса между инсталляциями, не для бэкапа.",
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.Snapshot"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Скачать снимок данных (admin)",
+                "tags": [
+                    "admin"
+                ]
+            }
+        },
+        "/admin/import": {
+            "post": {
+                "description": "Принимает JSON {mode, snapshot}. mode=merge (по умолчанию) — пропускать существующие записи по _id (и login для пользователей); mode=replace — очистить коллекции (кроме вызывающего админа), потом импортировать. Бампает updated_at у импортированных записей, чтобы Android-клиенты подхватили их на следующем sync/pull.",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "oneOf": [
+                                    {
+                                        "type": "object"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/handlers.importRequest",
+                                        "summary": "body",
+                                        "description": "Снимок и режим"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "description": "Снимок и режим",
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.importStats"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Bad Request"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Импорт снимка данных (admin)",
+                "tags": [
+                    "admin"
+                ]
+            }
+        },
         "/admin/users": {
             "get": {
                 "description": "Возвращает login/is_admin/blocked_at/created_at в дополнение к публичным полям. Не-удалённые пользователи (включая заблокированных).",
@@ -3304,6 +3570,94 @@
                 "summary": "Пометить одно уведомление прочитанным",
                 "tags": [
                     "notifications"
+                ]
+            }
+        },
+        "/setup/init": {
+            "post": {
+                "description": "Доступен только когда в БД нет пользователей. Создаёт админа и сразу выдаёт access+refresh пару (как /auth/login). Повторный вызов после успеха отдаёт 409.",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "oneOf": [
+                                    {
+                                        "type": "object"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/models.CreateUserRequest",
+                                        "summary": "body",
+                                        "description": "login/password/display_name"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "description": "login/password/display_name",
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.LoginResponse"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Bad Request"
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Conflict"
+                    }
+                },
+                "summary": "Создать первого админа (first-run wizard)",
+                "tags": [
+                    "setup"
+                ]
+            }
+        },
+        "/setup/status": {
+            "get": {
+                "description": "Возвращает needs_setup=true, если в БД нет ни одного активного пользователя. Публичный эндпоинт без auth — фронт вызывает его на старте.",
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/handlers.SetupStatusResponse"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    }
+                },
+                "summary": "Проверка first-run setup",
+                "tags": [
+                    "setup"
                 ]
             }
         },

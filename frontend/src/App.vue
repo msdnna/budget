@@ -7,7 +7,12 @@
   >
     <n-message-provider>
       <n-notification-provider>
-        <n-layout style="min-height: 100vh">
+        <!-- First-run wizard takes over the whole UI while the DB has no
+             users. SetupWizard emits `done` after admin creation + optional
+             import; we flip needsSetup=false and the normal layout below
+             takes over without a page reload. -->
+        <SetupWizard v-if="needsSetup" @done="onSetupDone" />
+        <n-layout v-else style="min-height: 100vh">
           <!-- ── Desktop sidebar layout ──────────────────────────── -->
           <n-layout v-if="!isMobile" has-sider style="height: 100vh">
             <n-layout-sider
@@ -477,7 +482,9 @@ import NotificationBell from '@/components/NotificationBell.vue'
 import DetailRequestModal from '@/components/DetailRequestModal.vue'
 import DetailRequestCreateModal from '@/components/DetailRequestCreateModal.vue'
 import SettingsTabs from '@/components/SettingsTabs.vue'
+import SetupWizard from '@/components/SetupWizard.vue'
 import { useDetailRequestsStore } from '@/stores/detailRequests'
+import api from '@/api/index'
 
 // ── Version info ──────────────────────────────────────────────────
 const webVersion = __APP_VERSION__
@@ -532,10 +539,36 @@ const isMobile = computed(() => windowWidth.value < 768)
 function onResize() {
   windowWidth.value = window.innerWidth
 }
+// First-run setup gate. Hit /api/setup/status before mounting the
+// regular shell — if the backend says the DB has no users, render the
+// wizard exclusively (no sidebar, no login modal). Once the wizard
+// emits `done` we flip this flag and the normal layout renders.
+const needsSetup = ref(false)
+async function checkSetupStatus() {
+  try {
+    const res = await api.get('/setup/status')
+    needsSetup.value = !!res.data?.needs_setup
+  } catch {
+    // Backend unavailable — fall through to the regular login flow so
+    // the existing error surfaces (rather than locking the user into
+    // a wizard they can't escape).
+    needsSetup.value = false
+  }
+}
+function onSetupDone() {
+  needsSetup.value = false
+  // Land on /statistics by default. setAuth already wrote the token in
+  // step 1, so the rest of the app will pick it up.
+  router.replace('/statistics')
+}
+
 onMounted(async () => {
   window.addEventListener('resize', onResize)
   window.addEventListener('auth:expired', onAuthExpired)
-  await auth.verify()
+  await checkSetupStatus()
+  if (!needsSetup.value) {
+    await auth.verify()
+  }
   versionApi
     .get()
     .then((r) => {
@@ -585,6 +618,7 @@ const currentTitle = computed(() => {
     settings: 'Настройки',
     'settings/categories': 'Настройки · Категории',
     'settings/users': 'Настройки · Пользователи',
+    'settings/portability': 'Настройки · Импорт/экспорт',
   }
   return map[activeKey.value] ?? 'Статистика'
 })
@@ -616,6 +650,7 @@ const menuOptions = computed(() => {
       children: [
         { label: 'Категории', key: 'settings/categories' },
         { label: 'Пользователи', key: 'settings/users' },
+        { label: 'Импорт/экспорт', key: 'settings/portability' },
       ],
     })
   }

@@ -119,6 +119,13 @@ func (r *UserRepository) SetAdmin(ctx context.Context, id string, admin bool) er
 	return err
 }
 
+// CountAll — общее число активных (не soft-deleted) пользователей.
+// Используется first-run wizard'ом: 0 → SetupHandler.Init разрешён,
+// иначе вызывается обычный /auth/login.
+func (r *UserRepository) CountAll(ctx context.Context) (int64, error) {
+	return r.col.CountDocuments(ctx, bson.M{"deleted_at": bson.M{"$exists": false}})
+}
+
 // CountAdmins — число активных (не soft-deleted) администраторов. Используется
 // safeguard'ом «нельзя снять/удалить последнего админа».
 func (r *UserRepository) CountAdmins(ctx context.Context) (int64, error) {
