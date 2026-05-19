@@ -83,6 +83,8 @@ func main() {
 	notifHandler := handlers.NewNotificationHandler(notifRepo)
 	limitChecker := handlers.NewLimitChecker(catRepo, txRepo, notifRepo)
 	txHandler.SetLimitChecker(limitChecker)
+	setupHandler := handlers.NewSetupHandler(userRepo, authHandler)
+	portabilityHandler := handlers.NewPortabilityHandler(db, userRepo)
 
 	r := gin.Default()
 	if err := r.SetTrustedProxies([]string{"127.0.0.1", "::1"}); err != nil {
@@ -111,6 +113,8 @@ func main() {
 		api.GET("/version", versionHandler.Get)
 		api.POST("/auth/login", authHandler.Login)
 		api.POST("/auth/refresh", authHandler.Refresh)
+		api.GET("/setup/status", setupHandler.Status)
+		api.POST("/setup/init", setupHandler.Init)
 
 		// Protected routes
 		protected := api.Group("/")
@@ -165,6 +169,9 @@ func main() {
 				admin.POST("/admin/users/:id/password", userAdminHandler.SetPassword)
 				admin.POST("/admin/users/:id/avatar", userAdminHandler.UploadAvatar)
 				admin.DELETE("/admin/users/:id/avatar", userAdminHandler.DeleteAvatar)
+
+				admin.GET("/admin/export", portabilityHandler.Export)
+				admin.POST("/admin/import", portabilityHandler.Import)
 			}
 
 			protected.GET("/export/excel", exportHandler.Excel)

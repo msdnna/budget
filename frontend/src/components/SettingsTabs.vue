@@ -22,6 +22,7 @@ import { useThemeStore } from '@/stores/theme'
 const TABS = [
   { key: 'settings/categories', label: 'Категории' },
   { key: 'settings/users', label: 'Пользователи' },
+  { key: 'settings/portability', label: 'Импорт/экспорт' },
 ]
 
 const route = useRoute()

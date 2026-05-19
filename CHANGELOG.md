@@ -16,6 +16,16 @@
 
 ## API (backend)
 
+### [1.23.0] — 2026-05-19
+
+#### Added
+- **First-run setup wizard.** Публичные эндпоинты `GET /api/setup/status` и `POST /api/setup/init` для интерактивной настройки на чистой базе. `Status` возвращает `needs_setup: true`, когда `users.count == 0`. `Init` создаёт первого админа (login/password/display_name) — доступен только пока в БД нет пользователей; идентичен `/auth/login` по выдаче (access+refresh JWT + LoginResponse). Заменяет необходимость вручную вызывать `cmd/create_user` после первого деплоя; CLI остаётся для headless-сценариев.
+- **JSON импорт/экспорт всей системы (admin).** `GET /api/admin/export` возвращает self-contained снимок (`schema_version=1`): users с bcrypt-хешами, categories, category_icons (data в base64), transactions (parents-first ordering для корректной вставки detail-request child'ов), wishlist, detail_requests. История уведомлений / refresh-токены / sync-метаданные не экспортируются (derived state). `POST /api/admin/import` принимает `{mode, snapshot}`: `merge` (по умолчанию) пропускает существующие записи по `_id` (и по `login` для пользователей), `replace` очищает коллекции (категории/иконки/транзакции/wishlist/detail_requests/notifications + всех пользователей кроме вызывающего админа) перед импортом. Для тех же UUID-коллизий импорт скипает запись. `updated_at` всех импортированных записей бампается на `now()` — Android-клиенты подхватят их на следующем `sync/pull`. Лимит payload'а — 50 MiB.
+- **`UserRepository.CountAll`** — счётчик не-удалённых пользователей, используется setup-хендлером.
+
+#### Notes
+- Формат экспорта — не замена бэкапа Mongo. Не сохраняет историю уведомлений, метаданные синхронизации, refresh-токены. Резервное копирование БД остаётся отдельной задачей.
+
 ### [1.22.0] — 2026-05-19
 
 #### Added
@@ -239,6 +249,13 @@
 ---
 
 ## Web (frontend)
+
+### [1.39.0] — 2026-05-19
+
+#### Added
+- **First-run setup wizard.** `SetupWizard.vue` рендерится поверх всего layout'а, пока бэкенд отвечает `needs_setup=true` (probe в `App.vue → onMounted → /api/setup/status`). Двухшаговый flow: (1) форма создания админа — display_name / login / password+repeat с визуальным password-strength баром (0–5 баллов по длине + классам символов), не блокирующая submit; (2) необязательный импорт JSON — drag-n-drop файла или paste в textarea с inline-валидацией `schema_version`. После создания админа `auth.setAuth` берёт выданный токен; после import (или skip) `done` → `router.replace('/statistics')` без перезагрузки.
+- **`/settings/portability` — Импорт / Экспорт.** Третья таба в `SettingsTabs.vue`. Скачивание JSON-снимка через `blob` response с парсингом `Content-Disposition`; импорт с radio-выбором режима (`merge` default / `replace`) + dropzone + inline textarea. Статистика импорта (импортировано/пропущено по типам) отображается в success-alert.
+- Mobile-навигация: для админа в выпадающем menu секции «Настройки» добавлена новая ссылка «Перенос».
 
 ### [1.38.0] — 2026-05-19
 

@@ -34,6 +34,11 @@ const routes = [
     component: () => import('@/views/UsersAdminView.vue'),
     meta: { title: 'Управление пользователями', adminOnly: true },
   },
+  {
+    path: '/settings/portability',
+    component: () => import('@/views/PortabilityView.vue'),
+    meta: { title: 'Импорт/экспорт', adminOnly: true },
+  },
   { path: '/settings', redirect: '/settings/categories' },
   // Backwards-compat redirect — earlier Phase 2 build used `/admin`.
   { path: '/admin', redirect: '/settings/categories' },
