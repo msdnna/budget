@@ -8,7 +8,8 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -a -ldflags='-w -s' -o main .
+RUN CGO_ENABLED=0 GOOS=linux go build -a -ldflags='-w -s' -o main . \
+ && CGO_ENABLED=0 GOOS=linux go build -a -ldflags='-w -s' -o create_user ./cmd/create_user
 
 # gcr.io/distroless/static-debian12:nonroot — no shell, no package manager, runs
 # as uid 65532. Minimal attack surface; tz data and DejaVu fonts copied from
@@ -26,6 +27,9 @@ LABEL org.opencontainers.image.title="msdnna-budget-backend" \
       org.opencontainers.image.revision="${VCS_REF}"
 
 COPY --from=builder /app/main               /app/main
+# CLI used for first-run setup on prod/RPi deploys (distroless has no shell,
+# so we ship the binary directly and invoke it via `docker compose exec`).
+COPY --from=builder /app/create_user        /app/create_user
 COPY --from=builder /usr/share/fonts/dejavu /usr/share/fonts/dejavu
 COPY --from=builder /usr/share/zoneinfo     /usr/share/zoneinfo
 

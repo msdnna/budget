@@ -16,6 +16,12 @@
 
 ## API (backend)
 
+### [1.22.0] — 2026-05-19
+
+#### Added
+- **`create_user` CLI в prod-образе.** `backend/Dockerfile.prod` теперь собирает второй бинарь `./cmd/create_user` и копирует его в `/app/create_user`. Distroless-образ не имеет шелла, поэтому первичная инициализация на prod/RPi разворотах требует прямого вызова бинаря через `docker compose exec`. До этого CLI существовал только как `go run ./cmd/create_user` в Makefile и был недоступен на хостах без Go (RPi). Документация в `docs/RPI_DEPLOY.md` ранее ссылалась на несуществующий флаг `-create-user` у серверного бинаря — исправлено: правильный вызов `/app/create_user -login … -password … -name …`, поддерживаются `-avatar` и `-admin`.
+- Тот же бинарь добавлен в dev-`backend/Dockerfile` для консистентности с prod.
+
 ### [1.21.0] — 2026-05-19
 
 #### Added

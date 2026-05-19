@@ -146,7 +146,7 @@ mongo-down: ## Stop local dev MongoDB
 
 # ─── Lint / Test ─────────────────────────────────────────────────────────────
 
-GOLANGCI_LINT := $(shell command -v golangci-lint 2>/dev/null || echo $$(go env GOPATH)/bin/golangci-lint)
+GOLANGCI_LINT := $(shell command -v golangci-lint 2>/dev/null || { command -v go >/dev/null 2>&1 && echo $$(go env GOPATH)/bin/golangci-lint; })
 
 .PHONY: lint-backend
 lint-backend: ## Run gofmt + go vet + golangci-lint on the Go backend
@@ -309,7 +309,7 @@ loadtest-drop: ## Drop the $(LOADTEST_DB) database entirely
 
 # ─── Swagger / OpenAPI ───────────────────────────────────────────────────────
 
-SWAG := $(shell command -v swag 2>/dev/null || echo $$(go env GOPATH)/bin/swag)
+SWAG := $(shell command -v swag 2>/dev/null || { command -v go >/dev/null 2>&1 && echo $$(go env GOPATH)/bin/swag; })
 
 .PHONY: swag-install
 swag-install: ## Install swag v2 CLI (swaggo/swag/v2 — OpenAPI 3.1 support)
