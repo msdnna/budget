@@ -175,13 +175,15 @@ make rpi-update
 Mongo не трогается. Volume `mongodb_data` переживает обновления.
 
 **APK для in-app Android updates.** `rpi-update` дополнительно вызывает
-`tools/rpi-fetch-apk.sh`, который через `gh release download
-android/v<android/VERSION>` тянет подписанную APK в `./apks/` (где nginx её
-раздаёт по `/apks/`). Идемпотентно — если файл уже на месте, skip. Soft-fail
-если релиз ещё не доехал или `gh` не установлен (API/WEB всё равно
-поднимутся; APK можно дотянуть позже отдельным `make rpi-apk-fetch`).
-Требует `gh` CLI на Pi: `sudo apt install gh`, и `gh auth login` для
-приватного репо.
+`tools/rpi-fetch-apk.sh`, который через `curl` тянет подписанную APK
+из `https://github.com/<owner>/<repo>/releases/download/android/v<ver>/...`
+в `./apks/` (где nginx её раздаёт по `/apks/`). Идемпотентно — если файл
+уже на месте, skip. Owner/repo берётся из `git remote get-url origin`.
+Для публичных репо работает без auth. Для приватных — задать
+`GH_TOKEN=<personal-access-token>` в env (curl подставит как Bearer).
+Soft-fail если релиз ещё не доехал — API/WEB всё равно поднимутся; APK
+можно дотянуть позже отдельным `make rpi-apk-fetch`. Зависимостей нет —
+только `curl`, который есть на любом RPi OS.
 
 Откатиться на пред. версию — пин `API_VERSION` / `WEB_VERSION`:
 ```bash
