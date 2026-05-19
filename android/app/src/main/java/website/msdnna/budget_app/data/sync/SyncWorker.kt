@@ -31,6 +31,17 @@ class SyncWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, 
     companion object {
         private const val UNIQUE_NAME = "msdnna_budget_sync"
 
+        /**
+         * Отменить запланированную/выполняющуюся sync-работу. Вызывается на
+         * explicit logout (`AppContainer.wipeUserData`) — иначе уже-в-очереди
+         * SyncWorker может стартовать после очистки Room и неудачно дёрнуть
+         * сервер на промежуточном состоянии (или, что хуже, на новом сервере
+         * под старым auth-token'ом до того, как успеет прорастать clearAuth).
+         */
+        fun cancel(context: Context) {
+            WorkManager.getInstance(context).cancelUniqueWork(UNIQUE_NAME)
+        }
+
         fun enqueue(context: Context) {
             // Piggyback a reachability re-probe on every mutation. Repositories
             // call enqueue() after every create/update/delete, so this covers

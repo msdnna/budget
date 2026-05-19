@@ -742,6 +742,12 @@
 
 ## Android
 
+### [1.38.3] — 2026-05-20
+
+#### Fixed
+- **Дубликаты категорий после переключения сервера.** Логаут не чистил Room, поэтому при logout → switch server → login на другом инстансе старые UUID-категории с прошлого сервера оставались рядом со свежепринятыми (`SyncEngine` мерджит по `_id`, конфликта нет → две записи «Жильё/ЖКХ»). Та же беда для transactions/wishlist/notifications. Добавил `AppContainer.wipeUserData()`: cancel pending `SyncWorker` → `db.clearAllTables()` → `prefs.clearLastSyncToken()`. Вызывается в `onLogout` ПЕРЕД `clearAuthAndSecurity()` (избежать окна с stale-данными и уже-снятым auth-token'ом). На 401-bounce не вызываем — это не явный logout, пользователь скорее всего вернётся на тот же сервер. Device-локальные настройки (тема, история URL'ов, PIN) не трогаем.
+- `SyncWorker.cancel(context)` — публичный hook для отмены unique-work `msdnna_budget_sync`. Без него уже-в-очереди worker мог стартовать после wipe и неудачно дёрнуть сервер на промежуточном состоянии.
+
 ### [1.38.2] — 2026-05-19
 
 #### Fixed

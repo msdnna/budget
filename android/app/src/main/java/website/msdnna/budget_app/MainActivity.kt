@@ -27,6 +27,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import website.msdnna.budget_app.data.AppContainer
 import website.msdnna.budget_app.data.api.RetrofitClient
 import website.msdnna.budget_app.data.preferences.AppPreferences
 import website.msdnna.budget_app.data.repository.CategoryRepository
@@ -366,7 +367,13 @@ class MainActivity : FragmentActivity() {
                                     RetrofitClient.refreshToken = ""
                                     authToken = ""
                                     AppLock.lock()
-                                    scope.launch { prefs.clearAuthAndSecurity() }
+                                    scope.launch {
+                                        // wipeUserData ПЕРЕД clearAuthAndSecurity — иначе короткое окно,
+                                        // где UI ещё видит cached Room rows без auth-token'а, и при
+                                        // подписке на StateFlow'ы получает stale-данные.
+                                        AppContainer.wipeUserData()
+                                        prefs.clearAuthAndSecurity()
+                                    }
                                 },
                                 onRequestNotifPermission = {
                                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
