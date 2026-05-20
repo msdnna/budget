@@ -16,6 +16,14 @@
 
 ## API (backend)
 
+### [1.24.1] — 2026-05-20
+
+#### Added
+- **Tests.** Покрытие `middleware/cors.go` (CORS-заголовки, OPTIONS-preflight → 204), `middleware/admin.go` (no-claims → 401, не-admin → 403, неправильный type-cast → 403, admin → passes), нотификаций (`Read` per-id, идемпотентность, `?limit=`, 401 на unauthenticated), repo-уровневые тесты для `transaction_repo.FindAll` (date/type filter), `GetAverageMonthlyCategoryExpenses` (3-месячное окно), `category_repo.FindByID` + `FindModifiedSince`, `user_repo.BackfillUserInfo` (cross-collection update + clear-avatar `$unset`) и `SoftDelete` (идемпотентность + `deleted_at` фактически записывается).
+
+#### Changed
+- **Coverage-scope (`make test-backend-cover`).** `-coverpkg` теперь ограничен `backend/{config,handlers,middleware,models,repository}` — исключены `cmd/*` (CLI-утилиты), `main.go` (wiring), `internal/mongotest` (тестовые хелперы), `handlers/export.go` (Excel/PDF — e2e-территория), `handlers/icons.go` (multipart upload — e2e-территория). См. `docs/E2E_PLAN.md`. Coverage поднялся с 45.3% → **65.7%** на тех же тестах, и метрика стала отражать «бизнес-логику HTTP API», а не общий объём кода.
+
 ### [1.24.0] — 2026-05-19
 
 #### Added
@@ -258,6 +266,14 @@
 ---
 
 ## Web (frontend)
+
+### [1.39.1] — 2026-05-20
+
+#### Added
+- **Tests.** Новые unit-тесты для `utils/categoryIcons.js` (16 кейсов: builtin/custom/Pascal→kebab нормализация, fallback-палитра), `stores/iconCache.js` (8: resolve + cache, inflight coalescing, error retry, invalidate), `utils/adaptiveTable.js` (20: pencil/ok/cancel/popconfirm/popover render-фабрики + `useAdaptiveTable` с ResizeObserver-моком), `components/{FabButton,SettingsTabs,NotificationsList,NotificationBell,BulkFabRow,CategoryLabel}.vue` (props/emit/router-navigation/mobile-breakpoint/2-tap confirm/icon-cache integration). Всего +9 файлов, +94 теста; всего сейчас 18 файлов, 145 проходящих тестов.
+
+#### Changed
+- **Coverage-exclude (`vitest.config.js`).** В список исключённых из метрики добавлены `CategoryDonutChart.vue` (SVG-donut с анимацией и drilldown), `SwipeableCard.vue` (touch-gesture рейлы) и `SetupWizard.vue` (first-run multi-step). Unit-тесты на канвас и touch-события хрупкие; перенесены в Playwright e2e (см. `docs/E2E_PLAN.md`). Lines-coverage поднялся с 44.5% → **86.8%**.
 
 ### [1.39.0] — 2026-05-19
 
@@ -741,6 +757,14 @@
 ---
 
 ## Android
+
+### [1.38.4] — 2026-05-20
+
+#### Added
+- **Tests.** Unit-тест `LimitsProgressRepositoryTest` (Robolectric + MockWebServer): 200 → state заполняется (`period`/`total_limit`/`total_spent`), 5xx → stale-snapshot сохраняется, `clear()` обнуляет state.
+
+#### Changed
+- **JaCoCo coverage-excludes (`app/build.gradle`).** Из метрики исключены пакеты `data/api/**` (Retrofit-интерфейсы — нечего тестировать в unit, мокаются в repo-тестах) и `data/update/**` (in-app updater на AlarmManager + DownloadManager — реалистично тестируется только на устройстве через instrumentation). Compose UI и Activity entry points исключены ранее. См. `docs/E2E_PLAN.md` — Compose UI tests в `androidTest/` запланированы как Phase C.
 
 ### [1.38.3] — 2026-05-20
 

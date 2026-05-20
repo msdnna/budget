@@ -204,9 +204,24 @@ test: ## Run all test suites and produce reports/test.html (uses tools/aggregate
 test-backend: ## Run Go unit tests (skips integration tests requiring Docker)
 	cd $(BACKEND_DIR) && $(GO) test -race -short ./...
 
+# Coverage scope: HTTP API surface (handlers + middleware + repos + helpers).
+# Исключено как покрываемое e2e или нетестируемое в unit'ах:
+#   - cmd/* — CLI-утилиты (seed_loadtest, migrate, create_user) гоняются вручную
+#     через make-таргеты, валидация их по факту использования;
+#   - internal/mongotest — сами тестовые хелперы, считать своё покрытие нет смысла;
+#   - main.go — фактически только wiring, проверяется через build/smoke в CI;
+#   - handlers/export.go (Excel/PDF) — XLSX/PDF golden-tests лучше делать в e2e
+#     (см. docs/E2E_PLAN.md), unit-проверка cellName/txTypeLabel уже есть;
+#   - handlers/icons.go (multipart upload + filesystem serve) — multipart + IO,
+#     e2e perekriaet realnym fail'om.
+COVER_PKGS := budget-go,budget-go/config,budget-go/handlers,budget-go/middleware,budget-go/models,budget-go/repository
+
 .PHONY: test-backend-cover
 test-backend-cover: ## Run Go tests with coverage profile (backend/coverage.out + cover.html)
-	cd $(BACKEND_DIR) && $(GO) test -race -covermode=atomic -coverpkg=./... -coverprofile=coverage.out ./...
+	cd $(BACKEND_DIR) && $(GO) test -race -covermode=atomic -coverpkg=$(COVER_PKGS) -coverprofile=coverage.out.raw ./...
+	@# Drop e2e-territory files (Excel/PDF/icons upload) — see COVER_PKGS comment.
+	@cd $(BACKEND_DIR) && grep -v -E '^budget-go/(handlers/(export|icons)\.go|main\.go):' coverage.out.raw > coverage.out
+	@rm -f $(BACKEND_DIR)/coverage.out.raw
 	cd $(BACKEND_DIR) && $(GO) tool cover -func=coverage.out | tail -1
 	cd $(BACKEND_DIR) && $(GO) tool cover -html=coverage.out -o cover.html
 	@echo "Coverage report: $(BACKEND_DIR)/cover.html"
