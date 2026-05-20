@@ -156,6 +156,11 @@ jacoco {
 }
 
 // Compose UI и генерированный код исключаем — таргетим бизнес-логику.
+// Также исключены пакеты, которые планово закрываются e2e/instrumentation-
+// тестами (см. docs/E2E_PLAN.md):
+//   - data/api — Retrofit interfaces (нечего тестировать в unit, мокаются в repo);
+//   - data/update — in-app updater (AlarmManager + DownloadManager, реалистично
+//     тестируется только на устройстве).
 def coverageExcludes = [
     '**/R.class',
     '**/R$*.class',
@@ -169,6 +174,8 @@ def coverageExcludes = [
     '**/website/msdnna/budget_app/ui/**',
     '**/website/msdnna/budget_app/notifications/**',
     '**/website/msdnna/budget_app/MainActivity*',
+    '**/website/msdnna/budget_app/data/api/**',
+    '**/website/msdnna/budget_app/data/update/**',
 ]
 
 tasks.register('jacocoTestReport', JacocoReport) {

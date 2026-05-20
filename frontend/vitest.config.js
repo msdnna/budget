@@ -33,6 +33,13 @@ export default defineConfig({
         'src/components/UserAvatar.vue',
         'src/components/SplitPane.vue',
         'src/components/DetailRequestBell*.vue',
+        // Covered by Playwright e2e (см. docs/E2E_PLAN.md):
+        // SVG donut со сложной анимацией/drilldown, touch-gesture swipe-карточка,
+        // wizard первого запуска. Unit-тестировать дорого и хрупко, e2e перекроет
+        // на реальном DOM с реальными событиями.
+        'src/components/CategoryDonutChart.vue',
+        'src/components/SwipeableCard.vue',
+        'src/components/SetupWizard.vue',
       ],
     },
   },
