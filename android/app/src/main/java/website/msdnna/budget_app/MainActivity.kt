@@ -34,7 +34,9 @@ import website.msdnna.budget_app.data.repository.CategoryRepository
 import website.msdnna.budget_app.data.security.AppLock
 import website.msdnna.budget_app.data.security.PinSecurity
 import website.msdnna.budget_app.data.sync.ReachabilityGate
+import website.msdnna.budget_app.data.sync.SyncWorker
 import website.msdnna.budget_app.notifications.NotificationReceiver
+import website.msdnna.budget_app.notifications.SyncNotificationPusher
 import website.msdnna.budget_app.ui.components.MbLogo
 import website.msdnna.budget_app.ui.screens.ConnectScreen
 import website.msdnna.budget_app.ui.screens.LockScreen
@@ -92,6 +94,24 @@ class MainActivity : FragmentActivity() {
             val notifPermissionLauncher = rememberLauncherForActivityResult(
                 ActivityResultContracts.RequestPermission()
             ) { /* granted state is implicit; notifications fire if granted */ }
+
+            // POST_NOTIFICATIONS is granted-once-per-install on Android 13+,
+            // but the system can revoke it if the user clears it from settings
+            // or the OS does periodic auto-revoke for unused apps. Re-asking
+            // on every cold start (rather than lazily when the user toggles
+            // a notification setting) keeps the sync-progress + reminder +
+            // limit-alert tray notifications working without surprise gaps.
+            fun maybeRequestNotifPermission() {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    val granted = ContextCompat.checkSelfPermission(
+                        this@MainActivity,
+                        Manifest.permission.POST_NOTIFICATIONS,
+                    ) == PackageManager.PERMISSION_GRANTED
+                    if (!granted) {
+                        notifPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    }
+                }
+            }
 
             LaunchedEffect(Unit) {
                 // Read initial values from DataStore in one shot to avoid race.
@@ -189,6 +209,23 @@ class MainActivity : FragmentActivity() {
                 val url = serverUrl
                 if (!url.isNullOrBlank() && !authToken.isNullOrBlank()) {
                     CategoryRepository.loadAll(url)
+                }
+            }
+
+            // Schedule periodic background sync + ask for the notification
+            // permission once we have a working session. Periodic work
+            // ensures the device pulls every ~15 min even with the app
+            // backgrounded; the foreground service inside SyncWorker keeps
+            // long-running first-syncs alive. Permission is requested here
+            // (cold-start) rather than lazily on toggle-flip because the OS
+            // can auto-revoke POST_NOTIFICATIONS for unused apps — re-asking
+            // each launch keeps the sync-progress + alert notifications
+            // working without surprise gaps.
+            LaunchedEffect(serverUrl, authToken) {
+                val url = serverUrl
+                if (!url.isNullOrBlank() && !authToken.isNullOrBlank()) {
+                    SyncWorker.enqueuePeriodic(this@MainActivity)
+                    maybeRequestNotifPermission()
                 }
             }
 
@@ -396,15 +433,28 @@ class MainActivity : FragmentActivity() {
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                NotificationReceiver.CHANNEL_ID,
-                "Напоминания о бюджете",
-                NotificationManager.IMPORTANCE_DEFAULT
-            ).apply {
-                description = "Напоминания о внесении доходов и расходов"
-            }
             val nm = getSystemService(NotificationManager::class.java)
-            nm.createNotificationChannel(channel)
+            nm.createNotificationChannel(
+                NotificationChannel(
+                    NotificationReceiver.CHANNEL_ID,
+                    "Напоминания о бюджете",
+                    NotificationManager.IMPORTANCE_DEFAULT
+                ).apply {
+                    description = "Напоминания о внесении доходов и расходов"
+                }
+            )
+            // Separate low-importance channel for sync progress: no sound /
+            // no peek / silently updates the same notification slot.
+            nm.createNotificationChannel(
+                NotificationChannel(
+                    SyncNotificationPusher.CHANNEL_ID,
+                    "Синхронизация",
+                    NotificationManager.IMPORTANCE_LOW
+                ).apply {
+                    description = "Прогресс синхронизации записей с сервером"
+                    setShowBadge(false)
+                }
+            )
         }
     }
 }

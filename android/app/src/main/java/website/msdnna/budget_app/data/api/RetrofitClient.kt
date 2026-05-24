@@ -167,10 +167,15 @@ object RetrofitClient {
             // request often needs a fresh TCP+TLS handshake while the device is
             // still ramping up, which manifested as Statistics never loading
             // until the user manually retried.
+            //
+            // readTimeout / callTimeout bumped from 20/30s to 60/180s so the
+            // initial `/sync/pull` on a large family budget (15k+ tx) actually
+            // completes — the server has to serialize the whole set in one
+            // shot, and slow Wi-Fi was tripping the 30s wallclock cap mid-pull.
             .connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(20, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
             .writeTimeout(15, TimeUnit.SECONDS)
-            .callTimeout(30, TimeUnit.SECONDS)
+            .callTimeout(180, TimeUnit.SECONDS)
             .build()
 
         refreshHttpClient = OkHttpClient.Builder()

@@ -44,6 +44,8 @@ import website.msdnna.budget_app.data.repository.DetailRequestStore
 import website.msdnna.budget_app.data.repository.TransactionRepository
 import website.msdnna.budget_app.data.repository.WishlistRepository
 import website.msdnna.budget_app.data.sync.ReachabilityGate
+import website.msdnna.budget_app.data.sync.SyncProgress
+import website.msdnna.budget_app.data.sync.SyncProgressBus
 import website.msdnna.budget_app.data.update.ApkDownloader
 import website.msdnna.budget_app.data.update.ApkInstaller
 import website.msdnna.budget_app.data.update.DownloadProgress
@@ -54,6 +56,7 @@ import website.msdnna.budget_app.notifications.NotificationScheduler
 import website.msdnna.budget_app.ui.components.MandatoryUpdateDialog
 import website.msdnna.budget_app.ui.components.MbLogo
 import website.msdnna.budget_app.ui.components.OptionalUpdateProgressDialog
+import website.msdnna.budget_app.ui.components.SyncProgressBanner
 import website.msdnna.budget_app.ui.components.UpdateBanner
 import website.msdnna.budget_app.ui.components.UserAvatar
 import website.msdnna.budget_app.ui.theme.AppTheme
@@ -565,6 +568,14 @@ fun MainScreen(
                     },
                     onDismiss = { bannerDismissed = true },
                 )
+            }
+            // visibleState (not raw state) — suppresses banner flashes for
+            // sub-600ms incremental pulls (push of 1 op + fetch of 0-5 rows),
+            // which fire on every CRUD / interaction. See SyncProgressBus.
+            val syncState by SyncProgressBus.visibleState
+                .collectAsStateWithLifecycle(initialValue = SyncProgress.Idle)
+            (syncState as? SyncProgress.Running)?.let { running ->
+                SyncProgressBanner(progress = running, primaryColor = primaryColor)
             }
             HorizontalPager(
                 state = pagerState,
