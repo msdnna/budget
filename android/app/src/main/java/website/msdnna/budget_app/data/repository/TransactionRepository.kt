@@ -31,8 +31,9 @@ object TransactionRepository {
         from: String? = null,
         to: String? = null,
         includeDetailed: Boolean = false,
+        deposit: String? = null,
     ): Flow<List<Transaction>> =
-        dao.observeFiltered(type, from, to, includeDetailed).map { list ->
+        dao.observeFiltered(type, from, to, includeDetailed, deposit).map { list ->
             val filtered = if (categories.isNullOrEmpty()) list
             else list.filter { it.category in categories }
             filtered.map { it.toModel() }
@@ -51,6 +52,7 @@ object TransactionRepository {
         source: String? = null,
         purpose: String? = null,
         description: String? = null,
+        deposit: String = "bank",
         wishlistId: String = "",
     ): Transaction {
         val now = Instant.now().toString()
@@ -77,6 +79,7 @@ object TransactionRepository {
             deletedAt = null,
             syncStatus = SyncStatus.PENDING_CREATE,
             wishlistId = wishlistId,
+            deposit = deposit.ifBlank { "bank" },
         )
         dao.upsert(entity)
         SyncWorker.enqueue(AppContainer.appContext)
@@ -93,6 +96,7 @@ object TransactionRepository {
         purpose: String? = null,
         description: String? = null,
         hidden: Boolean? = null,
+        deposit: String? = null,
         createdBy: UserInfo? = null,
     ): Transaction? {
         val existing = dao.findById(id) ?: return null
@@ -109,6 +113,7 @@ object TransactionRepository {
             purpose = purpose ?: existing.purpose,
             description = description ?: existing.description,
             hidden = hidden ?: existing.hidden,
+            deposit = deposit?.ifBlank { "bank" } ?: existing.deposit,
             createdById = createdBy?.userId ?: existing.createdById,
             createdByName = createdBy?.displayName ?: existing.createdByName,
             createdByAvatar = createdBy?.avatarUrl ?: existing.createdByAvatar,

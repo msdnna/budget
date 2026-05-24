@@ -53,6 +53,12 @@ data class TransactionEntity(
     // so the forecast can mark the wishlist item as "paid this period".
     @ColumnInfo(name = "wishlist_id", defaultValue = "''")
     val wishlistId: String = "",
+
+    /** Budget scope: "bank" (card) or "cash". Stored as TEXT NOT NULL so
+     *  filters and aggregations don't have to special-case nulls. Empty/old
+     *  rows are backfilled to "bank" by the migration below. */
+    @ColumnInfo(name = "deposit", defaultValue = "'bank'")
+    val deposit: String = "bank",
 )
 
 @Entity(tableName = "wishlist")
@@ -82,6 +88,9 @@ data class WishlistEntity(
     val syncStatus: String = SyncStatus.SYNCED,
 
     @ColumnInfo(name = "server_payload") val serverPayload: String? = null,
+
+    @ColumnInfo(name = "deposit", defaultValue = "'bank'")
+    val deposit: String = "bank",
 )
 
 @Entity(tableName = "categories")

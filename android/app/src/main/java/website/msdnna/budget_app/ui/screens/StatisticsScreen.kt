@@ -43,6 +43,7 @@ fun StatisticsScreen(
     val month by vm.month.collectAsState()
     val from by vm.from.collectAsState()
     val to by vm.to.collectAsState()
+    val deposit by vm.deposit.collectAsState()
     val state by vm.state.collectAsState()
 
     // Resolve the current stats period into a (fromIso, toIso) pair —
@@ -183,6 +184,32 @@ fun StatisticsScreen(
                 },
                 onDismiss = { pickerOpen = null },
             )
+
+            // Deposit scope filter — bank / cash / both (default = both).
+            // Shown as a chip row so it stays next to the period selector and
+            // doesn't claim a full settings sheet.
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Счёт:", style = MaterialTheme.typography.labelMedium)
+                FilterChip(
+                    selected = deposit == null,
+                    onClick = { vm.selectDeposit(null) },
+                    label = { Text("Все") },
+                )
+                DEPOSITS.forEach { meta ->
+                    FilterChip(
+                        selected = deposit == meta.value,
+                        onClick = { vm.selectDeposit(meta.value) },
+                        label = { Text(meta.label) },
+                        leadingIcon = {
+                            Icon(meta.icon, contentDescription = null, modifier = Modifier.size(16.dp))
+                        },
+                    )
+                }
+            }
 
             when {
                 state.loading -> SkeletonStatisticsContent()

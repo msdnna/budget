@@ -31,6 +31,7 @@ interface ApiService {
         @Query("category") category: String? = null,
         @Query("from") from: String? = null,
         @Query("to") to: String? = null,
+        @Query("deposit") deposit: String? = null,
         @Query("unlinked") unlinked: Boolean? = null
     ): TransactionListResponse
 
@@ -57,7 +58,8 @@ interface ApiService {
         @Query("month") month: String? = null,
         @Query("year") year: String? = null,
         @Query("from") from: String? = null,
-        @Query("to") to: String? = null
+        @Query("to") to: String? = null,
+        @Query("deposit") deposit: String? = null
     ): StatsSummary
 
     @GET("statistics/by-category")
@@ -66,16 +68,20 @@ interface ApiService {
         @Query("month") month: String? = null,
         @Query("year") year: String? = null,
         @Query("from") from: String? = null,
-        @Query("to") to: String? = null
+        @Query("to") to: String? = null,
+        @Query("deposit") deposit: String? = null
     ): List<CategoryStat>
 
     @GET("statistics/monthly")
     suspend fun getMonthlyStats(
-        @Query("year") year: String? = null
+        @Query("year") year: String? = null,
+        @Query("deposit") deposit: String? = null
     ): List<MonthlyStat>
 
     @GET("statistics/forecast")
-    suspend fun getForecast(): ForecastData
+    suspend fun getForecast(
+        @Query("deposit") deposit: String? = null
+    ): ForecastData
 
     @GET("statistics/overview")
     suspend fun getStatisticsOverview(
@@ -83,6 +89,7 @@ interface ApiService {
         @Query("year") year: String? = null,
         @Query("from") from: String? = null,
         @Query("to") to: String? = null,
+        @Query("deposit") deposit: String? = null,
     ): website.msdnna.budget_app.data.model.StatisticsOverviewResponse
 
     @GET("wishlist")

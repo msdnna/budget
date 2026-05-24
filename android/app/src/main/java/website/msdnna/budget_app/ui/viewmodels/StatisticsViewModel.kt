@@ -30,6 +30,7 @@ class StatisticsViewModel(serverUrl: String) : ViewModel() {
     private val _month = MutableStateFlow(now.get(Calendar.MONTH) + 1)
     private val _from = MutableStateFlow<String?>(null)
     private val _to = MutableStateFlow<String?>(null)
+    private val _deposit = MutableStateFlow<String?>(null)
     private val _refreshTick = MutableStateFlow(0)
     private val _state = MutableStateFlow(StatsUiState())
 
@@ -38,6 +39,7 @@ class StatisticsViewModel(serverUrl: String) : ViewModel() {
     val month = _month.asStateFlow()
     val from = _from.asStateFlow()
     val to = _to.asStateFlow()
+    val deposit = _deposit.asStateFlow()
     val state = _state.asStateFlow()
 
     private data class Inputs(
@@ -46,13 +48,17 @@ class StatisticsViewModel(serverUrl: String) : ViewModel() {
         val month: Int,
         val from: String?,
         val to: String?,
+        val deposit: String?,
     )
 
     @OptIn(ExperimentalCoroutinesApi::class)
     private val pipeline = combine(
         combine(_period, _year, _month) { p, y, m -> Triple(p, y, m) },
-        _from, _to, _refreshTick,
-    ) { triple, f, t, _ -> Inputs(triple.first, triple.second, triple.third, f, t) }
+        combine(_from, _to, _deposit) { f, t, d -> Triple(f, t, d) },
+        _refreshTick,
+    ) { pym, ftd, _ ->
+        Inputs(pym.first, pym.second, pym.third, ftd.first, ftd.second, ftd.third)
+    }
         .flatMapLatest { loadFlow(it) }
         .onEach { _state.value = it }
         .launchIn(viewModelScope)
@@ -86,6 +92,10 @@ class StatisticsViewModel(serverUrl: String) : ViewModel() {
         _to.value = to
     }
 
+    fun selectDeposit(value: String?) {
+        _deposit.value = value?.takeIf { it.isNotBlank() }
+    }
+
     fun reload() {
         _refreshTick.value += 1
     }
@@ -110,6 +120,7 @@ class StatisticsViewModel(serverUrl: String) : ViewModel() {
                     year = yr,
                     from = fromArg,
                     to = toArg,
+                    deposit = inputs.deposit,
                 )
                 StatsUiState(false, null, o.summary, o.expenseByCategory, o.incomeByCategory, o.monthly)
             }

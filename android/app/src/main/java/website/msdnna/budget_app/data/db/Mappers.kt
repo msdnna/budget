@@ -31,6 +31,7 @@ fun TransactionEntity.toModel(): Transaction = Transaction(
     detailRequestStatus = detailRequestStatus,
     excludedFromStats = excludedFromStats,
     wishlistId = wishlistId,
+    deposit = deposit.ifBlank { "bank" },
 )
 
 fun Transaction.toEntity(syncStatus: String = SyncStatus.SYNCED, serverPayload: String? = null): TransactionEntity =
@@ -61,6 +62,7 @@ fun Transaction.toEntity(syncStatus: String = SyncStatus.SYNCED, serverPayload: 
         detailRequestStatus = detailRequestStatus,
         excludedFromStats = excludedFromStats,
         wishlistId = wishlistId,
+        deposit = deposit.ifBlank { "bank" },
     )
 
 // ---- Wishlist ----
@@ -73,6 +75,7 @@ fun WishlistEntity.toModel(): WishlistItem = WishlistItem(
     priority = priority,
     purchased = purchased,
     frequency = frequency,
+    deposit = deposit.ifBlank { "bank" },
     notes = notes,
     createdBy = createdById?.let { UserInfo(it, createdByName.orEmpty(), createdByAvatar) },
     createdAt = createdAt,
@@ -104,6 +107,7 @@ fun WishlistItem.toEntity(syncStatus: String = SyncStatus.SYNCED, serverPayload:
         deletedAt = deletedAt,
         syncStatus = syncStatus,
         serverPayload = serverPayload,
+        deposit = deposit.ifBlank { "bank" },
     )
 
 // ---- Category ----

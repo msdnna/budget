@@ -14,7 +14,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         CategoryEntity::class,
         NotificationHistoryEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -91,6 +91,16 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        // v6 → v7: deposit scope (bank|cash) on transactions + wishlist.
+        // NOT NULL DEFAULT 'bank' so every legacy row lands in the bank scope
+        // — matches the backend backfill semantics.
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE transactions ADD COLUMN deposit TEXT NOT NULL DEFAULT 'bank'")
+                db.execSQL("ALTER TABLE wishlist ADD COLUMN deposit TEXT NOT NULL DEFAULT 'bank'")
+            }
+        }
+
         fun get(context: Context): AppDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
@@ -102,6 +112,7 @@ abstract class AppDatabase : RoomDatabase() {
                 MIGRATION_3_4,
                 MIGRATION_4_5,
                 MIGRATION_5_6,
+                MIGRATION_6_7,
             ).build().also { instance = it }
         }
     }

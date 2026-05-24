@@ -788,6 +788,20 @@
 
 ## Android
 
+### [1.40.0] — 2026-05-24
+
+#### Added
+- **Deposit scope (банковская карта / наличные).** Поле `deposit` (`bank`/`cash`, default `bank`) добавлено в `Transaction`/`WishlistItem`/`CreateTransactionRequest`/`UpdateTransactionRequest`/`CreateWishlistRequest`/`UpdateWishlistRequest`/`RegularItem` (`data/model/Models.kt`) и в Room (`TransactionEntity`/`WishlistEntity`, `Mappers.kt`).
+- **Room v7 migration** (`MIGRATION_6_7`): `ALTER TABLE transactions ADD COLUMN deposit TEXT NOT NULL DEFAULT 'bank'` + то же для `wishlist`.
+- **DAO/Repo фильтрация.** `TransactionDao.observeFiltered(deposit=?)` + `TransactionRepository.observeFiltered(deposit=…)`. `create()`/`update()` теперь принимают и нормализуют `deposit` (`ifBlank { "bank" }`).
+- **Retrofit API params.** `?deposit=` на `getTransactions` / `getStatsSummary` / `getByCategory` / `getMonthlyStats` / `getForecast` / `getStatisticsOverview`.
+- **ViewModels.** `IncomeViewModel` / `ExpensesViewModel` получили `_filterDeposit` + `setFilterDeposit()`; `StatisticsViewModel.selectDeposit()`; `ForecastViewModel.setFilterDeposit()` + `fetchForecast(deposit)`.
+- **UI компоненты.** `components/DepositChip.kt` (read-only иконка либо editable + DropdownMenu) и `DepositSegmented` (`FilterChip` пара) — переиспользуются в формах и tx-карточках.
+- **Экраны:**
+  - `IncomeScreen` / `ExpensesScreen`: в add/edit-sheet добавлен `DepositSegmented`. На tx-карточке слева от категории — read-only `DepositChip`. Initial balance sheet принимает «Счёт» через `vm.saveInitialBalance(amount, deposit)`.
+  - `ForecastScreen`: фильтр-чипы «Все/Карта/Нал» над summary'ями; в `AddWishlistSheet` и в edit-mode wishlist — `DepositSegmented`.
+  - `StatisticsScreen`: фильтр-чипы «Все/Карта/Нал» под period selector'ом — прокидываются через `vm.selectDeposit()` во все аггрегации `/statistics/overview`.
+
 ### [1.39.0] — 2026-05-24
 
 #### Added

@@ -548,6 +548,7 @@ fun AddExpenseSheet(
     var category by remember { mutableStateOf(template?.category ?: "") }
     var purpose by remember { mutableStateOf(template?.purpose ?: "") }
     var desc by remember { mutableStateOf(template?.description ?: "") }
+    var deposit by remember { mutableStateOf(normalizeDeposit(template?.deposit)) }
     var catExpanded by remember { mutableStateOf(false) }
     var catInput by remember { mutableStateOf(template?.category ?: "") }
 
@@ -678,6 +679,9 @@ fun AddExpenseSheet(
                 colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = primaryColor)
             )
 
+            Text("Счёт", style = MaterialTheme.typography.labelMedium)
+            DepositSegmented(value = deposit, onChange = { deposit = it })
+
             Spacer(Modifier.height(4.dp))
             Button(
                 onClick = {
@@ -688,7 +692,8 @@ fun AddExpenseSheet(
                             type = "expense", amount = amtD, date = date,
                             category = cat,
                             purpose = purpose.ifBlank { null },
-                            description = desc.ifBlank { null }
+                            description = desc.ifBlank { null },
+                            deposit = deposit,
                         )
                     )
                 },

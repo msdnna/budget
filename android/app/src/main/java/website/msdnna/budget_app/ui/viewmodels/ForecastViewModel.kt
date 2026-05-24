@@ -31,10 +31,12 @@ class ForecastViewModel(private val serverUrl: String) : ViewModel() {
     private val service = RetrofitClient.getService(serverUrl)
 
     private val _refreshTick = MutableStateFlow(0)
+    private val _filterDeposit = MutableStateFlow<String?>(null)
     private val _forecast = MutableStateFlow<ForecastData?>(null)
     private val _forecastLoading = MutableStateFlow(true)
     private val _forecastError = MutableStateFlow<String?>(null)
     private val _selectedIds = MutableStateFlow<Set<String>>(emptySet())
+    val filterDeposit = _filterDeposit.asStateFlow()
 
     // Separate selection bucket for «Регулярные расходы» — bulk operations
     // there are different (cancel paid / delete) so we keep selections from
@@ -50,8 +52,8 @@ class ForecastViewModel(private val serverUrl: String) : ViewModel() {
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    private val forecastJob = _refreshTick
-        .flatMapLatest { fetchForecast() }
+    private val forecastJob = combine(_refreshTick, _filterDeposit) { _, d -> d }
+        .flatMapLatest { dep -> fetchForecast(dep) }
         .onEach { f -> _forecast.value = f }
         .launchIn(viewModelScope)
 
@@ -62,11 +64,11 @@ class ForecastViewModel(private val serverUrl: String) : ViewModel() {
         ForecastUiState(forecast = f, wishlist = w, loading = loading, error = err)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, ForecastUiState(loading = true))
 
-    private fun fetchForecast(): Flow<ForecastData?> = flow {
+    private fun fetchForecast(deposit: String? = null): Flow<ForecastData?> = flow {
         _forecastLoading.value = true
         _forecastError.value = null
         try {
-            val f = withRetry { service.getForecast() }
+            val f = withRetry { service.getForecast(deposit = deposit) }
             emit(f)
         } catch (e: CancellationException) {
             throw e
@@ -80,6 +82,10 @@ class ForecastViewModel(private val serverUrl: String) : ViewModel() {
 
     fun reload() {
         _refreshTick.value += 1
+    }
+
+    fun setFilterDeposit(value: String?) {
+        _filterDeposit.value = value?.takeIf { it.isNotBlank() }
     }
 
     // togglePurchased был удалён в android 1.27.0 — теперь «Куплено»
@@ -181,6 +187,7 @@ class ForecastViewModel(private val serverUrl: String) : ViewModel() {
                 category = req.category,
                 priority = req.priority,
                 frequency = req.frequency,
+                deposit = req.deposit,
                 notes = req.notes,
             )
             CategoryUsage.recordUse("wishlist", req.category)
@@ -195,6 +202,7 @@ class ForecastViewModel(private val serverUrl: String) : ViewModel() {
             category = req.category,
             frequency = req.frequency,
             purchased = req.purchased,
+            deposit = req.deposit,
             notes = req.notes,
             createdBy = req.createdBy,
         )
