@@ -231,7 +231,7 @@ func TestTransactionRepo_GetSummary(t *testing.T) {
 
 	from := now.AddDate(0, 0, -1)
 	to := now.AddDate(0, 0, 7)
-	s, err := repo.GetSummary(ctx, from, to)
+	s, err := repo.GetSummary(ctx, from, to, "")
 	if err != nil {
 		t.Fatalf("GetSummary: %v", err)
 	}
@@ -338,7 +338,7 @@ func TestTransactionRepo_AggregateByCategory(t *testing.T) {
 
 	from := now.AddDate(0, -1, 0)
 	to := now.AddDate(0, 1, 0)
-	cats, err := repo.AggregateByCategory(ctx, string(models.Expense), from, to)
+	cats, err := repo.AggregateByCategory(ctx, string(models.Expense), "", from, to)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -907,7 +907,7 @@ func TestTransactionRepo_AggregateMonthlyRange(t *testing.T) {
 
 	out, err := repo.AggregateMonthlyRange(ctx,
 		time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
-		time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC))
+		time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1026,7 +1026,7 @@ func TestTransactionRepo_AverageMonthlyCategoryExpensesUnlinked(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cats, err := repo.GetAverageMonthlyCategoryExpensesUnlinked(ctx, from, to)
+	cats, err := repo.GetAverageMonthlyCategoryExpensesUnlinked(ctx, from, to, "")
 	if err != nil {
 		t.Fatal(err)
 	}

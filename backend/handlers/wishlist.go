@@ -49,6 +49,7 @@ func (h *WishlistHandler) Create(c *gin.Context) {
 		Priority:      req.Priority,
 		Frequency:     req.Frequency,
 		Purchased:     req.Purchased,
+		Deposit:       models.NormalizeDeposit(req.Deposit),
 		Notes:         req.Notes,
 		CreatedBy:     userInfoFromCtx(c),
 	}
@@ -127,6 +128,9 @@ func (h *WishlistHandler) Update(c *gin.Context) {
 	}
 	if req.Purchased != nil {
 		update["purchased"] = *req.Purchased
+	}
+	if req.Deposit != "" {
+		update["deposit"] = models.NormalizeDeposit(req.Deposit)
 	}
 	if req.Notes != "" {
 		update["notes"] = req.Notes
@@ -316,6 +320,9 @@ func (h *WishlistHandler) LinkExisting(c *gin.Context) {
 	update := bson.M{
 		"wishlist_id": item.ID,
 		"category":    item.Category,
+		// Align the linked tx with the wishlist item's scope so paid_amount /
+		// historical avg by deposit stays internally consistent.
+		"deposit": models.NormalizeDeposit(item.Deposit),
 	}
 	updated, err := h.txRepo.Update(c.Request.Context(), txID, update, 0, userInfoFromCtx(c))
 	if err != nil {

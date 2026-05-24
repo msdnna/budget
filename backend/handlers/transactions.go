@@ -93,6 +93,7 @@ func (h *TransactionHandler) Create(c *gin.Context) {
 		Source:      req.Source,
 		Purpose:     req.Purpose,
 		Description: req.Description,
+		Deposit:     models.NormalizeDeposit(req.Deposit),
 		WishlistID:  req.WishlistID,
 		CreatedBy:   userInfoFromCtx(c),
 	}
@@ -127,6 +128,7 @@ func (h *TransactionHandler) List(c *gin.Context) {
 	filter := models.TransactionFilter{
 		Type:     c.Query("type"),
 		Category: c.Query("category"),
+		Deposit:  normalizeDepositQuery(c.Query("deposit")),
 		Limit:    20,
 		Skip:     0,
 	}
@@ -236,6 +238,9 @@ func (h *TransactionHandler) Update(c *gin.Context) {
 	}
 	if req.Hidden != nil {
 		update["hidden"] = *req.Hidden
+	}
+	if req.Deposit != "" {
+		update["deposit"] = models.NormalizeDeposit(req.Deposit)
 	}
 	if req.CreatedBy != nil {
 		update["created_by"] = req.CreatedBy

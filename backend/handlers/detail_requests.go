@@ -201,6 +201,16 @@ func (h *DetailRequestHandler) AddChild(c *gin.Context) {
 		return
 	}
 
+	// Child tx inherits its parent's deposit scope — splitting a lump-sum
+	// expense across detail-request children doesn't change which scope it
+	// drew from. Fall back to the request payload, then to bank default.
+	parent, err := h.txRepo.FindByID(c.Request.Context(), dr.ParentTransactionID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	childDeposit := models.NormalizeDeposit(parent.Deposit)
+
 	t := &models.Transaction{
 		Type:              models.Expense,
 		Amount:            req.Amount,
@@ -209,6 +219,7 @@ func (h *DetailRequestHandler) AddChild(c *gin.Context) {
 		Source:            req.Source,
 		Purpose:           req.Purpose,
 		Description:       req.Description,
+		Deposit:           childDeposit,
 		CreatedBy:         userInfoFromCtx(c),
 		ParentID:          dr.ParentTransactionID,
 		ExcludedFromStats: true,

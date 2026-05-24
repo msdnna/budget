@@ -43,8 +43,9 @@ func NewStatisticsHandler(txRepo *repository.TransactionRepository, wlRepo *repo
 // @Router       /statistics/summary [get]
 func (h *StatisticsHandler) Summary(c *gin.Context) {
 	from, to := parsePeriodParams(c)
+	deposit := normalizeDepositQuery(c.Query("deposit"))
 
-	summary, err := h.txRepo.GetSummary(c.Request.Context(), from, to)
+	summary, err := h.txRepo.GetSummary(c.Request.Context(), from, to, deposit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -74,8 +75,9 @@ func (h *StatisticsHandler) ByCategory(c *gin.Context) {
 	}
 
 	from, to := parsePeriodParams(c)
+	deposit := normalizeDepositQuery(c.Query("deposit"))
 
-	data, err := h.txRepo.AggregateByCategory(c.Request.Context(), txType, from, to)
+	data, err := h.txRepo.AggregateByCategory(c.Request.Context(), txType, deposit, from, to)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -103,6 +105,7 @@ func (h *StatisticsHandler) ByCategory(c *gin.Context) {
 // @Router       /statistics/monthly [get]
 func (h *StatisticsHandler) Monthly(c *gin.Context) {
 	from, to := parsePeriodParams(c)
+	deposit := normalizeDepositQuery(c.Query("deposit"))
 
 	if from.IsZero() && to.IsZero() {
 		year := time.Now().Year()
@@ -121,7 +124,7 @@ func (h *StatisticsHandler) Monthly(c *gin.Context) {
 		to = time.Date(from.Year()+1, 1, 1, 0, 0, 0, 0, time.UTC).Add(-time.Second)
 	}
 
-	data, err := h.txRepo.AggregateMonthlyRange(c.Request.Context(), from, to)
+	data, err := h.txRepo.AggregateMonthlyRange(c.Request.Context(), from, to, deposit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -148,6 +151,7 @@ func (h *StatisticsHandler) Monthly(c *gin.Context) {
 // @Router       /statistics/overview [get]
 func (h *StatisticsHandler) Overview(c *gin.Context) {
 	from, to := parsePeriodParams(c)
+	deposit := normalizeDepositQuery(c.Query("deposit"))
 
 	year := time.Now().Year()
 	if monthStr := c.Query("month"); monthStr != "" {
@@ -169,7 +173,7 @@ func (h *StatisticsHandler) Overview(c *gin.Context) {
 
 	g, gctx := errgroup.WithContext(c.Request.Context())
 	g.Go(func() error {
-		s, err := h.txRepo.GetSummary(gctx, from, to)
+		s, err := h.txRepo.GetSummary(gctx, from, to, deposit)
 		if err != nil {
 			return err
 		}
@@ -177,7 +181,7 @@ func (h *StatisticsHandler) Overview(c *gin.Context) {
 		return nil
 	})
 	g.Go(func() error {
-		d, err := h.txRepo.AggregateByCategory(gctx, string(models.Expense), from, to)
+		d, err := h.txRepo.AggregateByCategory(gctx, string(models.Expense), deposit, from, to)
 		if err != nil {
 			return err
 		}
@@ -188,7 +192,7 @@ func (h *StatisticsHandler) Overview(c *gin.Context) {
 		return nil
 	})
 	g.Go(func() error {
-		d, err := h.txRepo.AggregateByCategory(gctx, string(models.Income), from, to)
+		d, err := h.txRepo.AggregateByCategory(gctx, string(models.Income), deposit, from, to)
 		if err != nil {
 			return err
 		}
@@ -199,7 +203,7 @@ func (h *StatisticsHandler) Overview(c *gin.Context) {
 		return nil
 	})
 	g.Go(func() error {
-		d, err := h.txRepo.AggregateMonthly(gctx, year)
+		d, err := h.txRepo.AggregateMonthly(gctx, year, deposit)
 		if err != nil {
 			return err
 		}
@@ -236,21 +240,36 @@ func (h *StatisticsHandler) Forecast(c *gin.Context) {
 	ctx := c.Request.Context()
 	now := time.Now()
 	threeMonthsAgo := now.AddDate(0, -3, 0)
+	deposit := normalizeDepositQuery(c.Query("deposit"))
 
 	// Historical avg by category, EXCLUDING transactions linked to recurring
 	// wishlist items — those are projected separately via the next-due model
 	// below. Counting them in both places double-billed the forecast.
-	historyCats, err := h.txRepo.GetAverageMonthlyCategoryExpensesUnlinked(ctx, threeMonthsAgo, now)
+	historyCats, err := h.txRepo.GetAverageMonthlyCategoryExpensesUnlinked(ctx, threeMonthsAgo, now, deposit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	// All non-purchased wishlist items contribute to forecast
-	unpurchased, err := h.wlRepo.FindUnpurchased(ctx)
+	// All non-purchased wishlist items contribute to forecast.
+	allUnpurchased, err := h.wlRepo.FindUnpurchased(ctx)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
+	}
+	// Filter wishlist items by deposit scope when requested. We do it in Go
+	// rather than the repo so existing FindUnpurchased callers stay simple,
+	// and so the empty-deposit wishlist (legacy or never-set) collapses to
+	// the bank scope per NormalizeDeposit.
+	unpurchased := allUnpurchased
+	if deposit != "" {
+		filtered := unpurchased[:0]
+		for _, it := range allUnpurchased {
+			if string(models.NormalizeDeposit(it.Deposit)) == deposit {
+				filtered = append(filtered, it)
+			}
+		}
+		unpurchased = filtered
 	}
 
 	// Pull every expense transaction linked to any recurring wishlist item
@@ -401,6 +420,7 @@ func (h *StatisticsHandler) Forecast(c *gin.Context) {
 				MonthlyCost:    item.EstimatedCost, // full per-period cost; UI suffix varies
 				Frequency:      string(item.Frequency),
 				Category:       item.Category,
+				Deposit:        string(models.NormalizeDeposit(item.Deposit)),
 				PaidThisPeriod: paidThisPeriod,
 				PaidAmount:     paidAmount,
 				PaidCount:      paidCount,
@@ -441,6 +461,19 @@ func (h *StatisticsHandler) Forecast(c *gin.Context) {
 		RegularItems:        regularItems,
 		UnpurchasedWishlist: unpurchased,
 	})
+}
+
+// normalizeDepositQuery accepts the ?deposit= query value and returns either
+// "" (no filter / "include both"), "bank", or "cash". Unknown values fall
+// back to "" so a typo can't silently hide every record.
+func normalizeDepositQuery(v string) string {
+	switch models.DepositType(v) {
+	case models.DepositBank:
+		return string(models.DepositBank)
+	case models.DepositCash:
+		return string(models.DepositCash)
+	}
+	return ""
 }
 
 func parsePeriodParams(c *gin.Context) (time.Time, time.Time) {

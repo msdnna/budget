@@ -43,6 +43,7 @@ func NewExportHandler(txRepo *repository.TransactionRepository, wlRepo *reposito
 func (h *ExportHandler) Excel(c *gin.Context) {
 	from, to := parsePeriodParams(c)
 	txType := c.Query("type")
+	deposit := normalizeDepositQuery(c.Query("deposit"))
 
 	themeKey := c.Query("theme")
 	theme, ok := pdfThemes[themeKey]
@@ -50,7 +51,7 @@ func (h *ExportHandler) Excel(c *gin.Context) {
 		theme = pdfThemes["blue"]
 	}
 
-	transactions, err := h.txRepo.FindAll(c.Request.Context(), from, to, txType)
+	transactions, err := h.txRepo.FindAll(c.Request.Context(), from, to, txType, deposit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -168,6 +169,7 @@ var pdfThemes = map[string]pdfTheme{
 func (h *ExportHandler) PDF(c *gin.Context) {
 	from, to := parsePeriodParams(c)
 	txType := c.Query("type")
+	deposit := normalizeDepositQuery(c.Query("deposit"))
 
 	themeKey := c.Query("theme")
 	theme, ok := pdfThemes[themeKey]
@@ -175,13 +177,13 @@ func (h *ExportHandler) PDF(c *gin.Context) {
 		theme = pdfThemes["blue"]
 	}
 
-	transactions, err := h.txRepo.FindAll(c.Request.Context(), from, to, txType)
+	transactions, err := h.txRepo.FindAll(c.Request.Context(), from, to, txType, deposit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	summary, err := h.txRepo.GetSummary(c.Request.Context(), from, to)
+	summary, err := h.txRepo.GetSummary(c.Request.Context(), from, to, deposit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

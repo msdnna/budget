@@ -12,6 +12,26 @@ const (
 	InitialBalance TransactionType = "initial_balance"
 )
 
+// DepositType splits the budget into independent scopes so cash spending
+// doesn't pollute card-balance reports (and vice versa). Filters across
+// statistics/income/expenses/forecast accept it as an optional query param.
+type DepositType string
+
+const (
+	DepositBank DepositType = "bank"
+	DepositCash DepositType = "cash"
+)
+
+// NormalizeDeposit defaults blank/unknown values to bank — the historical
+// scope every existing record predates this field with, and the most common
+// case for new entries.
+func NormalizeDeposit(d DepositType) DepositType {
+	if d == DepositCash {
+		return DepositCash
+	}
+	return DepositBank
+}
+
 type Transaction struct {
 	ID             string          `bson:"_id" json:"id"`
 	Type           TransactionType `bson:"type" json:"type"`
@@ -22,6 +42,7 @@ type Transaction struct {
 	Purpose        string          `bson:"purpose,omitempty" json:"purpose,omitempty"`
 	Description    string          `bson:"description,omitempty" json:"description,omitempty"`
 	Hidden         bool            `bson:"hidden,omitempty" json:"hidden,omitempty"`
+	Deposit        DepositType     `bson:"deposit" json:"deposit"`
 	CreatedBy      *UserInfo       `bson:"created_by,omitempty" json:"created_by,omitempty"`
 	CreatedAt      time.Time       `bson:"created_at" json:"created_at"`
 	Version        int             `bson:"version" json:"version"`
@@ -55,18 +76,20 @@ type CreateTransactionRequest struct {
 	Source      string          `json:"source"`
 	Purpose     string          `json:"purpose"`
 	Description string          `json:"description"`
+	Deposit     DepositType     `json:"deposit"`
 	WishlistID  string          `json:"wishlist_id"`
 }
 
 type UpdateTransactionRequest struct {
-	Amount      float64   `json:"amount"`
-	Date        string    `json:"date"`
-	Category    string    `json:"category"`
-	Source      string    `json:"source"`
-	Purpose     string    `json:"purpose"`
-	Description string    `json:"description"`
-	Hidden      *bool     `json:"hidden"`
-	CreatedBy   *UserInfo `json:"created_by"`
+	Amount      float64     `json:"amount"`
+	Date        string      `json:"date"`
+	Category    string      `json:"category"`
+	Source      string      `json:"source"`
+	Purpose     string      `json:"purpose"`
+	Description string      `json:"description"`
+	Hidden      *bool       `json:"hidden"`
+	Deposit     DepositType `json:"deposit"`
+	CreatedBy   *UserInfo   `json:"created_by"`
 	// Pointer so an empty string ("") is distinguishable from absent — empty
 	// string unlinks the transaction from its wishlist item.
 	WishlistID *string `json:"wishlist_id"`
@@ -78,8 +101,11 @@ type TransactionFilter struct {
 	To         *time.Time
 	Category   string
 	Categories []string
-	Limit      int64
-	Skip       int64
+	// Deposit restricts the result to a single scope (bank|cash). Empty
+	// string means "no filter" — return both.
+	Deposit string
+	Limit   int64
+	Skip    int64
 	// IncludeDetailed: when false, parents of closed detail-requests are
 	// hidden (they're historical and superseded by their children in stats).
 	IncludeDetailed bool

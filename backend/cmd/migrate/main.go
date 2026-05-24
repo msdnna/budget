@@ -57,8 +57,33 @@ func main() {
 		}
 	}
 
+	// Deposit backfill — all transactions and wishlist items predating the
+	// deposit split land in the "bank" scope by default.
+	for _, name := range []string{"transactions", "wishlist"} {
+		if err := backfillDeposit(ctx, db.Collection(name), name); err != nil {
+			log.Fatalf("backfill deposit %s: %v", name, err)
+		}
+	}
+
 	fmt.Println("✅ Migration complete.")
 	os.Exit(0)
+}
+
+// backfillDeposit sets deposit="bank" on any record where the field is
+// absent. Idempotent and safe to re-run after every schema change that
+// expects this default.
+func backfillDeposit(ctx context.Context, col *mongo.Collection, name string) error {
+	filter := bson.M{"$or": []bson.M{
+		{"deposit": bson.M{"$exists": false}},
+		{"deposit": ""},
+		{"deposit": nil},
+	}}
+	res, err := col.UpdateMany(ctx, filter, bson.M{"$set": bson.M{"deposit": "bank"}})
+	if err != nil {
+		return err
+	}
+	fmt.Printf("  %s: deposit backfilled=%d\n", name, res.ModifiedCount)
+	return nil
 }
 
 func migrateCollection(ctx context.Context, col *mongo.Collection, name string) error {
