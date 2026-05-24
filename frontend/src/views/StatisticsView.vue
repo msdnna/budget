@@ -42,6 +42,14 @@
             clearable
             @update:value="onPeriodValueChange"
           />
+          <n-select
+            v-model:value="selectedDeposit"
+            :options="depositFilterOptions"
+            size="small"
+            style="width: 180px"
+            to="body"
+            @update:value="onPeriodValueChange"
+          />
         </template>
         <!-- Mobile: маленькая кнопка-триггер value-picker'a справа. -->
         <n-popover v-else trigger="click" placement="bottom-end" :show-arrow="false">
@@ -75,6 +83,14 @@
               clearable
               size="small"
               style="width: 100%"
+              @update:value="onPeriodValueChange"
+            />
+            <n-select
+              v-model:value="selectedDeposit"
+              :options="depositFilterOptions"
+              size="small"
+              style="width: 100%; margin-top: 8px"
+              to="body"
               @update:value="onPeriodValueChange"
             />
           </div>
@@ -260,6 +276,7 @@ import {
   NDatePicker,
   NPopover,
   NIcon,
+  NSelect,
 } from 'naive-ui'
 import { CalendarOutline, TrendingUpOutline, TrendingDownOutline } from '@vicons/ionicons5'
 import { statistics, categories as catApi } from '@/api'
@@ -267,6 +284,7 @@ import { storeToRefs } from 'pinia'
 import { useThemeStore } from '@/stores/theme'
 import { useRouter } from 'vue-router'
 import TilePeriodPicker from '@/components/TilePeriodPicker.vue'
+import { DEPOSITS } from '@/utils/deposit'
 
 // ToolboxComponent is registered (without UI) because the Brush component
 // depends on it internally; we hide the buttons via `toolbox.show: false`.
@@ -318,6 +336,7 @@ function drilldown(kind, categoryName) {
       categories: categoryName,
       ...(from ? { from } : {}),
       ...(to ? { to } : {}),
+      ...(selectedDeposit.value ? { deposit: selectedDeposit.value } : {}),
     },
   })
 }
@@ -326,6 +345,12 @@ const period = ref('month')
 const selectedMonth = ref(Date.now())
 const selectedYear = ref(Date.now())
 const dateRange = ref(null)
+const selectedDeposit = ref('')
+
+const depositFilterOptions = [
+  { label: 'Все счета', value: '' },
+  ...DEPOSITS.map((d) => ({ label: d.label, value: d.value })),
+]
 
 const windowWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1024)
 const isMobile = computed(() => windowWidth.value < 768)
@@ -387,6 +412,7 @@ function buildParams() {
     p.from = fmtLocalDate(dateRange.value[0])
     p.to = fmtLocalDate(dateRange.value[1])
   }
+  if (selectedDeposit.value) p.deposit = selectedDeposit.value
   return p
 }
 
@@ -445,20 +471,22 @@ async function loadData() {
 // "month" filter is widened to a full year here so the chart still shows
 // surrounding context.
 function buildMonthlyParams() {
+  let base
   if (period.value === 'month') {
     const d = new Date(selectedMonth.value)
-    return { year: d.getFullYear() }
-  }
-  if (period.value === 'year') {
-    return { year: new Date(selectedYear.value).getFullYear() }
-  }
-  if (period.value === 'custom' && dateRange.value) {
-    return {
+    base = { year: d.getFullYear() }
+  } else if (period.value === 'year') {
+    base = { year: new Date(selectedYear.value).getFullYear() }
+  } else if (period.value === 'custom' && dateRange.value) {
+    base = {
       from: fmtLocalDate(dateRange.value[0]),
       to: fmtLocalDate(dateRange.value[1]),
     }
+  } else {
+    base = { year: new Date().getFullYear() }
   }
-  return { year: new Date().getFullYear() }
+  if (selectedDeposit.value) base.deposit = selectedDeposit.value
+  return base
 }
 
 async function loadMonthly() {

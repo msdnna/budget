@@ -118,6 +118,18 @@
                       />
                     </n-form-item>
                   </n-grid-item>
+                  <n-grid-item span="2">
+                    <n-form-item label="Счёт">
+                      <n-radio-group v-model:value="form.deposit" size="small">
+                        <n-radio-button v-for="d in DEPOSITS" :key="d.value" :value="d.value">
+                          <span class="dep-radio-content">
+                            <n-icon :component="d.icon" />
+                            {{ d.label }}
+                          </span>
+                        </n-radio-button>
+                      </n-radio-group>
+                    </n-form-item>
+                  </n-grid-item>
                 </n-grid>
                 <div v-if="isMobile && mobileEditing" class="form-actions-row">
                   <n-popconfirm @positive-click="deleteEditingRow">
@@ -193,6 +205,14 @@
                     to="body"
                     @update:value="applyFilters"
                   />
+                  <n-select
+                    v-model:value="filterDeposit"
+                    :options="depositFilterOptions"
+                    size="small"
+                    style="width: 170px"
+                    to="body"
+                    @update:value="applyFilters"
+                  />
                   <n-checkbox
                     v-model:checked="showDetailed"
                     size="small"
@@ -230,6 +250,15 @@
                       :max-tag-count="2"
                       :render-label="renderCategoryLabel"
                       :render-tag="renderCategoryTag"
+                      to="body"
+                      @update:value="applyFilters"
+                    />
+                    <div class="filter-popover-label">Счёт</div>
+                    <n-select
+                      v-model:value="filterDeposit"
+                      :options="depositFilterOptions"
+                      size="small"
+                      style="width: 100%"
                       to="body"
                       @update:value="applyFilters"
                     />
@@ -392,6 +421,12 @@
                             <span class="tx-card-date">
                               {{ new Date(row.date).toLocaleDateString('ru-RU') }}
                             </span>
+                            <DepositChip
+                              :model-value="row.deposit"
+                              editable
+                              :icon-size="14"
+                              @change="(v) => changeDeposit(row, v)"
+                            />
                             <CategoryLabel
                               class="tx-card-category"
                               :name="row.category"
@@ -540,6 +575,8 @@ import {
   NCheckbox,
   NIcon,
   NProgress,
+  NRadioGroup,
+  NRadioButton,
 } from 'naive-ui'
 import {
   ArrowBackOutline,
@@ -566,6 +603,8 @@ import FabButton from '@/components/FabButton.vue'
 import BulkFabRow from '@/components/BulkFabRow.vue'
 import SwipeableCard from '@/components/SwipeableCard.vue'
 import CategoryLabel from '@/components/CategoryLabel.vue'
+import DepositChip from '@/components/DepositChip.vue'
+import { DEPOSITS, DEPOSIT_DEFAULT, normalizeDeposit } from '@/utils/deposit'
 import { historyOptions, pushHistory } from '@/utils/inputHistory'
 import {
   users as usersApi,
@@ -595,6 +634,7 @@ const formRef = ref(null)
 const saving = ref(false)
 const filterRange = ref(null)
 const filterCategories = ref([])
+const filterDeposit = ref('')
 const route = useRoute()
 const router = useRouter()
 const showDetailed = ref(false)
@@ -688,7 +728,14 @@ async function loadLimitsProgress() {
   }
 }
 
-const form = ref({ amount: null, date: Date.now(), category: '', purpose: '', description: '' })
+const form = ref({
+  amount: null,
+  date: Date.now(),
+  category: '',
+  purpose: '',
+  description: '',
+  deposit: DEPOSIT_DEFAULT,
+})
 
 // LocalStorage-кэш недавно введённых «Назначений» для NAutoComplete.
 // Ref + явный refresh после submit'a — чтобы новое значение всплыло без
@@ -715,7 +762,14 @@ const { paneRef: tablePaneRef, compact: tableCompact } = useAdaptiveTable()
 
 function enterMobileAdd() {
   mobileEditing.value = null
-  form.value = { amount: null, date: Date.now(), category: '', purpose: '', description: '' }
+  form.value = {
+    amount: null,
+    date: Date.now(),
+    category: '',
+    purpose: '',
+    description: '',
+    deposit: DEPOSIT_DEFAULT,
+  }
   mobileAdding.value = true
 }
 
@@ -728,6 +782,7 @@ function enterMobileEdit(row) {
     category: row.category,
     purpose: row.purpose || '',
     description: row.description || '',
+    deposit: normalizeDeposit(row.deposit),
   }
 }
 
@@ -905,6 +960,7 @@ async function submit() {
       category: cat,
       purpose: form.value.purpose,
       description: form.value.description,
+      deposit: normalizeDeposit(form.value.deposit),
     }
     if (mobileEditing.value) {
       await store.update(mobileEditing.value.id, payload)
@@ -917,7 +973,14 @@ async function submit() {
     // Пушим «Назначение» в localStorage-историю для autocomplete'a.
     pushHistory('expense-purpose', form.value.purpose)
     refreshPurposeHistory()
-    form.value = { amount: null, date: Date.now(), category: '', purpose: '', description: '' }
+    form.value = {
+      amount: null,
+      date: Date.now(),
+      category: '',
+      purpose: '',
+      description: '',
+      deposit: DEPOSIT_DEFAULT,
+    }
     if (isMobile.value) {
       mobileAdding.value = false
       mobileEditing.value = null
@@ -1003,6 +1066,7 @@ function fillFromTemplate(row) {
     category: row.category,
     purpose: row.purpose || '',
     description: row.description || '',
+    deposit: normalizeDeposit(row.deposit),
   }
   if (isMobile.value) {
     // На мобилке форма скрыта пока не нажат FAB-«+» / тап по записи —
@@ -1031,6 +1095,7 @@ function applyFilters() {
     f.from = fmtLocalDate(filterRange.value[0])
     f.to = fmtLocalDate(filterRange.value[1])
   }
+  if (filterDeposit.value) f.deposit = filterDeposit.value
   store.setFilters(f)
 }
 
@@ -1039,14 +1104,30 @@ const activeFilterCount = computed(() => {
   if (filterRange.value) n += 1
   if (filterCategories.value?.length) n += 1
   if (showDetailed.value) n += 1
+  if (filterDeposit.value) n += 1
   return n
 })
 
 function resetFilters() {
   filterRange.value = null
   filterCategories.value = []
+  filterDeposit.value = ''
   showDetailed.value = false
   applyFilters()
+}
+
+const depositFilterOptions = [
+  { label: 'Все', value: '' },
+  ...DEPOSITS.map((d) => ({ label: d.label, value: d.value })),
+]
+
+async function changeDeposit(row, deposit) {
+  try {
+    await store.update(row.id, { deposit: normalizeDeposit(deposit) })
+    message.success(`Счёт: ${deposit === 'cash' ? 'Наличные' : 'Банковская карта'}`)
+  } catch (e) {
+    message.error(e.message)
+  }
 }
 
 // ── Inline cell editing ───────────────────────────────────────────────────────
@@ -1396,6 +1477,19 @@ const columns = computed(() => {
           default: () => `${row.created_by.display_name} · нажмите для смены`,
         })
       },
+    },
+    {
+      title: 'Счёт',
+      key: 'deposit',
+      width: 44,
+      align: 'center',
+      render: (row) =>
+        h(DepositChip, {
+          modelValue: row.deposit,
+          editable: true,
+          iconSize: 16,
+          onChange: (v) => changeDeposit(row, v),
+        }),
     },
     {
       title: 'Дата',
@@ -1839,6 +1933,13 @@ watch(
 }
 .swipe-action-danger {
   background: #d03050;
+}
+
+.dep-radio-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  line-height: 1;
 }
 
 .bulk-circle {

@@ -33,6 +33,22 @@
            regular_contrib (recurring only) and wishlist_contrib − regular_contrib
            (one-off only). Mobile = 2×2 (span 2 of 4), desktop = 4-в-ряд.
            Скрыты во время add-вида чтобы пользователь сфокусировался на форме. -->
+        <n-space
+          v-show="!isMobile || !mobileFormShown"
+          align="center"
+          justify="flex-end"
+          style="margin-bottom: 8px"
+        >
+          <n-text depth="3" style="font-size: 12px">Счёт</n-text>
+          <n-select
+            v-model:value="forecastDeposit"
+            :options="forecastDepositOptions"
+            size="small"
+            style="width: 180px"
+            to="body"
+            @update:value="onForecastDepositChange"
+          />
+        </n-space>
         <n-grid
           v-show="!isMobile || !mobileFormShown"
           :cols="4"
@@ -188,6 +204,18 @@
                         v-model:value="form.frequency"
                         :options="recurringFrequencyOptions"
                       />
+                    </n-form-item>
+                  </n-grid-item>
+                  <n-grid-item span="2">
+                    <n-form-item label="Счёт">
+                      <n-radio-group v-model:value="form.deposit" size="small">
+                        <n-radio-button v-for="d in DEPOSITS" :key="d.value" :value="d.value">
+                          <span class="dep-radio-content">
+                            <n-icon :component="d.icon" />
+                            {{ d.label }}
+                          </span>
+                        </n-radio-button>
+                      </n-radio-group>
                     </n-form-item>
                   </n-grid-item>
                   <n-grid-item span="2">
@@ -856,6 +884,7 @@ import BulkFabRow from '@/components/BulkFabRow.vue'
 import SplitPane from '@/components/SplitPane.vue'
 import CategoryLabel from '@/components/CategoryLabel.vue'
 import LinkExistingExpenseModal from '@/components/LinkExistingExpenseModal.vue'
+import { DEPOSITS, DEPOSIT_DEFAULT, normalizeDeposit } from '@/utils/deposit'
 import { historyOptions, pushHistory } from '@/utils/inputHistory'
 
 const themeStore = useThemeStore()
@@ -949,6 +978,7 @@ function enterForecastAdd(kind) {
     estimated_cost: null,
     category: '',
     frequency: kind === 'regular' ? 'monthly' : 'monthly',
+    deposit: DEPOSIT_DEFAULT,
     notes: '',
   }
   mobileFormShown.value = true
@@ -962,6 +992,7 @@ function enterForecastEdit(item) {
     estimated_cost: item.estimated_cost ?? null,
     category: item.category || '',
     frequency: item.frequency && item.frequency !== 'once' ? item.frequency : 'monthly',
+    deposit: normalizeDeposit(item.deposit),
     notes: item.notes || '',
   }
   mobileFormShown.value = true
@@ -1051,6 +1082,7 @@ const form = ref({
   estimated_cost: null,
   category: '',
   frequency: 'monthly',
+  deposit: DEPOSIT_DEFAULT,
   notes: '',
 })
 
@@ -1648,6 +1680,7 @@ async function submit() {
       estimated_cost: form.value.estimated_cost,
       category: cat,
       frequency,
+      deposit: normalizeDeposit(form.value.deposit),
       notes: form.value.notes,
     }
     if (mobileForecastEditing.value) {
@@ -1675,6 +1708,7 @@ async function submit() {
         estimated_cost: null,
         category: '',
         frequency: form.value.kind === 'regular' ? form.value.frequency : 'monthly',
+        deposit: DEPOSIT_DEFAULT,
         notes: '',
       }
     }
@@ -2457,14 +2491,25 @@ function getWishlistRowProps(row) {
   return {}
 }
 
+const forecastDeposit = ref('')
+const forecastDepositOptions = [
+  { label: 'Все счета', value: '' },
+  ...DEPOSITS.map((d) => ({ label: d.label, value: d.value })),
+]
+
 async function loadForecast() {
   loadingForecast.value = true
   try {
-    const { data } = await statistics.forecast()
+    const params = forecastDeposit.value ? { deposit: forecastDeposit.value } : undefined
+    const { data } = await statistics.forecast(params)
     forecast.value = data
   } finally {
     loadingForecast.value = false
   }
+}
+
+function onForecastDepositChange() {
+  loadForecast()
 }
 
 const forecastCategoryMeta = computed(() => {
@@ -2715,6 +2760,13 @@ watch(
 .form-actions-row {
   display: flex;
   gap: 8px;
+}
+
+.dep-radio-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  line-height: 1;
 }
 
 /* Bulk-selected строки получают class `.fc-row-sel` и подсвечиваются через
