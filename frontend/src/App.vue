@@ -129,8 +129,11 @@
               <!-- /sider-inner -->
             </n-layout-sider>
 
-            <!-- Content -->
-            <n-layout style="overflow-y: auto">
+            <!-- Content. Inner layout is a flex column so the header
+                 stays pinned at the top while only the content area
+                 scrolls — a single scrollbar over the body (not the
+                 header) is far less visually noisy. -->
+            <n-layout class="content-layout">
               <n-layout-header
                 bordered
                 class="app-header"
@@ -139,6 +142,7 @@
                   display: flex;
                   align-items: center;
                   justify-content: space-between;
+                  flex-shrink: 0;
                 "
               >
                 <n-text strong style="font-size: 16px">{{ currentTitle }}</n-text>
@@ -257,7 +261,7 @@
                   </n-tooltip>
                 </n-space>
               </n-layout-header>
-              <n-layout-content style="padding: 24px">
+              <n-layout-content class="scrollable-content" content-style="padding: 24px">
                 <AuthGate @login="showLogin = true">
                   <router-view />
                 </AuthGate>
@@ -532,7 +536,13 @@ function onAuthExpired() {
 // ── Responsive ────────────────────────────────────────────────────
 const router = useRouter()
 const route = useRoute()
-const collapsed = ref(false)
+// Sidebar collapsed state persists across reloads via localStorage —
+// the trigger-button click flips it through the `@collapse`/`@expand`
+// handlers, and the watcher below mirrors the change to storage.
+const collapsed = ref(localStorage.getItem('budget-sidebar-collapsed') === 'true')
+watch(collapsed, (v) => {
+  localStorage.setItem('budget-sidebar-collapsed', String(v))
+})
 const windowWidth = ref(window.innerWidth)
 const isMobile = computed(() => windowWidth.value < 768)
 
@@ -701,6 +711,24 @@ const isSettingsRoute = computed(() => activeKey.value.startsWith('settings/'))
 /* ── App header / sider logo (same height for visual alignment) ─── */
 .app-header {
   min-height: var(--app-header-h, 64px);
+}
+
+/* Inner layout: pinned header + scrolling body. `:deep` is required
+   because `<n-layout>` renders its own wrapper div. */
+.content-layout {
+  height: 100vh;
+}
+.content-layout :deep(.n-layout-scroll-container) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.scrollable-content {
+  flex: 1;
+  min-height: 0;
+}
+.scrollable-content :deep(.n-layout-scroll-container) {
+  overflow-y: auto;
 }
 
 /* ── Logo ──────────────────────────────────────────────────────── */
