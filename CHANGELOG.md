@@ -275,6 +275,19 @@
 
 ## Web (frontend)
 
+### [1.40.0] — 2026-05-24
+
+#### Added
+- **Deposit scope (банковская карта / наличные).** Транзакции и wishlist-итемы получили поле «Счёт» (`bank` / `cash`, default — `bank`).
+  - `Income/Expenses`: на каждой карточке (mobile) и в отдельной колонке таблицы (desktop) появляется `DepositChip` — кликабельная иконка, открывает dropdown переключения. В формах создания/редактирования — `n-radio-group` «Банковская карта» / «Наличные».
+  - `Forecast`: общий селектор «Счёт» в шапке (фильтрует прогноз по scope, передаёт `?deposit=` в `/api/statistics/forecast`); в форме добавления wishlist/regular — тот же radio-group.
+  - `Statistics`: селектор «Счёт» рядом с period picker'ом (desktop inline + mobile popover); параметр прокидывается в `summary` / `by-category` / `monthly`, а также в drill-down router-query (`/income?categories=…&deposit=…`).
+  - Initial balance (модалка): тоже принимает `deposit`, дефолт — `bank`.
+- **`utils/deposit.js`** — константы (`DEPOSIT_BANK` / `DEPOSIT_CASH` / `DEPOSIT_DEFAULT`), `DEPOSITS` metadata (label / shortLabel / `CardOutline`/`CashOutline` иконка из `@vicons/ionicons5`), `depositMeta()`, `normalizeDeposit()` сворачивает unknown→bank.
+- **`components/DepositChip.vue`** — переиспользуемый чип: read-only (просто иконка + опциональный label) или `editable` (NDropdown с двумя пунктами, эмитит `update:modelValue`/`change`).
+- **`stores/transactions.js`** — `filters.deposit` в стор, передаётся как `?deposit=` параметр в `/api/transactions`.
+- **`api.statistics.forecast(params)`** — теперь принимает query-параметры (раньше всегда был без аргументов).
+
 ### [1.39.2] — 2026-05-22
 
 #### Changed

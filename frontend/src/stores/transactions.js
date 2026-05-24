@@ -21,6 +21,7 @@ export function useTransactionsStore(scope = 'default') {
         categories: [],
         from: '',
         to: '',
+        deposit: '',
         includeDetailed: false,
       })
 
@@ -36,6 +37,7 @@ export function useTransactionsStore(scope = 'default') {
           }
           if (filters.value.from) params.from = filters.value.from
           if (filters.value.to) params.to = filters.value.to
+          if (filters.value.deposit) params.deposit = filters.value.deposit
           if (filters.value.includeDetailed) params.include_detailed = 'true'
 
           const { data } = await api.list(params)
@@ -83,6 +85,7 @@ export function useTransactionsStore(scope = 'default') {
           categories: [],
           from: '',
           to: '',
+          deposit: '',
           includeDetailed: false,
           ...f,
         }

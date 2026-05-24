@@ -75,7 +75,7 @@ export const statistics = {
   summary: (params) => api.get('/statistics/summary', { params }),
   byCategory: (params) => api.get('/statistics/by-category', { params }),
   monthly: (params) => api.get('/statistics/monthly', { params }),
-  forecast: () => api.get('/statistics/forecast'),
+  forecast: (params) => api.get('/statistics/forecast', { params }),
 }
 
 export const wishlist = {

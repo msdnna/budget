@@ -33,7 +33,7 @@
               <n-button v-if="ibRecord" size="small" quaternary type="error" @click="deleteIb">
                 <template #icon><n-icon :component="TrashOutline" /></template>
               </n-button>
-              <n-button size="small" type="primary" @click="showIbForm = true">
+              <n-button size="small" type="primary" @click="openIbForm">
                 {{ ibRecord ? 'Изменить' : 'Задать' }}
               </n-button>
             </n-space>
@@ -109,6 +109,18 @@
                     </n-form-item>
                   </n-grid-item>
                   <n-grid-item span="2">
+                    <n-form-item label="Счёт">
+                      <n-radio-group v-model:value="form.deposit" size="small">
+                        <n-radio-button v-for="d in DEPOSITS" :key="d.value" :value="d.value">
+                          <span class="dep-radio-content">
+                            <n-icon :component="d.icon" />
+                            {{ d.label }}
+                          </span>
+                        </n-radio-button>
+                      </n-radio-group>
+                    </n-form-item>
+                  </n-grid-item>
+                  <n-grid-item span="2">
                     <n-form-item label="Описание">
                       <n-input
                         v-model:value="form.description"
@@ -172,6 +184,14 @@
                     to="body"
                     @update:value="applyFilters"
                   />
+                  <n-select
+                    v-model:value="filterDeposit"
+                    :options="depositFilterOptions"
+                    size="small"
+                    style="width: 170px"
+                    to="body"
+                    @update:value="applyFilters"
+                  />
                 </n-space>
                 <!-- Mobile: иконка-кнопка с popover, чтобы фильтры не съедали
                    две полные строки в шапке списка. -->
@@ -204,6 +224,15 @@
                       :max-tag-count="2"
                       :render-label="renderCategoryLabel"
                       :render-tag="renderCategoryTag"
+                      to="body"
+                      @update:value="applyFilters"
+                    />
+                    <div class="filter-popover-label">Счёт</div>
+                    <n-select
+                      v-model:value="filterDeposit"
+                      :options="depositFilterOptions"
+                      size="small"
+                      style="width: 100%"
                       to="body"
                       @update:value="applyFilters"
                     />
@@ -369,6 +398,12 @@
                             <span class="tx-card-date">
                               {{ new Date(row.date).toLocaleDateString('ru-RU') }}
                             </span>
+                            <DepositChip
+                              :model-value="row.deposit"
+                              editable
+                              :icon-size="14"
+                              @change="(v) => changeDeposit(row, v)"
+                            />
                             <CategoryLabel
                               class="tx-card-category"
                               :name="row.category"
@@ -447,6 +482,16 @@
             placeholder="0.00"
           />
         </n-form-item>
+        <n-form-item label="Счёт">
+          <n-radio-group v-model:value="ibDeposit" size="small">
+            <n-radio-button v-for="d in DEPOSITS" :key="d.value" :value="d.value">
+              <span class="dep-radio-content">
+                <n-icon :component="d.icon" />
+                {{ d.label }}
+              </span>
+            </n-radio-button>
+          </n-radio-group>
+        </n-form-item>
       </n-form>
       <template #footer>
         <n-space justify="end">
@@ -518,6 +563,8 @@ import {
   NList,
   NListItem,
   NIcon,
+  NRadioGroup,
+  NRadioButton,
 } from 'naive-ui'
 import {
   ArrowBackOutline,
@@ -541,6 +588,8 @@ import FabButton from '@/components/FabButton.vue'
 import BulkFabRow from '@/components/BulkFabRow.vue'
 import SwipeableCard from '@/components/SwipeableCard.vue'
 import CategoryLabel from '@/components/CategoryLabel.vue'
+import DepositChip from '@/components/DepositChip.vue'
+import { DEPOSITS, DEPOSIT_DEFAULT, normalizeDeposit } from '@/utils/deposit'
 import { historyOptions, pushHistory } from '@/utils/inputHistory'
 import { users as usersApi, transactions as txApi } from '@/api'
 import {
@@ -558,9 +607,17 @@ const formRef = ref(null)
 const saving = ref(false)
 const filterRange = ref(null)
 const filterCategories = ref([])
+const filterDeposit = ref('')
 const route = useRoute()
 
-const form = ref({ amount: null, date: Date.now(), category: '', source: '', description: '' })
+const form = ref({
+  amount: null,
+  date: Date.now(),
+  category: '',
+  source: '',
+  description: '',
+  deposit: DEPOSIT_DEFAULT,
+})
 
 // LocalStorage-кэш недавно введённых «Источников» (NAutoComplete options).
 // Re-load после submit'a — чтобы только что добавленное значение всплыло в
@@ -595,7 +652,14 @@ onUnmounted(() => window.removeEventListener('resize', onWinResize))
 
 function enterMobileAdd() {
   mobileEditing.value = null
-  form.value = { amount: null, date: Date.now(), category: '', source: '', description: '' }
+  form.value = {
+    amount: null,
+    date: Date.now(),
+    category: '',
+    source: '',
+    description: '',
+    deposit: DEPOSIT_DEFAULT,
+  }
   mobileAdding.value = true
 }
 
@@ -608,6 +672,7 @@ function enterMobileEdit(row) {
     category: row.category,
     source: row.source || '',
     description: row.description || '',
+    deposit: normalizeDeposit(row.deposit),
   }
 }
 
@@ -655,6 +720,7 @@ const ibMonth = ref(Date.now())
 const ibRecord = ref(null)
 const showIbForm = ref(false)
 const ibAmount = ref(null)
+const ibDeposit = ref(DEPOSIT_DEFAULT)
 const ibSaving = ref(false)
 
 async function loadInitialBalance() {
@@ -670,25 +736,34 @@ async function loadInitialBalance() {
   }
 }
 
+function openIbForm() {
+  ibAmount.value = ibRecord.value?.amount ?? null
+  ibDeposit.value = normalizeDeposit(ibRecord.value?.deposit)
+  showIbForm.value = true
+}
+
 async function saveIb() {
   if (!ibAmount.value) return
   ibSaving.value = true
   try {
     const d = new Date(ibMonth.value)
     const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
+    const deposit = normalizeDeposit(ibDeposit.value)
     if (ibRecord.value) {
-      await txApi.update(ibRecord.value.id, { amount: ibAmount.value })
+      await txApi.update(ibRecord.value.id, { amount: ibAmount.value, deposit })
     } else {
       await txApi.create({
         type: 'initial_balance',
         amount: ibAmount.value,
         date,
         category: 'Начальный баланс',
+        deposit,
       })
     }
     await loadInitialBalance()
     showIbForm.value = false
     ibAmount.value = null
+    ibDeposit.value = DEPOSIT_DEFAULT
     message.success('Начальный баланс сохранён')
   } catch (e) {
     message.error(e.message)
@@ -842,6 +917,7 @@ async function submit() {
       category: cat,
       source: form.value.source,
       description: form.value.description,
+      deposit: normalizeDeposit(form.value.deposit),
     }
     if (mobileEditing.value) {
       await store.update(mobileEditing.value.id, payload)
@@ -856,7 +932,14 @@ async function submit() {
     // отфильтрует сам pushHistory.
     pushHistory('income-source', form.value.source)
     refreshSourceHistory()
-    form.value = { amount: null, date: Date.now(), category: '', source: '', description: '' }
+    form.value = {
+      amount: null,
+      date: Date.now(),
+      category: '',
+      source: '',
+      description: '',
+      deposit: DEPOSIT_DEFAULT,
+    }
     if (isMobile.value) {
       mobileAdding.value = false
       mobileEditing.value = null
@@ -884,6 +967,7 @@ function fillFromTemplate(row) {
     category: row.category,
     source: row.source || '',
     description: row.description || '',
+    deposit: normalizeDeposit(row.deposit),
   }
   if (isMobile.value) {
     // На мобилке форма скрыта пока не нажат FAB-«+» / тап по записи —
@@ -906,6 +990,7 @@ function applyFilters() {
     f.from = fmtLocalDate(filterRange.value[0])
     f.to = fmtLocalDate(filterRange.value[1])
   }
+  if (filterDeposit.value) f.deposit = filterDeposit.value
   store.setFilters(f)
 }
 
@@ -914,14 +999,21 @@ const activeFilterCount = computed(() => {
   let n = 0
   if (filterRange.value) n += 1
   if (filterCategories.value?.length) n += 1
+  if (filterDeposit.value) n += 1
   return n
 })
 
 function resetFilters() {
   filterRange.value = null
   filterCategories.value = []
+  filterDeposit.value = ''
   applyFilters()
 }
+
+const depositFilterOptions = [
+  { label: 'Все', value: '' },
+  ...DEPOSITS.map((d) => ({ label: d.label, value: d.value })),
+]
 
 // ── Inline cell editing ───────────────────────────────────────────────────────
 
@@ -973,6 +1065,15 @@ async function openReassign(row) {
     } finally {
       loadingUsers.value = false
     }
+  }
+}
+
+async function changeDeposit(row, deposit) {
+  try {
+    await store.update(row.id, { deposit: normalizeDeposit(deposit) })
+    message.success(`Счёт: ${deposit === 'cash' ? 'Наличные' : 'Банковская карта'}`)
+  } catch (e) {
+    message.error(e.message)
   }
 }
 
@@ -1272,6 +1373,19 @@ const columns = computed(() => {
           default: () => `${row.created_by.display_name} · нажмите для смены`,
         })
       },
+    },
+    {
+      title: 'Счёт',
+      key: 'deposit',
+      width: 44,
+      align: 'center',
+      render: (row) =>
+        h(DepositChip, {
+          modelValue: row.deposit,
+          editable: true,
+          iconSize: 16,
+          onChange: (v) => changeDeposit(row, v),
+        }),
     },
     {
       title: 'Дата',
@@ -1644,6 +1758,14 @@ onMounted(() => {
 }
 .swipe-action-danger {
   background: #d03050;
+}
+
+/* Deposit radio-button content (icon + label inline). */
+.dep-radio-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  line-height: 1;
 }
 
 /* Bulk-mode marker (replaces author avatar on selected cards). */
