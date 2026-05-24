@@ -33,12 +33,14 @@ class ExpensesViewModel(private val serverUrl: String) : ViewModel() {
     private val _filterCats = MutableStateFlow<Set<String>>(emptySet())
     private val _filterFrom = MutableStateFlow<String?>(null)
     private val _filterTo = MutableStateFlow<String?>(null)
+    private val _filterDeposit = MutableStateFlow<String?>(null)
     private val _selectedIds = MutableStateFlow<Set<String>>(emptySet())
     private val _includeDetailed = MutableStateFlow(false)
 
     val filterCats = _filterCats.asStateFlow()
     val filterFrom = _filterFrom.asStateFlow()
     val filterTo = _filterTo.asStateFlow()
+    val filterDeposit = _filterDeposit.asStateFlow()
     val selectedIds = _selectedIds.asStateFlow()
     val includeDetailed = _includeDetailed.asStateFlow()
     val categories: StateFlow<List<Category>> = combine(
@@ -48,21 +50,28 @@ class ExpensesViewModel(private val serverUrl: String) : ViewModel() {
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    val uiState: StateFlow<ExpensesUiState> = combine(_filterCats, _filterFrom, _filterTo, _includeDetailed) { c, f, t, inc ->
-        FilterTuple(c, f, t, inc)
-    }
-        .flatMapLatest { (cats, from, to, inc) ->
+    val uiState: StateFlow<ExpensesUiState> = combine(
+        _filterCats, _filterFrom, _filterTo, _includeDetailed, _filterDeposit,
+    ) { c, f, t, inc, dep -> FilterTuple(c, f, t, inc, dep) }
+        .flatMapLatest { ft ->
             TransactionRepository.observeFiltered(
                 type = "expense",
-                categories = cats.takeIf { it.isNotEmpty() },
-                from = from,
-                to = to,
-                includeDetailed = inc,
+                categories = ft.cats.takeIf { it.isNotEmpty() },
+                from = ft.from,
+                to = ft.to,
+                includeDetailed = ft.includeDetailed,
+                deposit = ft.deposit,
             ).map { txs -> ExpensesUiState(transactions = txs, total = txs.size, loading = false) }
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, ExpensesUiState(loading = true))
 
-    private data class FilterTuple(val cats: Set<String>, val from: String?, val to: String?, val includeDetailed: Boolean)
+    private data class FilterTuple(
+        val cats: Set<String>,
+        val from: String?,
+        val to: String?,
+        val includeDetailed: Boolean,
+        val deposit: String?,
+    )
 
     fun setIncludeDetailed(v: Boolean) {
         _includeDetailed.value = v
@@ -98,6 +107,10 @@ class ExpensesViewModel(private val serverUrl: String) : ViewModel() {
     fun setDateRange(from: String?, to: String?) {
         _filterFrom.value = from
         _filterTo.value = to
+        _page.value = 1
+    }
+    fun setFilterDeposit(deposit: String?) {
+        _filterDeposit.value = deposit?.takeIf { it.isNotBlank() }
         _page.value = 1
     }
     fun loadMore() { /* no-op: full list is always loaded from Room */ }
@@ -152,6 +165,7 @@ class ExpensesViewModel(private val serverUrl: String) : ViewModel() {
                 source = req.source,
                 purpose = req.purpose,
                 description = req.description,
+                deposit = req.deposit,
                 wishlistId = req.wishlistId.orEmpty(),
             )
             CategoryUsage.recordUse("expense", req.category)
@@ -167,6 +181,7 @@ class ExpensesViewModel(private val serverUrl: String) : ViewModel() {
             source = req.source,
             purpose = req.purpose,
             description = req.description,
+            deposit = req.deposit,
             createdBy = req.createdBy,
         )
         if (!req.category.isNullOrBlank()) CategoryUsage.recordUse("expense", req.category)

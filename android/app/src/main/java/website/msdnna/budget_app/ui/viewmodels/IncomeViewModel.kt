@@ -29,6 +29,7 @@ class IncomeViewModel(private val serverUrl: String) : ViewModel() {
     private val _filterCats = MutableStateFlow<Set<String>>(emptySet())
     private val _filterFrom = MutableStateFlow<String?>(null)
     private val _filterTo = MutableStateFlow<String?>(null)
+    private val _filterDeposit = MutableStateFlow<String?>(null)
     private val _ibYear = MutableStateFlow(now.get(Calendar.YEAR))
     private val _ibMonth = MutableStateFlow(now.get(Calendar.MONTH) + 1)
     private val _selectedIds = MutableStateFlow<Set<String>>(emptySet())
@@ -36,6 +37,7 @@ class IncomeViewModel(private val serverUrl: String) : ViewModel() {
     val filterCats = _filterCats.asStateFlow()
     val filterFrom = _filterFrom.asStateFlow()
     val filterTo = _filterTo.asStateFlow()
+    val filterDeposit = _filterDeposit.asStateFlow()
     val selectedIds = _selectedIds.asStateFlow()
     val categories: StateFlow<List<Category>> = combine(
         CategoryRepository.income,
@@ -46,18 +48,26 @@ class IncomeViewModel(private val serverUrl: String) : ViewModel() {
     val ibMonth = _ibMonth.asStateFlow()
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    val uiState: StateFlow<IncomeUiState> = combine(_filterCats, _filterFrom, _filterTo) { c, f, t ->
-        Triple(c, f, t)
-    }
-        .flatMapLatest { (cats, from, to) ->
+    val uiState: StateFlow<IncomeUiState> = combine(
+        _filterCats, _filterFrom, _filterTo, _filterDeposit,
+    ) { c, f, t, d -> FilterTuple(c, f, t, d) }
+        .flatMapLatest { (cats, from, to, deposit) ->
             TransactionRepository.observeFiltered(
                 type = "income",
                 categories = cats.takeIf { it.isNotEmpty() },
                 from = from,
                 to = to,
+                deposit = deposit,
             ).map { txs -> IncomeUiState(transactions = txs, total = txs.size, loading = false) }
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, IncomeUiState(loading = true))
+
+    private data class FilterTuple(
+        val cats: Set<String>,
+        val from: String?,
+        val to: String?,
+        val deposit: String?,
+    )
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val ibRecord: StateFlow<Transaction?> = combine(_ibYear, _ibMonth) { y, m -> y to m }
@@ -104,6 +114,10 @@ class IncomeViewModel(private val serverUrl: String) : ViewModel() {
         _filterTo.value = to
         _page.value = 1
     }
+    fun setFilterDeposit(deposit: String?) {
+        _filterDeposit.value = deposit?.takeIf { it.isNotBlank() }
+        _page.value = 1
+    }
     fun loadMore() { /* no-op: Room observes full list */ }
 
     fun ibNavigateBack() {
@@ -120,20 +134,21 @@ class IncomeViewModel(private val serverUrl: String) : ViewModel() {
         } else _ibMonth.value++
     }
 
-    fun saveInitialBalance(amount: Double) {
+    fun saveInitialBalance(amount: Double, deposit: String = "bank") {
         viewModelScope.launch {
             val year = _ibYear.value
             val month = _ibMonth.value
             val date = "%04d-%02d-01".format(year, month)
             val current = ibRecord.value
             if (current != null) {
-                TransactionRepository.update(current.id, amount = amount)
+                TransactionRepository.update(current.id, amount = amount, deposit = deposit)
             } else {
                 TransactionRepository.create(
                     type = "initial_balance",
                     amount = amount,
                     date = date,
                     category = "Начальный баланс",
+                    deposit = deposit,
                 )
             }
         }
@@ -188,6 +203,7 @@ class IncomeViewModel(private val serverUrl: String) : ViewModel() {
                 source = req.source,
                 purpose = req.purpose,
                 description = req.description,
+                deposit = req.deposit,
             )
             if (req.type == "income") CategoryUsage.recordUse("income", req.category)
         }
@@ -202,6 +218,7 @@ class IncomeViewModel(private val serverUrl: String) : ViewModel() {
             source = req.source,
             purpose = req.purpose,
             description = req.description,
+            deposit = req.deposit,
             createdBy = req.createdBy,
         )
         if (!req.category.isNullOrBlank()) CategoryUsage.recordUse("income", req.category)

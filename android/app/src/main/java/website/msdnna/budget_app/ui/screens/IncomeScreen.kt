@@ -387,9 +387,10 @@ fun IncomeScreen(
         AddInitialBalanceSheet(
             primaryColor = primaryColor,
             currentAmount = ibRecord?.amount,
+            currentDeposit = ibRecord?.deposit,
             onDismiss = { showIbForm = false },
-            onSave = { amount ->
-                vm.saveInitialBalance(amount)
+            onSave = { amount, deposit ->
+                vm.saveInitialBalance(amount, deposit)
                 showIbForm = false
             }
         )
@@ -648,11 +649,19 @@ fun SwipeableTransactionCard(
                 }
 
                 Column(Modifier.weight(1f)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
                         Text(
                             formatDate(transaction.date),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        DepositChip(
+                            value = transaction.deposit,
+                            iconSize = 14.dp,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         CategoryLabel(
                             name = transaction.category,
@@ -770,6 +779,7 @@ fun TransactionDetailSheet(
     var editSource by remember { mutableStateOf(transaction.source ?: "") }
     var editPurpose by remember { mutableStateOf(transaction.purpose ?: "") }
     var editDesc by remember { mutableStateOf(transaction.description ?: "") }
+    var editDeposit by remember { mutableStateOf(normalizeDeposit(transaction.deposit)) }
     var catExpanded by remember { mutableStateOf(false) }
 
     val catFiltered = remember(editCatInput, categories) {
@@ -1106,6 +1116,9 @@ fun TransactionDetailSheet(
                             colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = primaryColor)
                         )
 
+                        Text("Счёт", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 8.dp))
+                        DepositSegmented(value = editDeposit, onChange = { editDeposit = it })
+
                         Spacer(Modifier.height(8.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             OutlinedButton(onClick = { isEditing = false }, modifier = Modifier.weight(1f)) {
@@ -1123,7 +1136,8 @@ fun TransactionDetailSheet(
                                                 category = editCatInput.trim().ifBlank { editCategory },
                                                 source = editSource.ifBlank { null },
                                                 purpose = editPurpose.ifBlank { null },
-                                                description = editDesc.ifBlank { null }
+                                                description = editDesc.ifBlank { null },
+                                                deposit = editDeposit,
                                             )
                                         )
                                         saving = false
@@ -1222,6 +1236,7 @@ fun AddIncomeSheet(
     var category by remember { mutableStateOf(template?.category ?: "") }
     var source by remember { mutableStateOf(template?.source ?: "") }
     var desc by remember { mutableStateOf(template?.description ?: "") }
+    var deposit by remember { mutableStateOf(normalizeDeposit(template?.deposit)) }
     var catExpanded by remember { mutableStateOf(false) }
     var catInput by remember { mutableStateOf(template?.category ?: "") }
 
@@ -1351,6 +1366,9 @@ fun AddIncomeSheet(
                 colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = primaryColor)
             )
 
+            Text("Счёт", style = MaterialTheme.typography.labelMedium)
+            DepositSegmented(value = deposit, onChange = { deposit = it })
+
             Spacer(Modifier.height(4.dp))
             Button(
                 onClick = {
@@ -1361,7 +1379,8 @@ fun AddIncomeSheet(
                             type = "income", amount = amtD, date = date,
                             category = cat,
                             source = source.ifBlank { null },
-                            description = desc.ifBlank { null }
+                            description = desc.ifBlank { null },
+                            deposit = deposit,
                         )
                     )
                 },
@@ -1380,10 +1399,12 @@ fun AddIncomeSheet(
 fun AddInitialBalanceSheet(
     primaryColor: Color,
     currentAmount: Double?,
+    currentDeposit: String? = null,
     onDismiss: () -> Unit,
-    onSave: (Double) -> Unit
+    onSave: (Double, String) -> Unit
 ) {
     var amount by remember { mutableStateOf(currentAmount?.let { if (it == 0.0) "" else it.toInt().toString() } ?: "") }
+    var deposit by remember { mutableStateOf(normalizeDeposit(currentDeposit)) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -1406,11 +1427,14 @@ fun AddInitialBalanceSheet(
                 colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = primaryColor)
             )
 
+            Text("Счёт", style = MaterialTheme.typography.labelMedium)
+            DepositSegmented(value = deposit, onChange = { deposit = it })
+
             Spacer(Modifier.height(4.dp))
             Button(
                 onClick = {
                     val amtD = amount.replace(',', '.').toDoubleOrNull() ?: return@Button
-                    onSave(amtD)
+                    onSave(amtD, deposit)
                 },
                 modifier = Modifier.fillMaxWidth().height(48.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = primaryColor),

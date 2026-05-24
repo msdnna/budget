@@ -51,6 +51,7 @@ data class Transaction(
     val purpose: String? = null,
     val description: String? = null,
     val hidden: Boolean = false,
+    val deposit: String = "bank",
     @SerializedName("created_by") val createdBy: UserInfo? = null,
     @SerializedName("created_at") val createdAt: String = "",
     val version: Int = 0,
@@ -104,6 +105,7 @@ data class CreateTransactionRequest(
     val source: String? = null,
     val purpose: String? = null,
     val description: String? = null,
+    val deposit: String = "bank",
     @SerializedName("wishlist_id") val wishlistId: String? = null,
 )
 
@@ -147,6 +149,7 @@ data class RegularItem(
     @SerializedName("monthly_cost") val monthlyCost: Double = 0.0,
     val frequency: String = "monthly",
     val category: String = "",
+    val deposit: String = "bank",
     @SerializedName("paid_this_period") val paidThisPeriod: Boolean = false,
     @SerializedName("paid_amount") val paidAmount: Double = 0.0,
     @SerializedName("paid_count") val paidCount: Int = 0,
@@ -165,6 +168,7 @@ data class WishlistItem(
     @SerializedName("is_favorite") val isFavorite: Boolean = false,
     val purchased: Boolean = false,
     val frequency: String = "monthly",
+    val deposit: String = "bank",
     val notes: String? = null,
     @SerializedName("created_by") val createdBy: UserInfo? = null,
     @SerializedName("created_at") val createdAt: String = "",
@@ -180,6 +184,7 @@ data class CreateWishlistRequest(
     val category: String,
     val frequency: String = "once",
     val priority: Int = 5,
+    val deposit: String = "bank",
     val notes: String? = null
 )
 
@@ -190,6 +195,7 @@ data class UpdateTransactionRequest(
     val source: String? = null,
     val purpose: String? = null,
     val description: String? = null,
+    val deposit: String? = null,
     @SerializedName("created_by") val createdBy: UserInfo? = null
 )
 
@@ -199,6 +205,7 @@ data class UpdateWishlistRequest(
     val category: String? = null,
     val frequency: String? = null,
     val purchased: Boolean? = null,
+    val deposit: String? = null,
     val notes: String? = null,
     @SerializedName("created_by") val createdBy: UserInfo? = null
 )

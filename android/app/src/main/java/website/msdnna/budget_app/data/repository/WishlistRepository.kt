@@ -30,6 +30,7 @@ object WishlistRepository {
         category: String,
         priority: Int = 5,
         frequency: String = "once",
+        deposit: String = "bank",
         notes: String? = null,
     ): WishlistItem {
         val now = Instant.now().toString()
@@ -54,6 +55,7 @@ object WishlistRepository {
             updatedAt = now,
             deletedAt = null,
             syncStatus = SyncStatus.PENDING_CREATE,
+            deposit = deposit.ifBlank { "bank" },
         )
         dao.upsert(entity)
         SyncWorker.enqueue(AppContainer.appContext)
@@ -68,6 +70,7 @@ object WishlistRepository {
         priority: Int? = null,
         frequency: String? = null,
         purchased: Boolean? = null,
+        deposit: String? = null,
         notes: String? = null,
         createdBy: UserInfo? = null,
     ): WishlistItem? {
@@ -84,6 +87,7 @@ object WishlistRepository {
             priority = priority ?: existing.priority,
             frequency = frequency ?: existing.frequency,
             purchased = purchased ?: existing.purchased,
+            deposit = deposit?.ifBlank { "bank" } ?: existing.deposit,
             notes = notes ?: existing.notes,
             createdById = createdBy?.userId ?: existing.createdById,
             createdByName = createdBy?.displayName ?: existing.createdByName,

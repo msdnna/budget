@@ -32,6 +32,7 @@ interface TransactionDao {
           AND (:type IS NULL OR type = :type)
           AND (:from IS NULL OR date >= :from)
           AND (:to IS NULL OR date <= :to)
+          AND (:deposit IS NULL OR deposit = :deposit)
         ORDER BY date DESC
     """
     )
@@ -40,6 +41,7 @@ interface TransactionDao {
         from: String?,
         to: String?,
         includeDetailed: Boolean = false,
+        deposit: String? = null,
         pendingDelete: String = SyncStatus.PENDING_DELETE,
     ): Flow<List<TransactionEntity>>
 

@@ -320,6 +320,28 @@ fun ForecastScreen(
                 // recycling as separate items.
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        val forecastDeposit by vm.filterDeposit.collectAsState()
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text("Счёт:", style = MaterialTheme.typography.labelMedium)
+                            FilterChip(
+                                selected = forecastDeposit == null,
+                                onClick = { vm.setFilterDeposit(null) },
+                                label = { Text("Все") },
+                            )
+                            DEPOSITS.forEach { meta ->
+                                FilterChip(
+                                    selected = forecastDeposit == meta.value,
+                                    onClick = { vm.setFilterDeposit(meta.value) },
+                                    label = { Text(meta.label) },
+                                    leadingIcon = {
+                                        Icon(meta.icon, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    },
+                                )
+                            }
+                        }
                         when {
                             uiState.loading -> ForecastSummarySkeleton()
                             uiState.error != null -> OfflineView(
@@ -1317,6 +1339,7 @@ fun WishlistInteractiveSheet(
     var editCatInput by remember { mutableStateOf(item.category) }
     var editFrequency by remember { mutableStateOf(item.frequency) }
     var editNotes by remember { mutableStateOf(item.notes ?: "") }
+    var editDeposit by remember { mutableStateOf(normalizeDeposit(item.deposit)) }
     var catExpanded by remember { mutableStateOf(false) }
     var freqExpanded by remember { mutableStateOf(false) }
 
@@ -1584,6 +1607,9 @@ fun WishlistInteractiveSheet(
                             colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = primaryColor)
                         )
 
+                        Text("Счёт", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 8.dp))
+                        DepositSegmented(value = editDeposit, onChange = { editDeposit = it })
+
                         Spacer(Modifier.height(8.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             OutlinedButton(onClick = { isEditing = false }, modifier = Modifier.weight(1f)) {
@@ -1605,6 +1631,7 @@ fun WishlistInteractiveSheet(
                                                 category = editCatInput.trim().ifBlank { editCategory },
                                                 frequency = editFrequency,
                                                 notes = editNotes.ifBlank { null },
+                                                deposit = editDeposit,
                                             )
                                         )
                                         saving = false
@@ -1714,6 +1741,7 @@ fun AddWishlistSheet(
     var cost by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("") }
     var notes by remember { mutableStateOf("") }
+    var deposit by remember { mutableStateOf(DEPOSIT_DEFAULT) }
     // Default recurring frequency; only consulted when kind == "regular".
     var frequency by remember { mutableStateOf("monthly") }
     var catExpanded by remember { mutableStateOf(false) }
@@ -1920,6 +1948,9 @@ fun AddWishlistSheet(
                 colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = primaryColor)
             )
 
+            Text("Счёт", style = MaterialTheme.typography.labelMedium)
+            DepositSegmented(value = deposit, onChange = { deposit = it })
+
             Spacer(Modifier.height(4.dp))
             Button(
                 onClick = {
@@ -1931,6 +1962,7 @@ fun AddWishlistSheet(
                             name = name, estimatedCost = costD,
                             category = catInput.trim().ifBlank { category },
                             frequency = freq,
+                            deposit = deposit,
                             notes = notes.ifBlank { null },
                         )
                     )
