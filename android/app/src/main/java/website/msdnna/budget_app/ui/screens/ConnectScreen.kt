@@ -11,15 +11,18 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -37,7 +40,14 @@ import website.msdnna.budget_app.data.api.RetrofitClient
 import website.msdnna.budget_app.data.discovery.DiscoveredServer
 import website.msdnna.budget_app.data.discovery.ServerDiscovery
 import website.msdnna.budget_app.data.model.LoginRequest
+import website.msdnna.budget_app.data.update.ApkDownloader
+import website.msdnna.budget_app.data.update.ApkInstaller
+import website.msdnna.budget_app.data.update.DownloadProgress
+import website.msdnna.budget_app.data.update.UpdateState
+import website.msdnna.budget_app.data.update.resolveUpdate
+import website.msdnna.budget_app.ui.components.MandatoryUpdateDialog
 import website.msdnna.budget_app.ui.components.MbLogo
+import website.msdnna.budget_app.ui.components.OptionalUpdateProgressDialog
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -107,6 +117,60 @@ fun ConnectScreen(
     val passwordFocus = remember { FocusRequester() }
 
     val fullServerUrl by remember { derivedStateOf { "${if (useHttps) "https" else "http"}://${serverHost.trim()}" } }
+
+    // In-app update safety net for users locked out of login (e.g. broken auth
+    // flow in their installed version): once the server is reachable, fetch
+    // /api/version and surface an update offer below the login form so they
+    // can self-recover without sideloading an APK by hand.
+    var updateState by remember { mutableStateOf<UpdateState>(UpdateState.None) }
+    var downloadProgress by remember { mutableStateOf<DownloadProgress?>(null) }
+    var bannerDismissed by remember { mutableStateOf(false) }
+    var canInstallApk by remember { mutableStateOf(ApkInstaller.canInstall(context)) }
+
+    suspend fun fetchUpdateState(url: String): UpdateState = try {
+        val v = RetrofitClient.getService(url).getVersion()
+        resolveUpdate(
+            current = BuildConfig.VERSION_NAME,
+            latest = v.androidLatest,
+            minRequired = v.androidMinRequired,
+            serverUrl = url,
+        )
+    } catch (_: Exception) {
+        UpdateState.None
+    }
+
+    // Run the version probe whenever we land on step 2 with a non-empty host —
+    // covers both the post-health-check transition and the cold-start case
+    // where savedServerUrl already put us on the login form.
+    LaunchedEffect(step, fullServerUrl) {
+        if (step == 2 && serverHost.isNotBlank()) {
+            updateState = fetchUpdateState(fullServerUrl)
+        }
+    }
+
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                canInstallApk = ApkInstaller.canInstall(context)
+                if (step == 2 && serverHost.isNotBlank()) {
+                    scope.launch { updateState = fetchUpdateState(fullServerUrl) }
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    fun startUpdateDownload(apkUrl: String, version: String) {
+        downloadProgress = DownloadProgress.Running(0, 0)
+        scope.launch {
+            ApkDownloader.download(context, apkUrl, version).collect { p ->
+                downloadProgress = p
+                if (p is DownloadProgress.Done) ApkInstaller.install(context, p.file)
+            }
+        }
+    }
 
     fun connectStep() {
         val host = serverHost.trim()
@@ -449,6 +513,23 @@ fun ConnectScreen(
                                     Text("Войти", fontWeight = FontWeight.SemiBold)
                                 }
                             }
+
+                            val update = updateState
+                            if (update is UpdateState.Optional && !bannerDismissed) {
+                                Spacer(Modifier.height(16.dp))
+                                ConnectUpdateBanner(
+                                    latestVersion = update.latest,
+                                    primaryColor = primaryColor,
+                                    onClick = {
+                                        if (!canInstallApk) {
+                                            ApkInstaller.openUnknownSourcesSettings(context)
+                                        } else {
+                                            startUpdateDownload(update.apkUrl, update.latest)
+                                        }
+                                    },
+                                    onDismiss = { bannerDismissed = true },
+                                )
+                            }
                         }
                     } // Column wrapper
                 } // AnimatedContent
@@ -464,6 +545,77 @@ fun ConnectScreen(
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
         )
+    }
+
+    val update = updateState
+    val dp = downloadProgress
+    if (update is UpdateState.Optional && dp != null) {
+        OptionalUpdateProgressDialog(
+            latestVersion = update.latest,
+            primaryColor = primaryColor,
+            progress = dp,
+            onDismiss = { downloadProgress = null },
+        )
+    }
+    if (update is UpdateState.Required) {
+        MandatoryUpdateDialog(
+            latestVersion = update.latest,
+            primaryColor = primaryColor,
+            progress = dp,
+            canInstall = canInstallApk,
+            onDownload = { startUpdateDownload(update.apkUrl, update.latest) },
+            onGrantInstallPermission = { ApkInstaller.openUnknownSourcesSettings(context) },
+        )
+    }
+}
+
+@Composable
+private fun ConnectUpdateBanner(
+    latestVersion: String,
+    primaryColor: Color,
+    onClick: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        tonalElevation = 0.dp,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Icon(
+                Icons.Default.SystemUpdate,
+                contentDescription = null,
+                tint = primaryColor,
+                modifier = Modifier.size(22.dp),
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    "Доступно обновление приложения",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    "Установить v$latestVersion",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
+                Icon(
+                    Icons.Default.Close,
+                    contentDescription = "Скрыть",
+                    modifier = Modifier.size(18.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
 }
 
