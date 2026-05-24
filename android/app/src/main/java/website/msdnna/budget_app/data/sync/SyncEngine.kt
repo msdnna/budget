@@ -5,6 +5,7 @@ import com.google.gson.Gson
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
 import website.msdnna.budget_app.data.api.RetrofitClient
 import website.msdnna.budget_app.data.db.AppDatabase
 import website.msdnna.budget_app.data.db.SyncStatus
@@ -40,21 +41,54 @@ class SyncEngine(
 ) {
     private val gson = Gson()
 
+    // Guards against concurrent sync(): WorkManager may enqueue a second
+    // worker (CRUD enqueue + NetworkObserver + screen-resume refresh all
+    // race), and a second pull cancelling the first mid-stream would lose
+    // the partial-pull's lastSyncToken update — the next pull then refetches
+    // 15k+ rows from scratch, which the user sees as the banner resetting
+    // from "5500 / 23187" back to zero.
+    private val syncMutex = Mutex()
+
     enum class Result { Success, Skipped, Failed }
+
+    companion object {
+        // Transactions can run into tens of thousands on first sync. Chunking
+        // the merge loop lets us emit progress ticks at a sensible cadence
+        // (~30 updates for a 15k pull) without spamming the StateFlow.
+        private const val TX_CHUNK_SIZE = 500
+    }
 
     suspend fun sync(serverUrl: String): Result {
         if (serverUrl.isBlank() || RetrofitClient.authToken.isBlank()) return Result.Skipped
+        // Try-lock semantics: if another sync is already running, the caller
+        // is a duplicate (concurrent CRUD enqueue, NetworkObserver re-fire,
+        // periodic worker tick) and should be a no-op rather than stack up.
+        // The in-flight sync covers the work the caller wanted anyway —
+        // pending mutations live in Room with PENDING_* status, and the next
+        // periodic tick + post-pull pass will drain them.
+        if (!syncMutex.tryLock()) {
+            Log.i(TAG, "sync already in progress — skipping duplicate trigger")
+            return Result.Skipped
+        }
         return try {
             val api = RetrofitClient.getService(serverUrl)
+            SyncProgressBus.set(SyncProgress.Running(SyncProgress.Phase.PUSH, 0, 0))
             push(api)
             pull(api)
+            SyncProgressBus.set(SyncProgress.Running(SyncProgress.Phase.POST, 0, 0))
             postPullRefresh(serverUrl)
+            SyncProgressBus.set(SyncProgress.Done)
             Result.Success
         } catch (ce: CancellationException) {
+            // Cancelled (e.g. logout / WorkManager kill) — leave the bus at
+            // the last running state; the next worker run will reset it.
             throw ce
         } catch (e: Exception) {
             Log.w(TAG, "sync failed", e)
+            SyncProgressBus.set(SyncProgress.Failed(e.message))
             Result.Failed
+        } finally {
+            syncMutex.unlock()
         }
     }
 
@@ -252,16 +286,55 @@ class SyncEngine(
 
     private suspend fun pull(api: website.msdnna.budget_app.data.api.ApiService) {
         val since = prefs.lastSyncToken.first()
+        SyncProgressBus.set(SyncProgress.Running(SyncProgress.Phase.FETCH, 0, 0))
         val resp = api.syncPull(since)
 
-        for (t in resp.transactions) mergeTransaction(t)
-        for (w in resp.wishlist) mergeWishlist(w)
-        for (c in resp.categories) mergeCategory(c)
+        // Order matters for UX: wishlist + categories are small (hundreds at
+        // most) and populate otherwise-empty screens fast. Transactions can
+        // run to tens of thousands and they're chunked below so the banner /
+        // notification show honest progress instead of freezing on phase 1.
+        val wlTotal = resp.wishlist.size
+        SyncProgressBus.set(SyncProgress.Running(SyncProgress.Phase.WISHLIST, 0, wlTotal))
+        for ((i, w) in resp.wishlist.withIndex()) {
+            mergeWishlist(w)
+            if (shouldTickWishlist(i, wlTotal)) {
+                SyncProgressBus.set(SyncProgress.Running(SyncProgress.Phase.WISHLIST, i + 1, wlTotal))
+            }
+        }
+        if (wlTotal > 0) {
+            SyncProgressBus.set(SyncProgress.Running(SyncProgress.Phase.WISHLIST, wlTotal, wlTotal))
+        }
+
+        val catTotal = resp.categories.size
+        SyncProgressBus.set(SyncProgress.Running(SyncProgress.Phase.CATEGORIES, 0, catTotal))
+        for ((i, c) in resp.categories.withIndex()) {
+            mergeCategory(c)
+            if (shouldTickWishlist(i, catTotal)) {
+                SyncProgressBus.set(SyncProgress.Running(SyncProgress.Phase.CATEGORIES, i + 1, catTotal))
+            }
+        }
+        if (catTotal > 0) {
+            SyncProgressBus.set(SyncProgress.Running(SyncProgress.Phase.CATEGORIES, catTotal, catTotal))
+        }
+
+        val txTotal = resp.transactions.size
+        SyncProgressBus.set(SyncProgress.Running(SyncProgress.Phase.TRANSACTIONS, 0, txTotal))
+        var processed = 0
+        for (chunk in resp.transactions.chunked(TX_CHUNK_SIZE)) {
+            for (t in chunk) mergeTransaction(t)
+            processed += chunk.size
+            SyncProgressBus.set(SyncProgress.Running(SyncProgress.Phase.TRANSACTIONS, processed, txTotal))
+        }
 
         if (resp.serverTime.isNotBlank()) {
             prefs.setLastSyncToken(resp.serverTime)
         }
     }
+
+    /** Skip per-row emissions for tiny lists where 1-by-1 ticks would just
+     *  flicker the UI without informational value. */
+    private fun shouldTickWishlist(index: Int, total: Int): Boolean =
+        total > 50 && (index + 1) % 25 == 0
 
     private suspend fun mergeTransaction(remote: Transaction) {
         val local = db.transactions().findById(remote.id)
