@@ -6,6 +6,33 @@
   --nav-item: #999999;
   --divider: #d9d9d9;
   --divider-hover: #aaaaaa;
+  --scrollbar-thumb: rgba(0, 0, 0, 0.18);
+  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.32);
+}
+
+/* Themed scrollbars — both Firefox (`scrollbar-*` props) and WebKit
+   (`::-webkit-scrollbar`). Subtle thumb in light/dark, transparent
+   track so the scrollbar reads as an overlay rather than a panel. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 4px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+*::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 /* Single-panel daterange picker: the second calendar is redundant — selection
@@ -38,6 +65,8 @@
   --nav-item: #aaaaaa;
   --divider: #444444;
   --divider-hover: #555555;
+  --scrollbar-thumb: rgba(255, 255, 255, 0.16);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.3);
 }
 
 /* ────────────────────────────────────────────────────────────────────

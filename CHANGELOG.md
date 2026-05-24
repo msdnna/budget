@@ -267,6 +267,15 @@
 
 ## Web (frontend)
 
+### [1.39.2] — 2026-05-22
+
+#### Changed
+- **Скроллбар в основном контенте теперь только под хедером.** Раньше внутренний `<n-layout>` имел `overflow-y: auto`, и скролл-контейнер охватывал и header, и content — справа от header'а проходила полоса. Теперь inner layout — flex-колонка с pinned-header'ом (`flex-shrink: 0`) и `<n-layout-content>` с собственным `overflow-y: auto`; скроллбар начинается ниже header'а.
+- **Тематизированные нативные скроллбары.** Глобальные стили `::-webkit-scrollbar*` + Firefox `scrollbar-*` в `styles/theme.css`: прозрачный track, полупрозрачный thumb (8px, чуть темнее на hover), CSS-переменные `--scrollbar-thumb`/`--scrollbar-thumb-hover` переключаются между light/dark через `:root[data-theme='dark']`. Покрывает все нативно-скроллящие контейнеры (n-layout-content, custom overflow-блоки), приводя их к виду уже стилизованных списков (NotificationsList, CategoryDonutChart и т.п.).
+
+#### Fixed
+- **Состояние свёрнутого сайдбара сохраняется между обновлениями страницы.** Click на trigger-кнопке `<n-layout-sider>` теперь пишется в `localStorage['budget-sidebar-collapsed']`, и при следующем mount'е sidebar восстанавливается в том же состоянии. До этого `collapsed` всегда инициализировался в `false`.
+
 ### [1.39.1] — 2026-05-20
 
 #### Added
