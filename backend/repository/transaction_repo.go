@@ -44,6 +44,7 @@ func (r *TransactionRepository) Create(ctx context.Context, t *models.Transactio
 	t.UpdatedAt = now
 	t.Version = 1
 	t.DeletedAt = nil
+	t.Deposit = models.NormalizeDeposit(t.Deposit)
 	t.LastModifiedBy = t.CreatedBy
 	_, err := r.col.InsertOne(ctx, t)
 	return err
@@ -144,6 +145,7 @@ func (r *TransactionRepository) Upsert(ctx context.Context, t *models.Transactio
 		}
 		t.Version = 1
 		t.DeletedAt = nil
+		t.Deposit = models.NormalizeDeposit(t.Deposit)
 		_, err := r.col.InsertOne(ctx, t)
 		if err != nil {
 			if mongo.IsDuplicateKeyError(err) {
@@ -165,6 +167,7 @@ func (r *TransactionRepository) Upsert(ctx context.Context, t *models.Transactio
 		filter["version"] = baseVersion
 	}
 	t.Version = baseVersion + 1
+	t.Deposit = models.NormalizeDeposit(t.Deposit)
 	res := r.col.FindOneAndReplace(ctx, filter, t,
 		options.FindOneAndReplace().SetReturnDocument(options.After))
 	if err := res.Err(); err != nil {
@@ -206,10 +209,13 @@ func (r *TransactionRepository) Find(ctx context.Context, f models.TransactionFi
 	return results, total, nil
 }
 
-func (r *TransactionRepository) FindAll(ctx context.Context, from, to time.Time, txType string) ([]models.Transaction, error) {
+func (r *TransactionRepository) FindAll(ctx context.Context, from, to time.Time, txType, deposit string) ([]models.Transaction, error) {
 	filter := bson.M{"deleted_at": nil}
 	if txType != "" {
 		filter["type"] = txType
+	}
+	if deposit != "" {
+		filter["deposit"] = deposit
 	}
 	if !from.IsZero() || !to.IsZero() {
 		dateFilter := bson.M{}
@@ -307,8 +313,8 @@ func (r *TransactionRepository) SoftDeleteChildren(ctx context.Context, parentID
 	return err
 }
 
-func (r *TransactionRepository) AggregateByCategory(ctx context.Context, txType string, from, to time.Time) ([]models.CategoryData, error) {
-	matchStage := bson.D{{Key: "$match", Value: buildDateFilter(txType, from, to)}}
+func (r *TransactionRepository) AggregateByCategory(ctx context.Context, txType, deposit string, from, to time.Time) ([]models.CategoryData, error) {
+	matchStage := bson.D{{Key: "$match", Value: buildDateFilter(txType, deposit, from, to)}}
 
 	groupStage := bson.D{{Key: "$group", Value: bson.D{
 		{Key: "_id", Value: "$category"},
@@ -358,27 +364,31 @@ func (r *TransactionRepository) AggregateByCategory(ctx context.Context, txType 
 	return result, nil
 }
 
-func (r *TransactionRepository) AggregateMonthly(ctx context.Context, year int) ([]models.MonthlyData, error) {
+func (r *TransactionRepository) AggregateMonthly(ctx context.Context, year int, deposit string) ([]models.MonthlyData, error) {
 	start := time.Date(year, 1, 1, 0, 0, 0, 0, time.UTC)
 	end := time.Date(year+1, 1, 1, 0, 0, 0, 0, time.UTC).Add(-time.Second)
-	return r.AggregateMonthlyRange(ctx, start, end)
+	return r.AggregateMonthlyRange(ctx, start, end, deposit)
 }
 
 // AggregateMonthlyRange buckets transactions into year-month groups within
 // [from, to]. Months without data are still emitted with zero totals so the
 // chart x-axis is contiguous. The returned slice is ordered by year, month.
-func (r *TransactionRepository) AggregateMonthlyRange(ctx context.Context, from, to time.Time) ([]models.MonthlyData, error) {
+func (r *TransactionRepository) AggregateMonthlyRange(ctx context.Context, from, to time.Time, deposit string) ([]models.MonthlyData, error) {
 	if from.IsZero() || to.IsZero() || !from.Before(to) {
 		return []models.MonthlyData{}, nil
 	}
 
+	match := bson.D{
+		{Key: "date", Value: bson.D{{Key: "$gte", Value: from}, {Key: "$lte", Value: to}}},
+		{Key: "hidden", Value: bson.D{{Key: "$ne", Value: true}}},
+		{Key: "deleted_at", Value: nil},
+		{Key: "excluded_from_stats", Value: bson.D{{Key: "$ne", Value: true}}},
+	}
+	if deposit != "" {
+		match = append(match, bson.E{Key: "deposit", Value: deposit})
+	}
 	pipeline := mongo.Pipeline{
-		{{Key: "$match", Value: bson.D{
-			{Key: "date", Value: bson.D{{Key: "$gte", Value: from}, {Key: "$lte", Value: to}}},
-			{Key: "hidden", Value: bson.D{{Key: "$ne", Value: true}}},
-			{Key: "deleted_at", Value: nil},
-			{Key: "excluded_from_stats", Value: bson.D{{Key: "$ne", Value: true}}},
-		}}},
+		{{Key: "$match", Value: match}},
 		{{Key: "$group", Value: bson.D{
 			{Key: "_id", Value: bson.D{
 				{Key: "year", Value: bson.D{{Key: "$year", Value: "$date"}}},
@@ -443,8 +453,11 @@ func (r *TransactionRepository) AggregateMonthlyRange(ctx context.Context, from,
 	return result, nil
 }
 
-func (r *TransactionRepository) GetSummary(ctx context.Context, from, to time.Time) (*models.SummaryData, error) {
+func (r *TransactionRepository) GetSummary(ctx context.Context, from, to time.Time, deposit string) (*models.SummaryData, error) {
 	filter := bson.M{"hidden": bson.M{"$ne": true}, "deleted_at": nil, "excluded_from_stats": bson.M{"$ne": true}}
+	if deposit != "" {
+		filter["deposit"] = deposit
+	}
 	if !from.IsZero() || !to.IsZero() {
 		dateFilter := bson.M{}
 		if !from.IsZero() {
@@ -600,13 +613,13 @@ func (r *TransactionRepository) UnlinkFromWishlist(ctx context.Context, wishlist
 	return res.ModifiedCount, nil
 }
 
-func (r *TransactionRepository) GetAverageMonthlyCategoryExpenses(ctx context.Context, from, to time.Time) ([]models.CategoryData, error) {
+func (r *TransactionRepository) GetAverageMonthlyCategoryExpenses(ctx context.Context, from, to time.Time, deposit string) ([]models.CategoryData, error) {
 	months := to.Sub(from).Hours() / 24 / 30
 	if months < 1 {
 		months = 1
 	}
 
-	rawData, err := r.AggregateByCategory(ctx, string(models.Expense), from, to)
+	rawData, err := r.AggregateByCategory(ctx, string(models.Expense), deposit, from, to)
 	if err != nil {
 		return nil, err
 	}
@@ -624,7 +637,7 @@ func (r *TransactionRepository) GetAverageMonthlyCategoryExpenses(ctx context.Co
 // recurring schedule is already projected via wishlist_contrib's next-due
 // model — including the actual payment in the 3-month avg would inflate
 // the forecast for the next 3 months after every yearly bill.
-func (r *TransactionRepository) GetAverageMonthlyCategoryExpensesUnlinked(ctx context.Context, from, to time.Time) ([]models.CategoryData, error) {
+func (r *TransactionRepository) GetAverageMonthlyCategoryExpensesUnlinked(ctx context.Context, from, to time.Time, deposit string) ([]models.CategoryData, error) {
 	months := to.Sub(from).Hours() / 24 / 30
 	if months < 1 {
 		months = 1
@@ -638,6 +651,9 @@ func (r *TransactionRepository) GetAverageMonthlyCategoryExpensesUnlinked(ctx co
 		// Empty/missing wishlist_id only — bson omitempty means unlinked
 		// rows store no field at all, so $in handles both shapes.
 		"wishlist_id": bson.M{"$in": []any{nil, ""}},
+	}
+	if deposit != "" {
+		match["deposit"] = deposit
 	}
 	if !from.IsZero() || !to.IsZero() {
 		df := bson.M{}
@@ -727,6 +743,9 @@ func buildTransactionFilter(f models.TransactionFilter) bson.M {
 	} else if f.Category != "" {
 		filter["category"] = f.Category
 	}
+	if f.Deposit != "" {
+		filter["deposit"] = f.Deposit
+	}
 	if f.From != nil || f.To != nil {
 		dateFilter := bson.M{}
 		if f.From != nil {
@@ -740,10 +759,13 @@ func buildTransactionFilter(f models.TransactionFilter) bson.M {
 	return filter
 }
 
-func buildDateFilter(txType string, from, to time.Time) bson.M {
+func buildDateFilter(txType, deposit string, from, to time.Time) bson.M {
 	filter := bson.M{"hidden": bson.M{"$ne": true}, "deleted_at": nil, "excluded_from_stats": bson.M{"$ne": true}}
 	if txType != "" {
 		filter["type"] = txType
+	}
+	if deposit != "" {
+		filter["deposit"] = deposit
 	}
 	if !from.IsZero() || !to.IsZero() {
 		dateFilter := bson.M{}

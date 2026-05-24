@@ -375,6 +375,8 @@ components:
           type: string
         date:
           type: string
+        deposit:
+          $ref: '#/components/schemas/models.DepositType'
         description:
           type: string
         purpose:
@@ -410,6 +412,8 @@ components:
       properties:
         category:
           type: string
+        deposit:
+          $ref: '#/components/schemas/models.DepositType'
         estimated_cost:
           type: number
         frequency:
@@ -427,6 +431,14 @@ components:
       - estimated_cost
       - name
       type: object
+    models.DepositType:
+      enum:
+      - bank
+      - cash
+      type: string
+      x-enum-varnames:
+      - DepositBank
+      - DepositCash
     models.DetailRequest:
       properties:
         assignee:
@@ -592,6 +604,8 @@ components:
     models.RegularItemForecast:
       properties:
         category:
+          type: string
+        deposit:
           type: string
         estimated_cost:
           type: number
@@ -778,6 +792,8 @@ components:
           type: string
         deleted_at:
           type: string
+        deposit:
+          $ref: '#/components/schemas/models.DepositType'
         description:
           type: string
         detail_request_id:
@@ -852,6 +868,8 @@ components:
           $ref: '#/components/schemas/models.UserInfo'
         date:
           type: string
+        deposit:
+          $ref: '#/components/schemas/models.DepositType'
         description:
           type: string
         hidden:
@@ -883,6 +901,8 @@ components:
           type: string
         created_by:
           $ref: '#/components/schemas/models.UserInfo'
+        deposit:
+          $ref: '#/components/schemas/models.DepositType'
         estimated_cost:
           type: number
         frequency:
@@ -915,6 +935,8 @@ components:
           $ref: '#/components/schemas/models.UserInfo'
         deleted_at:
           type: string
+        deposit:
+          $ref: '#/components/schemas/models.DepositType'
         estimated_cost:
           type: number
         frequency:

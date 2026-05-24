@@ -51,7 +51,9 @@ func (c *LimitChecker) Run(ctx context.Context, categoryName string) {
 		return
 	}
 
-	agg, err := c.txRepo.AggregateByCategory(ctx, string(models.Expense), from, to)
+	// Limits aren't yet split per deposit — sum bank+cash for now. The
+	// deposit-split limits feature is tracked separately.
+	agg, err := c.txRepo.AggregateByCategory(ctx, string(models.Expense), "", from, to)
 	if err != nil {
 		log.Printf("LimitChecker: aggregate: %v", err)
 		return

@@ -535,6 +535,9 @@
                     "date": {
                         "type": "string"
                     },
+                    "deposit": {
+                        "$ref": "#/components/schemas/models.DepositType"
+                    },
                     "description": {
                         "type": "string"
                     },
@@ -586,6 +589,9 @@
                     "category": {
                         "type": "string"
                     },
+                    "deposit": {
+                        "$ref": "#/components/schemas/models.DepositType"
+                    },
                     "estimated_cost": {
                         "type": "number"
                     },
@@ -611,6 +617,17 @@
                     "name"
                 ],
                 "type": "object"
+            },
+            "models.DepositType": {
+                "enum": [
+                    "bank",
+                    "cash"
+                ],
+                "type": "string",
+                "x-enum-varnames": [
+                    "DepositBank",
+                    "DepositCash"
+                ]
             },
             "models.DetailRequest": {
                 "properties": {
@@ -845,6 +862,9 @@
             "models.RegularItemForecast": {
                 "properties": {
                     "category": {
+                        "type": "string"
+                    },
+                    "deposit": {
                         "type": "string"
                     },
                     "estimated_cost": {
@@ -1093,6 +1113,9 @@
                     "deleted_at": {
                         "type": "string"
                     },
+                    "deposit": {
+                        "$ref": "#/components/schemas/models.DepositType"
+                    },
                     "description": {
                         "type": "string"
                     },
@@ -1187,6 +1210,9 @@
                     "date": {
                         "type": "string"
                     },
+                    "deposit": {
+                        "$ref": "#/components/schemas/models.DepositType"
+                    },
                     "description": {
                         "type": "string"
                     },
@@ -1230,6 +1256,9 @@
                     },
                     "created_by": {
                         "$ref": "#/components/schemas/models.UserInfo"
+                    },
+                    "deposit": {
+                        "$ref": "#/components/schemas/models.DepositType"
                     },
                     "estimated_cost": {
                         "type": "number"
@@ -1279,6 +1308,9 @@
                     },
                     "deleted_at": {
                         "type": "string"
+                    },
+                    "deposit": {
+                        "$ref": "#/components/schemas/models.DepositType"
                     },
                     "estimated_cost": {
                         "type": "number"

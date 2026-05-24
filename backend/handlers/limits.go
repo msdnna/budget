@@ -60,7 +60,7 @@ func (h *LimitsHandler) Progress(c *gin.Context) {
 		return
 	}
 
-	agg, err := h.txRepo.AggregateByCategory(ctx, string(models.Expense), from, to)
+	agg, err := h.txRepo.AggregateByCategory(ctx, string(models.Expense), "", from, to)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

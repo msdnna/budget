@@ -16,6 +16,14 @@
 
 ## API (backend)
 
+### [1.25.0] — 2026-05-24
+
+#### Added
+- **Deposit scope (банковская карта / наличные).** Новое поле `deposit` на `Transaction` и `WishlistItem` со значениями `bank`/`cash` (default — `bank`). Фильтр `?deposit=bank|cash` принимают `GET /api/transactions`, `/statistics/{summary,by-category,monthly,overview,forecast}`, `/export/{excel,pdf}`. Отсутствующий параметр = «оба скоупа». На уровне repository добавлено поле `TransactionFilter.Deposit`; все агрегации (`AggregateByCategory`, `AggregateMonthlyRange`, `GetSummary`, `GetAverageMonthlyCategoryExpenses*`, `FindAll`) получили новый параметр `deposit string` (пустая строка = без фильтра). `RegularItemForecast.Deposit` отдаётся клиентам, чтобы в прогнозе можно было показать значок по карточке без второго запроса. DR-children наследуют `deposit` у parent'а (`POST /api/detail-requests/:id/transactions`). `POST /api/wishlist/:id/link/:tx_id` приводит deposit транзакции к deposit'у wishlist-итема — чтобы paid-amount по scope оставался консистентным. Лимиты расходов **пока** считаются по обоим scope'ам (раздельные лимиты — отдельная задача).
+- **Backfill миграция.** `cmd/migrate` дополнен шагом `backfillDeposit`: всем существующим `transactions`/`wishlist` без поля `deposit` (или с пустым) проставляется `bank`. Идемпотентно, повторные запуски безопасны.
+- **Helper `models.NormalizeDeposit(d)`.** Любые пустые/неизвестные значения клиентов схлопываются в `bank` (вызывается в `Create`/`Upsert` обоих repository, в `*Handler.Create/Update`, в `sync.decode*Payload`).
+- **Тесты.** `TestTransactionRepo_DepositFilter` (bank/cash/без-фильтра + empty→bank normalization) и `TestNormalizeDeposit_Defaults`.
+
 ### [1.24.1] — 2026-05-20
 
 #### Added

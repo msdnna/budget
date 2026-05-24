@@ -45,7 +45,7 @@ func TestTransactionRepo_FindAll_FiltersByDateAndType(t *testing.T) {
 	}
 
 	// No filter — returns everything non-deleted.
-	all, err := repo.FindAll(ctx, time.Time{}, time.Time{}, "")
+	all, err := repo.FindAll(ctx, time.Time{}, time.Time{}, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +54,7 @@ func TestTransactionRepo_FindAll_FiltersByDateAndType(t *testing.T) {
 	}
 
 	// Type filter — only expenses.
-	exp, err := repo.FindAll(ctx, time.Time{}, time.Time{}, string(models.Expense))
+	exp, err := repo.FindAll(ctx, time.Time{}, time.Time{}, string(models.Expense), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +65,7 @@ func TestTransactionRepo_FindAll_FiltersByDateAndType(t *testing.T) {
 	// Date range filter — only Feb tx.
 	from := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
 	to := time.Date(2026, 2, 28, 0, 0, 0, 0, time.UTC)
-	feb1, err := repo.FindAll(ctx, from, to, "")
+	feb1, err := repo.FindAll(ctx, from, to, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +101,7 @@ func TestTransactionRepo_GetAverageMonthlyCategoryExpenses(t *testing.T) {
 		}
 	}
 
-	got, err := repo.GetAverageMonthlyCategoryExpenses(ctx, from, to)
+	got, err := repo.GetAverageMonthlyCategoryExpenses(ctx, from, to, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,6 +111,89 @@ func TestTransactionRepo_GetAverageMonthlyCategoryExpenses(t *testing.T) {
 	// 900 / 3 = 300 (approximately, since "months" uses 30-day buckets).
 	if got[0].Amount < 250 || got[0].Amount > 350 {
 		t.Errorf("avg amount = %f, want ~300", got[0].Amount)
+	}
+}
+
+// ─── deposit scope: filter + default normalization ──
+
+func TestTransactionRepo_DepositFilter(t *testing.T) {
+	db := mongotest.Start(t)
+	repo := repository.NewTransactionRepository(db)
+	ctx := testCtx(t)
+
+	now := time.Date(2026, 4, 10, 0, 0, 0, 0, time.UTC)
+	mk := func(amt float64, dep models.DepositType) *models.Transaction {
+		return &models.Transaction{
+			Type:      models.Expense,
+			Amount:    amt,
+			Date:      now,
+			Category:  "C",
+			Deposit:   dep,
+			CreatedBy: &models.UserInfo{UserID: "u1"},
+		}
+	}
+	// Two bank + one cash + one without deposit (should default to bank).
+	for _, tx := range []*models.Transaction{
+		mk(100, models.DepositBank),
+		mk(200, models.DepositBank),
+		mk(50, models.DepositCash),
+		mk(70, ""),
+	} {
+		if err := repo.Create(ctx, tx); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	bank, _, err := repo.Find(ctx, models.TransactionFilter{Deposit: "bank", Limit: 100})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(bank) != 3 {
+		t.Errorf("bank scope = %d, want 3 (incl. empty-deposit row normalized to bank)", len(bank))
+	}
+
+	cash, _, err := repo.Find(ctx, models.TransactionFilter{Deposit: "cash", Limit: 100})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cash) != 1 || cash[0].Amount != 50 {
+		t.Errorf("cash scope = %+v, want one 50-rub row", cash)
+	}
+
+	// No filter → both scopes returned.
+	all, _, err := repo.Find(ctx, models.TransactionFilter{Limit: 100})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 4 {
+		t.Errorf("no-filter = %d, want 4", len(all))
+	}
+
+	// Aggregate by category with deposit filter — only bank slice.
+	bySection, err := repo.GetSummary(ctx,
+		now.AddDate(0, 0, -1), now.AddDate(0, 0, 1), "cash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bySection.TotalExpense != 50 {
+		t.Errorf("cash summary expense = %f, want 50", bySection.TotalExpense)
+	}
+}
+
+func TestNormalizeDeposit_Defaults(t *testing.T) {
+	cases := []struct {
+		in   models.DepositType
+		want models.DepositType
+	}{
+		{"", models.DepositBank},
+		{"unknown", models.DepositBank},
+		{models.DepositBank, models.DepositBank},
+		{models.DepositCash, models.DepositCash},
+	}
+	for _, c := range cases {
+		if got := models.NormalizeDeposit(c.in); got != c.want {
+			t.Errorf("NormalizeDeposit(%q) = %q, want %q", c.in, got, c.want)
+		}
 	}
 }
 

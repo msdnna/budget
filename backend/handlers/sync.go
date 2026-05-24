@@ -213,6 +213,7 @@ func decodeTransactionPayload(raw json.RawMessage) (*models.Transaction, error) 
 		Purpose             string                 `json:"purpose"`
 		Description         string                 `json:"description"`
 		Hidden              bool                   `json:"hidden"`
+		Deposit             models.DepositType     `json:"deposit"`
 		CreatedBy           *models.UserInfo       `json:"created_by"`
 		CreatedAt           string                 `json:"created_at"`
 		Version             int                    `json:"version"`
@@ -239,6 +240,7 @@ func decodeTransactionPayload(raw json.RawMessage) (*models.Transaction, error) 
 		Purpose:             a.Purpose,
 		Description:         a.Description,
 		Hidden:              a.Hidden,
+		Deposit:             models.NormalizeDeposit(a.Deposit),
 		CreatedBy:           a.CreatedBy,
 		CreatedAt:           parseLooseTime(a.CreatedAt),
 		Version:             a.Version,
@@ -259,20 +261,21 @@ func decodeTransactionPayload(raw json.RawMessage) (*models.Transaction, error) 
 
 func decodeWishlistPayload(raw json.RawMessage) (*models.WishlistItem, error) {
 	type alias struct {
-		ID             string           `json:"id"`
-		Name           string           `json:"name"`
-		EstimatedCost  float64          `json:"estimated_cost"`
-		Category       string           `json:"category"`
-		Priority       int              `json:"priority"`
-		Frequency      models.Frequency `json:"frequency"`
-		Purchased      bool             `json:"purchased"`
-		Notes          string           `json:"notes"`
-		CreatedBy      *models.UserInfo `json:"created_by"`
-		CreatedAt      string           `json:"created_at"`
-		Version        int              `json:"version"`
-		UpdatedAt      string           `json:"updated_at"`
-		DeletedAt      *string          `json:"deleted_at"`
-		LastModifiedBy *models.UserInfo `json:"last_modified_by"`
+		ID             string             `json:"id"`
+		Name           string             `json:"name"`
+		EstimatedCost  float64            `json:"estimated_cost"`
+		Category       string             `json:"category"`
+		Priority       int                `json:"priority"`
+		Frequency      models.Frequency   `json:"frequency"`
+		Purchased      bool               `json:"purchased"`
+		Deposit        models.DepositType `json:"deposit"`
+		Notes          string             `json:"notes"`
+		CreatedBy      *models.UserInfo   `json:"created_by"`
+		CreatedAt      string             `json:"created_at"`
+		Version        int                `json:"version"`
+		UpdatedAt      string             `json:"updated_at"`
+		DeletedAt      *string            `json:"deleted_at"`
+		LastModifiedBy *models.UserInfo   `json:"last_modified_by"`
 	}
 	var a alias
 	if err := json.Unmarshal(raw, &a); err != nil {
@@ -286,6 +289,7 @@ func decodeWishlistPayload(raw json.RawMessage) (*models.WishlistItem, error) {
 		Priority:       a.Priority,
 		Frequency:      a.Frequency,
 		Purchased:      a.Purchased,
+		Deposit:        models.NormalizeDeposit(a.Deposit),
 		Notes:          a.Notes,
 		CreatedBy:      a.CreatedBy,
 		CreatedAt:      parseLooseTime(a.CreatedAt),

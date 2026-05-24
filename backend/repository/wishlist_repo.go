@@ -42,6 +42,7 @@ func (r *WishlistRepository) Create(ctx context.Context, item *models.WishlistIt
 	item.UpdatedAt = now
 	item.Version = 1
 	item.DeletedAt = nil
+	item.Deposit = models.NormalizeDeposit(item.Deposit)
 	item.LastModifiedBy = item.CreatedBy
 	_, err := r.col.InsertOne(ctx, item)
 	return err
@@ -129,6 +130,7 @@ func (r *WishlistRepository) Upsert(ctx context.Context, item *models.WishlistIt
 		}
 		item.Version = 1
 		item.DeletedAt = nil
+		item.Deposit = models.NormalizeDeposit(item.Deposit)
 		_, err := r.col.InsertOne(ctx, item)
 		if err != nil {
 			if mongo.IsDuplicateKeyError(err) {
@@ -144,6 +146,7 @@ func (r *WishlistRepository) Upsert(ctx context.Context, item *models.WishlistIt
 		filter["version"] = baseVersion
 	}
 	item.Version = baseVersion + 1
+	item.Deposit = models.NormalizeDeposit(item.Deposit)
 	res := r.col.FindOneAndReplace(ctx, filter, item,
 		options.FindOneAndReplace().SetReturnDocument(options.After))
 	if err := res.Err(); err != nil {
