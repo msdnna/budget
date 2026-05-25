@@ -359,16 +359,18 @@ fun IncomeScreen(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                                 if (hasActive) {
-                                    TextButton(
-                                        onClick = { vm.resetFilters() },
-                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                                    ) {
-                                        Text(
-                                            "Сбросить",
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = primaryColor,
-                                        )
-                                    }
+                                    // Plain clickable Text rather than
+                                    // TextButton — the latter bakes in a
+                                    // 48dp min-height which made this row
+                                    // jump as soon as any filter activated.
+                                    Text(
+                                        "Сбросить",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = primaryColor,
+                                        modifier = Modifier
+                                            .clickable { vm.resetFilters() }
+                                            .padding(horizontal = 8.dp, vertical = 2.dp),
+                                    )
                                 }
                             }
                         }

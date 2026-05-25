@@ -337,16 +337,14 @@ fun ExpensesScreen(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                                 if (hasActive) {
-                                    TextButton(
-                                        onClick = { vm.resetFilters() },
-                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                                    ) {
-                                        Text(
-                                            "Сбросить",
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = primaryColor,
-                                        )
-                                    }
+                                    Text(
+                                        "Сбросить",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = primaryColor,
+                                        modifier = Modifier
+                                            .clickable { vm.resetFilters() }
+                                            .padding(horizontal = 8.dp, vertical = 2.dp),
+                                    )
                                 }
                             }
                         }
