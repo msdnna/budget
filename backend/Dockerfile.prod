@@ -9,7 +9,8 @@ RUN go mod download
 
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -a -ldflags='-w -s' -o main . \
- && CGO_ENABLED=0 GOOS=linux go build -a -ldflags='-w -s' -o create_user ./cmd/create_user
+ && CGO_ENABLED=0 GOOS=linux go build -a -ldflags='-w -s' -o create_user ./cmd/create_user \
+ && CGO_ENABLED=0 GOOS=linux go build -a -ldflags='-w -s' -o migrate ./cmd/migrate
 
 # gcr.io/distroless/static-debian12:nonroot — no shell, no package manager, runs
 # as uid 65532. Minimal attack surface; tz data and DejaVu fonts copied from
@@ -30,6 +31,8 @@ COPY --from=builder /app/main               /app/main
 # CLI used for first-run setup on prod/RPi deploys (distroless has no shell,
 # so we ship the binary directly and invoke it via `docker compose exec`).
 COPY --from=builder /app/create_user        /app/create_user
+# Schema/data migrations CLI — same invocation pattern as create_user.
+COPY --from=builder /app/migrate            /app/migrate
 COPY --from=builder /usr/share/fonts/dejavu /usr/share/fonts/dejavu
 COPY --from=builder /usr/share/zoneinfo     /usr/share/zoneinfo
 
