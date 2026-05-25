@@ -817,6 +817,14 @@
 
 ## Android
 
+### [1.40.5] — 2026-05-25
+
+#### Changed
+- **IB header (Доходы)**: иконки выбора месяца и редактирования теперь лежат горизонтально, обе tinted в primary. Маленький label месяца под иконками убран — он дублировал данные popup'а. Row вертикально центрирована по карточке.
+
+#### Fixed
+- **HorizontalPager перехватывал inner LazyRow scroll.** Default `pageNestedScrollConnection` я уже занулил в 1.40.4, но это только покрывает fling-propagation. Прямой pointer drag по `Modifier.scrollable` внутри пейджера всё ещё ловил unconsumed delta когда inner LazyRow дошёл до края. Добавлен `LocalInnerHorizontalScroll` CompositionLocal: каждая LazyRow с `TrackInnerHorizontalScroll(state)` публикует `state.isScrollInProgress` в общую `MutableState<Boolean>`, MainScreen передаёт `userScrollEnabled = !innerHScrolling.value` в `HorizontalPager`. Теперь свайп страниц замораживается пока пользователь активно прокручивает чипы фильтра.
+
 ### [1.40.4] — 2026-05-25
 
 #### Changed

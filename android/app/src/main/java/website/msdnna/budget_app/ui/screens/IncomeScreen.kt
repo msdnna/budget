@@ -173,7 +173,7 @@ fun IncomeScreen(
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp).fillMaxWidth(),
-                        verticalAlignment = Alignment.Top,
+                        verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         // Left column — title + per-deposit balance rows.
@@ -229,16 +229,14 @@ fun IncomeScreen(
                                 }
                             }
                         }
-                        // Right-side action column: period picker (calendar
-                        // glyph) + edit (pencil). Both compact 32dp icons so
-                        // the card stays ~3 rows tall even with two scopes
-                        // populated. The month text was replaced by a popup
-                        // anchored to the calendar icon — saves a row's worth
-                        // of vertical space and looks closer to a control bar
-                        // than a date label.
-                        Column(
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
-                            horizontalAlignment = Alignment.End,
+                        // Right-side action row: period picker + edit, both
+                        // tinted in primary so they read as actionable. The
+                        // month-label was removed — the picker is one tap
+                        // away and the current period is anchored to the
+                        // selected month inside the popup itself.
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Box {
                                 var ibPickerOpen by remember { mutableStateOf(false) }
@@ -249,6 +247,7 @@ fun IncomeScreen(
                                     Icon(
                                         Icons.Default.CalendarMonth,
                                         contentDescription = "${monthName(ibMonth)} $ibYear",
+                                        tint = primaryColor,
                                     )
                                 }
                                 TilePeriodPickerPopup(
@@ -268,16 +267,12 @@ fun IncomeScreen(
                                 onClick = { showIbForm = true },
                                 modifier = Modifier.size(32.dp),
                             ) {
-                                Icon(Icons.Default.Edit, contentDescription = "Изменить")
+                                Icon(
+                                    Icons.Default.Edit,
+                                    contentDescription = "Изменить",
+                                    tint = primaryColor,
+                                )
                             }
-                            // Tiny period label under the icons so the user
-                            // still sees which month is in play without
-                            // opening the picker.
-                            Text(
-                                "${monthName(ibMonth)} $ibYear",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
                         }
                     }
                 }
@@ -330,7 +325,10 @@ fun IncomeScreen(
                             // so long labels horizontally scroll instead of
                             // truncating to «Нали…».
                             val filterDeposit by vm.filterDeposit.collectAsState()
+                            val depositRowState = androidx.compose.foundation.lazy.rememberLazyListState()
+                            TrackInnerHorizontalScroll(depositRowState)
                             androidx.compose.foundation.lazy.LazyRow(
+                                state = depositRowState,
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {

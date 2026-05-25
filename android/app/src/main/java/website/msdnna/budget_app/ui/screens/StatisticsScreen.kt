@@ -121,7 +121,10 @@ fun StatisticsScreen(
                         modifier = Modifier.fillMaxWidth().padding(12.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
+                        val periodRowState = androidx.compose.foundation.lazy.rememberLazyListState()
+                        TrackInnerHorizontalScroll(periodRowState)
                         androidx.compose.foundation.lazy.LazyRow(
+                            state = periodRowState,
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             items(StatsPeriod.values().toList()) { p ->
@@ -179,7 +182,10 @@ fun StatisticsScreen(
                                 }
                             }
                         }
+                        val depositRowState = androidx.compose.foundation.lazy.rememberLazyListState()
+                        TrackInnerHorizontalScroll(depositRowState)
                         androidx.compose.foundation.lazy.LazyRow(
+                            state = depositRowState,
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
