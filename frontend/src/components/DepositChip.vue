@@ -1,19 +1,28 @@
 <template>
-  <NTooltip placement="top" :delay="150">
-    <template #trigger>
-      <NDropdown
-        v-if="editable"
-        trigger="click"
-        placement="bottom-start"
-        :options="dropdownOptions"
-        @select="onSelect"
-      >
+  <!-- Editable: NDropdown wraps a tooltip wrapping the button. The tooltip
+       must be the immediate parent of the button (not of NDropdown) — otherwise
+       NTooltip resolves its "trigger" from NDropdown's slot machinery and the
+       hover lands on the menu options instead of the chip itself. -->
+  <NDropdown
+    v-if="editable"
+    trigger="click"
+    placement="bottom-start"
+    :options="dropdownOptions"
+    @select="onSelect"
+  >
+    <NTooltip placement="top" :delay="150" trigger="hover">
+      <template #trigger>
         <button type="button" class="dep-chip dep-chip-btn" :aria-label="ariaLabel">
           <NIcon :component="meta.icon" :size="iconSize" />
           <span v-if="withLabel" class="dep-chip-label">{{ meta.shortLabel }}</span>
         </button>
-      </NDropdown>
-      <span v-else class="dep-chip" :aria-label="ariaLabel">
+      </template>
+      {{ tooltipText }}
+    </NTooltip>
+  </NDropdown>
+  <NTooltip v-else placement="top" :delay="150" trigger="hover">
+    <template #trigger>
+      <span class="dep-chip" :aria-label="ariaLabel">
         <NIcon :component="meta.icon" :size="iconSize" />
         <span v-if="withLabel" class="dep-chip-label">{{ meta.shortLabel }}</span>
       </span>
