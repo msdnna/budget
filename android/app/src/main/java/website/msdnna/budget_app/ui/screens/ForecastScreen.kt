@@ -163,6 +163,9 @@ private val ColourWlDelete = Color(0xFFE53935) // left  swipe: delete
 fun ForecastScreen(
     serverUrl: String,
     primaryColor: Color,
+    /** Controlled by the FilterAlt action-icon in MainScreen's TopAppBar.
+     *  Toggles the deposit-scope card. */
+    filtersVisible: Boolean = false,
     onSelectionCountChange: (Int) -> Unit = {},
     /** Open the «привязать существующий расход» overlay for the given
      *  wishlist/regular item (id + display name). null-call disables the
@@ -179,12 +182,18 @@ fun ForecastScreen(
     val regularSelectionMode = selectedRegularIds.isNotEmpty()
     val anySelectionMode = selectionMode || regularSelectionMode
 
+    // Deposit scope filter applies to the local wishlist + synth fallback —
+    // the server-side fields on `forecast` come pre-filtered already.
+    val filterDeposit by vm.filterDeposit.collectAsState()
+
     // Wishlist (one-off planned purchases) and regular expenses live in the
     // same `wishlist` collection on the backend, distinguished only by
     // `frequency`. The forecast screen renders them in two separate
     // sections so the user can tell wishes from obligations at a glance.
-    val wishlistOneOff = remember(uiState.wishlist) {
-        uiState.wishlist.filter { !isRecurring(it.frequency) }
+    val wishlistOneOff = remember(uiState.wishlist, filterDeposit) {
+        uiState.wishlist
+            .filter { !isRecurring(it.frequency) }
+            .filter { filterDeposit == null || (it.deposit.ifBlank { "bank" }) == filterDeposit }
     }
 
     // Local transactions feed the offline synth of regular_items so
@@ -321,39 +330,34 @@ fun ForecastScreen(
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         val forecastDeposit by vm.filterDeposit.collectAsState()
-                        // Deposit scope filter wrapped in its own Card so it
-                        // looks like a sibling of the summary cards rather
-                        // than free-floating chips (per user feedback).
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(12.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
+                        // Deposit scope filter: same UX as Stats — collapsed
+                        // under the TopAppBar funnel toggle. Card wrapper
+                        // keeps it visually aligned with the summary block.
+                        androidx.compose.animation.AnimatedVisibility(visible = filtersVisible) {
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                             ) {
-                                FilterChip(
-                                    selected = forecastDeposit == null,
-                                    onClick = { vm.setFilterDeposit(null) },
-                                    label = { Text("Все счета") },
-                                    colors = FilterChipDefaults.filterChipColors(
-                                        selectedContainerColor = primaryColor,
-                                        selectedLabelColor = Color.White,
-                                    ),
-                                )
-                                DEPOSITS.forEach { meta ->
-                                    FilterChip(
-                                        selected = forecastDeposit == meta.value,
-                                        onClick = { vm.setFilterDeposit(meta.value) },
-                                        label = { Text(meta.label) },
-                                        leadingIcon = {
-                                            Icon(meta.icon, contentDescription = null, modifier = Modifier.size(16.dp))
-                                        },
-                                        colors = FilterChipDefaults.filterChipColors(
-                                            selectedContainerColor = primaryColor,
-                                            selectedLabelColor = Color.White,
-                                        ),
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(12.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    DepositScopeChip(
+                                        selected = forecastDeposit == null,
+                                        label = "Все счета",
+                                        icon = null,
+                                        primaryColor = primaryColor,
+                                        onClick = { vm.setFilterDeposit(null) },
                                     )
+                                    DEPOSITS.forEach { meta ->
+                                        DepositScopeChip(
+                                            selected = forecastDeposit == meta.value,
+                                            label = meta.label,
+                                            icon = meta.icon,
+                                            primaryColor = primaryColor,
+                                            onClick = { vm.setFilterDeposit(meta.value) },
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -426,9 +430,21 @@ fun ForecastScreen(
                 //     transactions (Room). `synthesizeRegularItems` mirrors
                 //     the backend's calendar-period bucketing so paid badges
                 //     and «след. оплата» stay consistent without the network.
-                val regular: List<RegularItem> = uiState.forecast?.regularItems
-                    ?.takeIf { it.isNotEmpty() }
-                    ?: synthesizeRegularItems(uiState.wishlist, localTransactions)
+                //
+                // `takeIf isNotEmpty` was too greedy — when an online filter
+                // (deposit=cash) legitimately returned `[]`, we still fell
+                // back to synthesizing from ALL wishlist items, surfacing
+                // bank-only regulars on a cash-filtered Forecast. Trust the
+                // server whenever `forecast` is non-null; only fall back when
+                // the request actually failed (uiState.forecast == null).
+                val scopedWishlist = uiState.wishlist.filter {
+                    filterDeposit == null || (it.deposit.ifBlank { "bank" }) == filterDeposit
+                }
+                val regular: List<RegularItem> = if (uiState.forecast != null) {
+                    uiState.forecast!!.regularItems
+                } else {
+                    synthesizeRegularItems(scopedWishlist, localTransactions)
+                }
                 if (regular.isNotEmpty()) {
                     item {
                         Text(
