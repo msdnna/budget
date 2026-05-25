@@ -166,6 +166,9 @@ fun ForecastScreen(
     /** Controlled by the FilterAlt action-icon in MainScreen's TopAppBar.
      *  Toggles the deposit-scope card. */
     filtersVisible: Boolean = false,
+    /** Bumped by MainScreen on long-press of the funnel — triggers
+     *  `vm.resetFilters()`. See StatisticsScreen for the same plumbing. */
+    resetTrigger: Int = 0,
     onSelectionCountChange: (Int) -> Unit = {},
     /** Open the «привязать существующий расход» overlay for the given
      *  wishlist/regular item (id + display name). null-call disables the
@@ -221,6 +224,9 @@ fun ForecastScreen(
 
     LaunchedEffect(selectedIds.size, selectedRegularIds.size) {
         onSelectionCountChange(selectedIds.size + selectedRegularIds.size)
+    }
+    LaunchedEffect(resetTrigger) {
+        if (resetTrigger > 0) vm.resetFilters()
     }
 
     // Currently-selected regular items snapshot — drives bulk-FAB state

@@ -102,6 +102,11 @@ class ForecastViewModel(private val serverUrl: String) : ViewModel() {
         _filterDeposit.value = value?.takeIf { it.isNotBlank() }
     }
 
+    /** Clears the deposit filter. Forecast doesn't expose any other knobs. */
+    fun resetFilters() {
+        _filterDeposit.value = null
+    }
+
     // togglePurchased был удалён в android 1.27.0 — теперь «Куплено»
     // открывает префилл-форму (purchaseWishlist) с linked tx, а «Не
     // куплено» отвязывает и сбрасывает флаг (unpurchaseWishlist).

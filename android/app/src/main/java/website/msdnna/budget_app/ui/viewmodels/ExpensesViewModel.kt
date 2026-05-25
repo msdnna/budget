@@ -113,6 +113,18 @@ class ExpensesViewModel(private val serverUrl: String) : ViewModel() {
         _filterDeposit.value = deposit?.takeIf { it.isNotBlank() }
         _page.value = 1
     }
+
+    /** Drops every filter — categories, date range, deposit scope, and the
+     *  «Показать закрытые запросы» toggle. Bound to the «Сбросить» button
+     *  in the filter card and to long-press on the funnel TopAppBar action. */
+    fun resetFilters() {
+        _filterCats.value = emptySet()
+        _filterFrom.value = null
+        _filterTo.value = null
+        _filterDeposit.value = null
+        _includeDetailed.value = false
+        _page.value = 1
+    }
     fun loadMore() { /* no-op: full list is always loaded from Room */ }
 
     fun deleteTransaction(id: String) {

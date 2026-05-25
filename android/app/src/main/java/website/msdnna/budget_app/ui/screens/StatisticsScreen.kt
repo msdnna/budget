@@ -32,6 +32,11 @@ fun StatisticsScreen(
      *  When true, the deposit-scope card is visible; otherwise it collapses
      *  away to keep the screen tidy (mirrors income/expenses filters). */
     filtersVisible: Boolean = false,
+    /** Bumped by MainScreen when the user long-presses the funnel icon —
+     *  triggers `vm.resetFilters()`. We can't read the VM directly from
+     *  MainScreen (it's owned by this screen), so the parent signals via
+     *  this counter and LaunchedEffect picks up the change. */
+    resetTrigger: Int = 0,
     // Drilldown callbacks: invoked when the user taps a slice of the
     // expense / income donut. Parent (MainScreen) is responsible for
     // applying the filter on the destination VM, scrolling the pager,
@@ -88,6 +93,11 @@ fun StatisticsScreen(
             website.msdnna.budget_app.data.repository.LimitsProgressRepository
                 .refresh(serverUrl)
         }
+    }
+    LaunchedEffect(resetTrigger) {
+        // Skip the initial composition (resetTrigger == 0) — only react to
+        // subsequent bumps from the long-press in MainScreen.
+        if (resetTrigger > 0) vm.resetFilters()
     }
 
     PullToRefreshBox(

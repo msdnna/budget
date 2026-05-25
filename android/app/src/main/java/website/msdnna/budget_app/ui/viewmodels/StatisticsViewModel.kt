@@ -96,6 +96,13 @@ class StatisticsViewModel(serverUrl: String) : ViewModel() {
         _deposit.value = value?.takeIf { it.isNotBlank() }
     }
 
+    /** Drops the deposit filter. The period selector intentionally stays —
+     *  Statistics is always scoped to some period (it's the primary axis),
+     *  so resetting to "all time" would be confusing. */
+    fun resetFilters() {
+        _deposit.value = null
+    }
+
     fun reload() {
         _refreshTick.value += 1
     }

@@ -817,6 +817,16 @@
 
 ## Android
 
+### [1.41.1] — 2026-05-25
+
+#### Added
+- **Кнопка «Сбросить» в карточке фильтров** Income/Expenses — справа от «Всего: N», видна только когда хотя бы один фильтр активен (категории / период / счёт / «Закрытые запросы»).
+- **Long-press на funnel в TopAppBar** теперь сбрасывает все фильтры текущего экрана. Income/Expenses вызывают свою VM напрямую (shared instance); Statistics/Forecast — через `resetTrigger: Int` counter-prop, который MainScreen инкрементирует, а экраны слушают через `LaunchedEffect`. Long-press сопровождается haptic feedback. Сам funnel IconButton переведён на `Modifier.combinedClickable` (M3 IconButton не expose'ит onLongClick).
+- В соответствующие VM добавлены методы `resetFilters()` (Income / Expenses / Statistics / Forecast).
+
+#### Changed
+- **Унифицированы заголовки карточек.** Карточка фильтров получила заголовок «Фильтры» в стиле `titleSmall + SemiBold`. IB-карточка (Income) перешла с центрированного `labelMedium` на левостороннее `titleSmall + SemiBold` — теперь стиль одинаков с «Лимит расходов».
+
 ### [1.41.0] — 2026-05-25
 
 #### Changed
