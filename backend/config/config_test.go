@@ -26,6 +26,11 @@ func TestNew_DevDefaults(t *testing.T) {
 	unsetEnv(t, "APP_ENV")
 	unsetEnv(t, "JWT_SECRET")
 	unsetEnv(t, "MONGO_URI")
+	unsetEnv(t, "MONGO_USERNAME")
+	unsetEnv(t, "MONGO_PASSWORD")
+	unsetEnv(t, "MONGO_DB")
+	unsetEnv(t, "MONGO_HOST")
+	unsetEnv(t, "MONGO_PORT")
 	unsetEnv(t, "DB_NAME")
 	unsetEnv(t, "PORT")
 	unsetEnv(t, "PDF_FONT_PATH")
@@ -71,6 +76,45 @@ func TestNew_RespectsEnv(t *testing.T) {
 	}
 	if cfg.FontPath != "/tmp/font.ttf" {
 		t.Errorf("FontPath = %q", cfg.FontPath)
+	}
+}
+
+func TestNew_StitchesMongoURIFromCreds(t *testing.T) {
+	unsetEnv(t, "APP_ENV")
+	unsetEnv(t, "JWT_SECRET")
+	unsetEnv(t, "MONGO_URI")
+	unsetEnv(t, "DB_NAME")
+	t.Setenv("MONGO_USERNAME", "ad@min")
+	t.Setenv("MONGO_PASSWORD", "p@ss/w?d")
+	t.Setenv("MONGO_DB", "budget_loadtest")
+	t.Setenv("MONGO_HOST", "db.example.com")
+	t.Setenv("MONGO_PORT", "27018")
+
+	cfg := New()
+	// Both username and password must round-trip through url.QueryEscape so
+	// at-signs / slashes / question-marks don't get parsed as URI delimiters.
+	const want = "mongodb://ad%40min:p%40ss%2Fw%3Fd@db.example.com:27018/budget_loadtest?authSource=admin"
+	if cfg.MongoURI != want {
+		t.Errorf("MongoURI =\n  %q\n  want %q", cfg.MongoURI, want)
+	}
+	if cfg.DBName != "budget_loadtest" {
+		t.Errorf("DBName = %q, want %q", cfg.DBName, "budget_loadtest")
+	}
+}
+
+func TestNew_DBNameFallsBackToMongoDB(t *testing.T) {
+	// DB_NAME unset, MONGO_DB set → DBName inherits MONGO_DB. Mirrors the
+	// docker-compose convention where backend reads DB_NAME but the rest of
+	// the .env only exposes MONGO_DB.
+	unsetEnv(t, "APP_ENV")
+	unsetEnv(t, "JWT_SECRET")
+	unsetEnv(t, "DB_NAME")
+	t.Setenv("MONGO_URI", "mongodb://x:y@h:1/zzz")
+	t.Setenv("MONGO_DB", "custom_loadtest")
+
+	cfg := New()
+	if cfg.DBName != "custom_loadtest" {
+		t.Errorf("DBName = %q, want %q", cfg.DBName, "custom_loadtest")
 	}
 }
 

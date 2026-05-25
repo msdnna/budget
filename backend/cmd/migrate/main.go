@@ -33,7 +33,15 @@ import (
 var collectionsToMigrate = []string{"transactions", "wishlist", "categories"}
 
 func main() {
-	_ = godotenv.Load()
+	// .env lives in the repo root, but `go run ./cmd/migrate` from backend/
+	// has CWD=backend/. Call Load() per-path because godotenv returns early
+	// on the first missing file when a list is passed — a single bad path
+	// would silently skip the rest. godotenv won't overwrite already-set
+	// keys, so the first hit wins. Inside the Docker image neither file
+	// exists and config falls back to process env (compose env_file).
+	for _, p := range []string{".env", "../.env"} {
+		_ = godotenv.Load(p)
+	}
 	cfg := config.New()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
