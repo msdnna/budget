@@ -817,6 +817,14 @@
 
 ## Android
 
+### [1.41.3] — 2026-05-25
+
+#### Changed
+- **Рефакторинг карточки фильтров в общий `FilterCard` компонент.** Inline `AnimatedVisibility` + `Card` + «Фильтры»-header + «Всего/Сбросить»-footer был продублирован на Income / Expenses / Statistics / Forecast — каждое изменение шапки/подвала надо было править в 4 местах (из-за чего ранее заголовок «Фильтры» и кнопка «Сбросить» приехали в Stats/Forecast отдельным релизом). Вынесли в `components/FilterCard.kt`: shell владеет анимацией, header'ом и опциональным footer'ом; экраны передают только свои `FilterSection`'ы и набор fields для активности (`hasActiveFilters` + `onReset`). Размеры файлов экранов: Income −36 строк, Expenses −34 строки, Statistics −13 строк, Forecast −10 строк. Вся визуальная поверхность идентична 1.41.2.
+
+#### Added
+- **Кнопка «Сбросить» теперь и на Stats / Forecast** (паритет с Income / Expenses) — справа в footer'е карточки, видна только когда активен deposit-фильтр. Долгое нажатие на funnel в TopAppBar продолжает работать как раньше.
+
 ### [1.41.2] — 2026-05-25
 
 #### Fixed

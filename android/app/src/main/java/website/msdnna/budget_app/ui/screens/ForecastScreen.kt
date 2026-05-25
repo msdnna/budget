@@ -337,51 +337,41 @@ fun ForecastScreen(
                     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         val forecastDeposit by vm.filterDeposit.collectAsState()
                         // Deposit scope filter: same UX as Stats — collapsed
-                        // under the TopAppBar funnel toggle. Card wrapper
-                        // keeps it visually aligned with the summary block.
-                        androidx.compose.animation.AnimatedVisibility(visible = filtersVisible) {
-                            Card(
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                        // under the TopAppBar funnel toggle.
+                        FilterCard(
+                            visible = filtersVisible,
+                            hasActiveFilters = forecastDeposit != null,
+                            onReset = { vm.resetFilters() },
+                            primaryColor = primaryColor,
+                        ) {
+                            FilterSection(title = "Счёт") {
+                                val depositRowState = androidx.compose.foundation.lazy.rememberLazyListState()
+                                TrackInnerHorizontalScroll(depositRowState)
+                                androidx.compose.foundation.lazy.LazyRow(
+                                    state = depositRowState,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
                                 ) {
-                                    Text(
-                                        "Фильтры",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
-                                    )
-                                    FilterSection(title = "Счёт") {
-                                        val depositRowState = androidx.compose.foundation.lazy.rememberLazyListState()
-                                        TrackInnerHorizontalScroll(depositRowState)
-                                        androidx.compose.foundation.lazy.LazyRow(
-                                            state = depositRowState,
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                        ) {
-                                            item {
-                                                DepositScopeChip(
-                                                    selected = forecastDeposit == null,
-                                                    label = "Все счета",
-                                                    icon = null,
-                                                    primaryColor = primaryColor,
-                                                    onClick = { vm.setFilterDeposit(null) },
-                                                )
-                                            }
-                                            items(DEPOSITS) { meta ->
-                                                DepositScopeChip(
-                                                    selected = forecastDeposit == meta.value,
-                                                    label = meta.label,
-                                                    icon = meta.icon,
-                                                    primaryColor = primaryColor,
-                                                    onClick = { vm.setFilterDeposit(meta.value) },
-                                                )
-                                            }
-                                        }
+                                    item {
+                                        DepositScopeChip(
+                                            selected = forecastDeposit == null,
+                                            label = "Все счета",
+                                            icon = null,
+                                            primaryColor = primaryColor,
+                                            onClick = { vm.setFilterDeposit(null) },
+                                        )
                                     }
-                                } // /Column (Фильтры block)
+                                    items(DEPOSITS) { meta ->
+                                        DepositScopeChip(
+                                            selected = forecastDeposit == meta.value,
+                                            label = meta.label,
+                                            icon = meta.icon,
+                                            primaryColor = primaryColor,
+                                            onClick = { vm.setFilterDeposit(meta.value) },
+                                        )
+                                    }
+                                }
                             }
                         }
                         when {
