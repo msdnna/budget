@@ -340,7 +340,10 @@ fun ForecastScreen(
                                 // LazyRow so long labels («Банковская карта»)
                                 // never need to truncate — overflow scrolls
                                 // horizontally instead.
+                                val depositRowState = androidx.compose.foundation.lazy.rememberLazyListState()
+                                TrackInnerHorizontalScroll(depositRowState)
                                 androidx.compose.foundation.lazy.LazyRow(
+                                    state = depositRowState,
                                     modifier = Modifier.fillMaxWidth().padding(12.dp),
                                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                                     verticalAlignment = Alignment.CenterVertically,

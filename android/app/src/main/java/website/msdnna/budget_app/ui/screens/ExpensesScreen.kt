@@ -273,7 +273,10 @@ fun ExpensesScreen(
                                 )
                             }
                             val filterDeposit by vm.filterDeposit.collectAsState()
+                            val depositRowState = androidx.compose.foundation.lazy.rememberLazyListState()
+                            TrackInnerHorizontalScroll(depositRowState)
                             androidx.compose.foundation.lazy.LazyRow(
+                                state = depositRowState,
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {

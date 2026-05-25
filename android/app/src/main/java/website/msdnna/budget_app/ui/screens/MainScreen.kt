@@ -614,69 +614,74 @@ fun MainScreen(
             (syncState as? SyncProgress.Running)?.let { running ->
                 SyncProgressBanner(progress = running, primaryColor = primaryColor)
             }
-            HorizontalPager(
-                state = pagerState,
-                // Pre-compose all off-screen pages so multi-page swipes never have
-                // to inflate during the gesture. Cold-start cost is one-time;
-                // subsequent swipes are pure layout-translate of cached compositions.
-                beyondViewportPageCount = NAV_ITEMS.size - 1,
-                // Default nested-scroll connection picks up unconsumed
-                // horizontal scroll (from inner LazyRow filter-chips, swipe
-                // cards) and keeps the pager flinging once the inner reaches
-                // its bound — manifesting as "the page leaks to the next tab
-                // when I scroll filter chips to the end". Swap in an empty
-                // connection so the pager only listens to direct gestures on
-                // its own viewport.
-                pageNestedScrollConnection = remember {
-                    object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {}
-                },
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-            ) { page ->
-                key(NAV_ITEMS[page].route) {
-                    when (NAV_ITEMS[page].route) {
-                        "statistics" -> StatisticsScreen(
-                            serverUrl = serverUrl,
-                            primaryColor = primaryColor,
-                            valuesHidden = valuesHidden,
-                            pieUnitRuble = pieUnitRuble,
-                            filtersVisible = filtersVisible,
-                            onDrilldownExpense = { category, from, to ->
-                                expensesVm.setFilterCategories(setOf(category))
-                                expensesVm.setDateRange(from, to)
-                                statsDrilldownTarget = 2
-                                scope.launch { pagerState.animateScrollToPage(2) }
-                            },
-                            onDrilldownIncome = { category, from, to ->
-                                incomeVm.setFilterCategories(setOf(category))
-                                incomeVm.setDateRange(from, to)
-                                statsDrilldownTarget = 1
-                                scope.launch { pagerState.animateScrollToPage(1) }
-                            },
-                        )
-                        "income" -> IncomeScreen(
-                            serverUrl, primaryColor, valuesHidden,
-                            filtersVisible = filtersVisible,
-                            onSelectionCountChange = { selectionCounts["income"] = it }
-                        )
-                        "expenses" -> ExpensesScreen(
-                            serverUrl, primaryColor, valuesHidden,
-                            filtersVisible = filtersVisible,
-                            currentUserId = currentUserId,
-                            isAdmin = isAdmin,
-                            onSelectionCountChange = { selectionCounts["expenses"] = it },
-                            onOpenDetailRequest = { id -> openDetailRequestId = id },
-                            onOpenCategoryLimits = { showCategoryLimits = true },
-                        )
-                        "forecast" -> ForecastScreen(
-                            serverUrl, primaryColor,
-                            filtersVisible = filtersVisible,
-                            onSelectionCountChange = { selectionCounts["forecast"] = it },
-                            onLinkExisting = { id, name -> linkExpenseTarget = id to name },
-                        )
-                        "export" -> ExportScreen(serverUrl, primaryColor)
+            // Page-children publish their own horizontal-scroll state here so
+            // the pager can pause its swipe gesture while an inner LazyRow
+            // (filter chips, etc.) is actively scrolling. `pageNestedScroll
+            // Connection` alone wasn't enough — it covers fling propagation
+            // but not the live pointer drag that follows once the inner
+            // hits its scroll bound.
+            val innerHScrolling = remember { mutableStateOf(false) }
+            androidx.compose.runtime.CompositionLocalProvider(
+                website.msdnna.budget_app.ui.components.LocalInnerHorizontalScroll provides innerHScrolling,
+            ) {
+                HorizontalPager(
+                    state = pagerState,
+                    // Pre-compose all off-screen pages so multi-page swipes never have
+                    // to inflate during the gesture. Cold-start cost is one-time;
+                    // subsequent swipes are pure layout-translate of cached compositions.
+                    beyondViewportPageCount = NAV_ITEMS.size - 1,
+                    pageNestedScrollConnection = remember {
+                        object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {}
+                    },
+                    userScrollEnabled = !innerHScrolling.value,
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                ) { page ->
+                    key(NAV_ITEMS[page].route) {
+                        when (NAV_ITEMS[page].route) {
+                            "statistics" -> StatisticsScreen(
+                                serverUrl = serverUrl,
+                                primaryColor = primaryColor,
+                                valuesHidden = valuesHidden,
+                                pieUnitRuble = pieUnitRuble,
+                                filtersVisible = filtersVisible,
+                                onDrilldownExpense = { category, from, to ->
+                                    expensesVm.setFilterCategories(setOf(category))
+                                    expensesVm.setDateRange(from, to)
+                                    statsDrilldownTarget = 2
+                                    scope.launch { pagerState.animateScrollToPage(2) }
+                                },
+                                onDrilldownIncome = { category, from, to ->
+                                    incomeVm.setFilterCategories(setOf(category))
+                                    incomeVm.setDateRange(from, to)
+                                    statsDrilldownTarget = 1
+                                    scope.launch { pagerState.animateScrollToPage(1) }
+                                },
+                            )
+                            "income" -> IncomeScreen(
+                                serverUrl, primaryColor, valuesHidden,
+                                filtersVisible = filtersVisible,
+                                onSelectionCountChange = { selectionCounts["income"] = it }
+                            )
+                            "expenses" -> ExpensesScreen(
+                                serverUrl, primaryColor, valuesHidden,
+                                filtersVisible = filtersVisible,
+                                currentUserId = currentUserId,
+                                isAdmin = isAdmin,
+                                onSelectionCountChange = { selectionCounts["expenses"] = it },
+                                onOpenDetailRequest = { id -> openDetailRequestId = id },
+                                onOpenCategoryLimits = { showCategoryLimits = true },
+                            )
+                            "forecast" -> ForecastScreen(
+                                serverUrl, primaryColor,
+                                filtersVisible = filtersVisible,
+                                onSelectionCountChange = { selectionCounts["forecast"] = it },
+                                onLinkExisting = { id, name -> linkExpenseTarget = id to name },
+                            )
+                            "export" -> ExportScreen(serverUrl, primaryColor)
+                        }
                     }
                 }
-            }
+            } // /CompositionLocalProvider for LocalInnerHorizontalScroll
         }
     }
 
