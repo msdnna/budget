@@ -1479,9 +1479,9 @@ const columns = computed(() => {
       },
     },
     {
-      title: 'Счёт',
+      title: '',
       key: 'deposit',
-      width: 44,
+      width: 36,
       align: 'center',
       render: (row) =>
         h(DepositChip, {

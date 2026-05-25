@@ -21,23 +21,34 @@
               />
             </n-space>
           </template>
-          <n-space align="center" justify="space-between">
-            <n-text
-              v-if="ibRecord"
-              :style="`color:${incomeColor};font-weight:600;font-size:18px${valuesHidden ? ';filter:blur(7px);user-select:none' : ''}`"
-            >
-              {{ ibRecord.amount.toLocaleString('ru-RU') }} ₽
-            </n-text>
-            <n-text v-else type="tertiary">Не задан</n-text>
-            <n-space>
-              <n-button v-if="ibRecord" size="small" quaternary type="error" @click="deleteIb">
+          <div class="ib-rows">
+            <div v-for="d in DEPOSITS" :key="d.value" class="ib-row">
+              <span class="ib-row-label">
+                <n-icon :component="d.icon" :size="16" />
+                <span>{{ d.label }}</span>
+              </span>
+              <span
+                v-if="ibByDeposit[d.value]"
+                :style="`color:${incomeColor};font-weight:600;font-size:16px${valuesHidden ? ';filter:blur(7px);user-select:none' : ''}`"
+              >
+                {{ ibByDeposit[d.value].amount.toLocaleString('ru-RU') }} ₽
+              </span>
+              <n-text v-else depth="3" style="font-size: 14px">Не задан</n-text>
+              <n-button
+                v-if="ibByDeposit[d.value]"
+                size="tiny"
+                quaternary
+                type="error"
+                title="Удалить"
+                @click="deleteIb(d.value)"
+              >
                 <template #icon><n-icon :component="TrashOutline" /></template>
               </n-button>
-              <n-button size="small" type="primary" @click="openIbForm">
-                {{ ibRecord ? 'Изменить' : 'Задать' }}
-              </n-button>
-            </n-space>
-          </n-space>
+            </div>
+          </div>
+          <n-button size="small" type="primary" block style="margin-top: 8px" @click="openIbForm">
+            {{ ibByDeposit.bank || ibByDeposit.cash ? 'Изменить' : 'Задать' }}
+          </n-button>
         </n-card>
 
         <!-- На мобильном левый pane по умолчанию скрыт. Кнопка `+ Добавить
@@ -470,35 +481,34 @@
       v-model:show="showIbForm"
       preset="card"
       title="Баланс на начало месяца"
-      style="max-width: 320px"
+      style="max-width: 360px"
     >
-      <n-form label-placement="top">
-        <n-form-item label="Сумма (₽)">
-          <n-input-number
-            v-model:value="ibAmount"
-            :min="0.01"
-            :precision="2"
-            style="width: 100%"
-            placeholder="0.00"
-          />
-        </n-form-item>
-        <n-form-item label="Счёт">
-          <n-radio-group v-model:value="ibDeposit" size="small">
-            <n-radio-button v-for="d in DEPOSITS" :key="d.value" :value="d.value">
-              <span class="dep-radio-content">
-                <n-icon :component="d.icon" />
-                {{ d.label }}
-              </span>
-            </n-radio-button>
-          </n-radio-group>
-        </n-form-item>
-      </n-form>
+      <n-tabs v-model:value="ibTab" type="line" animated size="small">
+        <n-tab-pane v-for="d in DEPOSITS" :key="d.value" :name="d.value">
+          <template #tab>
+            <span class="dep-radio-content">
+              <n-icon :component="d.icon" />
+              {{ d.label }}
+            </span>
+          </template>
+          <n-form label-placement="top">
+            <n-form-item :label="`Сумма на ${d.label.toLowerCase()} (₽)`">
+              <n-input-number
+                v-model:value="ibFormAmount[d.value]"
+                :min="0"
+                :precision="2"
+                style="width: 100%"
+                placeholder="0.00"
+                clearable
+              />
+            </n-form-item>
+          </n-form>
+        </n-tab-pane>
+      </n-tabs>
       <template #footer>
         <n-space justify="end">
           <n-button @click="showIbForm = false">Отмена</n-button>
-          <n-button type="primary" :loading="ibSaving" :disabled="!ibAmount" @click="saveIb">
-            Сохранить
-          </n-button>
+          <n-button type="primary" :loading="ibSaving" @click="saveIb">Сохранить</n-button>
         </n-space>
       </template>
     </n-modal>
@@ -565,6 +575,8 @@ import {
   NIcon,
   NRadioGroup,
   NRadioButton,
+  NTabs,
+  NTabPane,
 } from 'naive-ui'
 import {
   ArrowBackOutline,
@@ -715,12 +727,17 @@ async function deleteEditingRow() {
 }
 
 // ── Initial balance ───────────────────────────────────────────────────────────
+//
+// Initial balance lives independently per deposit scope (bank / cash) — each
+// scope has its own running balance, so a single sum doesn't make sense.
+// We keep one record per scope per month; the modal lets the user edit both
+// at once via tabs, and the header card surfaces both values stacked.
 
 const ibMonth = ref(Date.now())
-const ibRecord = ref(null)
+const ibByDeposit = ref({ bank: null, cash: null })
 const showIbForm = ref(false)
-const ibAmount = ref(null)
-const ibDeposit = ref(DEPOSIT_DEFAULT)
+const ibTab = ref(DEPOSIT_DEFAULT)
+const ibFormAmount = ref({ bank: null, cash: null })
 const ibSaving = ref(false)
 
 async function loadInitialBalance() {
@@ -729,41 +746,56 @@ async function loadInitialBalance() {
   const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
   const to = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
   try {
-    const { data } = await txApi.list({ type: 'initial_balance', from, to, limit: 1 })
-    ibRecord.value = (data.data || [])[0] || null
+    const { data } = await txApi.list({ type: 'initial_balance', from, to, limit: 10 })
+    const rows = data.data || []
+    // Pick the latest record per deposit (server returns desc by date).
+    const next = { bank: null, cash: null }
+    for (const r of rows) {
+      const dep = normalizeDeposit(r.deposit)
+      if (!next[dep]) next[dep] = r
+    }
+    ibByDeposit.value = next
   } catch {
-    ibRecord.value = null
+    ibByDeposit.value = { bank: null, cash: null }
   }
 }
 
 function openIbForm() {
-  ibAmount.value = ibRecord.value?.amount ?? null
-  ibDeposit.value = normalizeDeposit(ibRecord.value?.deposit)
+  ibFormAmount.value = {
+    bank: ibByDeposit.value.bank?.amount ?? null,
+    cash: ibByDeposit.value.cash?.amount ?? null,
+  }
+  ibTab.value = DEPOSIT_DEFAULT
   showIbForm.value = true
 }
 
 async function saveIb() {
-  if (!ibAmount.value) return
   ibSaving.value = true
   try {
     const d = new Date(ibMonth.value)
     const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
-    const deposit = normalizeDeposit(ibDeposit.value)
-    if (ibRecord.value) {
-      await txApi.update(ibRecord.value.id, { amount: ibAmount.value, deposit })
-    } else {
-      await txApi.create({
-        type: 'initial_balance',
-        amount: ibAmount.value,
-        date,
-        category: 'Начальный баланс',
-        deposit,
-      })
+    // Upsert each scope only when its amount actually changed (avoids
+    // bumping updated_at on the untouched record and the noise that brings
+    // through sync to Android clients).
+    for (const dep of ['bank', 'cash']) {
+      const next = ibFormAmount.value[dep]
+      const existing = ibByDeposit.value[dep]
+      const prev = existing?.amount ?? null
+      if (next === prev || next == null) continue
+      if (existing) {
+        await txApi.update(existing.id, { amount: next, deposit: dep })
+      } else {
+        await txApi.create({
+          type: 'initial_balance',
+          amount: next,
+          date,
+          category: 'Начальный баланс',
+          deposit: dep,
+        })
+      }
     }
     await loadInitialBalance()
     showIbForm.value = false
-    ibAmount.value = null
-    ibDeposit.value = DEPOSIT_DEFAULT
     message.success('Начальный баланс сохранён')
   } catch (e) {
     message.error(e.message)
@@ -772,11 +804,12 @@ async function saveIb() {
   }
 }
 
-async function deleteIb() {
-  if (!ibRecord.value) return
+async function deleteIb(deposit) {
+  const row = ibByDeposit.value[deposit]
+  if (!row) return
   try {
-    await txApi.remove(ibRecord.value.id)
-    ibRecord.value = null
+    await txApi.remove(row.id)
+    await loadInitialBalance()
     message.success('Начальный баланс удалён')
   } catch (e) {
     message.error(e.message)
@@ -1375,9 +1408,9 @@ const columns = computed(() => {
       },
     },
     {
-      title: 'Счёт',
+      title: '',
       key: 'deposit',
-      width: 44,
+      width: 36,
       align: 'center',
       render: (row) =>
         h(DepositChip, {
@@ -1766,6 +1799,27 @@ onMounted(() => {
   align-items: center;
   gap: 6px;
   line-height: 1;
+}
+
+/* Initial balance rows — two scopes stacked, each row label + amount + del btn. */
+.ib-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ib-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ib-row-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  font-size: 13px;
+  color: var(--text-3, currentColor);
+  opacity: 0.85;
 }
 
 /* Bulk-mode marker (replaces author avatar on selected cards). */
