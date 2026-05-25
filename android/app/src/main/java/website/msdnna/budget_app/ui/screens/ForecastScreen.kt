@@ -337,19 +337,24 @@ fun ForecastScreen(
                             Card(
                                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                             ) {
-                                Row(
+                                // LazyRow so long labels («Банковская карта»)
+                                // never need to truncate — overflow scrolls
+                                // horizontally instead.
+                                androidx.compose.foundation.lazy.LazyRow(
                                     modifier = Modifier.fillMaxWidth().padding(12.dp),
                                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
-                                    DepositScopeChip(
-                                        selected = forecastDeposit == null,
-                                        label = "Все счета",
-                                        icon = null,
-                                        primaryColor = primaryColor,
-                                        onClick = { vm.setFilterDeposit(null) },
-                                    )
-                                    DEPOSITS.forEach { meta ->
+                                    item {
+                                        DepositScopeChip(
+                                            selected = forecastDeposit == null,
+                                            label = "Все счета",
+                                            icon = null,
+                                            primaryColor = primaryColor,
+                                            onClick = { vm.setFilterDeposit(null) },
+                                        )
+                                    }
+                                    items(DEPOSITS) { meta ->
                                         DepositScopeChip(
                                             selected = forecastDeposit == meta.value,
                                             label = meta.label,
@@ -445,14 +450,16 @@ fun ForecastScreen(
                 } else {
                     synthesizeRegularItems(scopedWishlist, localTransactions)
                 }
-                if (regular.isNotEmpty()) {
-                    item {
-                        Text(
-                            "Регулярные расходы",
-                            style = MaterialTheme.typography.titleMedium,
-                            modifier = Modifier.padding(top = 8.dp)
-                        )
-                    }
+                item {
+                    Text(
+                        "Регулярные расходы",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
+                if (regular.isEmpty()) {
+                    item { EmptyView("Регулярных расходов нет") }
+                } else {
                     items(regular, key = { "reg:${it.id}" }) { regItem ->
                         SwipeableRegularItemCard(
                             modifier = Modifier.animateItem(),

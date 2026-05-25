@@ -70,7 +70,7 @@ class IncomeViewModel(private val serverUrl: String) : ViewModel() {
     )
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    val ibRecord: StateFlow<Transaction?> = combine(_ibYear, _ibMonth) { y, m -> y to m }
+    val ibByDeposit: StateFlow<Map<String, Transaction>> = combine(_ibYear, _ibMonth) { y, m -> y to m }
         .flatMapLatest { (y, m) ->
             val from = "%04d-%02d-01".format(y, m)
             val lastDay = Calendar.getInstance()
@@ -81,9 +81,20 @@ class IncomeViewModel(private val serverUrl: String) : ViewModel() {
                 type = "initial_balance",
                 from = from,
                 to = to,
-            ).map { it.firstOrNull() }
+            ).map { rows ->
+                // Newest-per-deposit. Repo orders desc by date; the first
+                // match per scope is the "current" record. Empty-deposit
+                // legacy rows collapse to "bank" (mirrors NormalizeDeposit
+                // on the server side).
+                val out = mutableMapOf<String, Transaction>()
+                for (tx in rows) {
+                    val dep = tx.deposit.ifBlank { "bank" }
+                    if (!out.containsKey(dep)) out[dep] = tx
+                }
+                out.toMap()
+            }
         }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
 
     private val _page = MutableStateFlow(1)
     val page = _page.asStateFlow()
@@ -134,12 +145,18 @@ class IncomeViewModel(private val serverUrl: String) : ViewModel() {
         } else _ibMonth.value++
     }
 
+    /**
+     * Saves an initial-balance amount for the given deposit scope. Upserts
+     * the existing record if one exists this month, otherwise creates a
+     * fresh one. Callers from the deposit-tabbed sheet invoke this once per
+     * scope they want to change.
+     */
     fun saveInitialBalance(amount: Double, deposit: String = "bank") {
         viewModelScope.launch {
             val year = _ibYear.value
             val month = _ibMonth.value
             val date = "%04d-%02d-01".format(year, month)
-            val current = ibRecord.value
+            val current = ibByDeposit.value[deposit]
             if (current != null) {
                 TransactionRepository.update(current.id, amount = amount, deposit = deposit)
             } else {
