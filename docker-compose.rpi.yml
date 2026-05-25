@@ -56,7 +56,7 @@ services:
       - PDF_FONT_PATH=/usr/share/fonts/dejavu/DejaVuSans.ttf
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
       - TZ=${TZ:-Europe/Moscow}
-      - ANDROID_LATEST=${ANDROID_LATEST:-1.40.3}
+      - ANDROID_LATEST=${ANDROID_LATEST:-1.40.4}
       - ANDROID_MIN_REQUIRED=${ANDROID_MIN_REQUIRED:-1.12.0}
     depends_on:
       mongodb:

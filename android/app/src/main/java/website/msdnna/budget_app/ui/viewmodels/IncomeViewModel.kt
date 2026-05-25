@@ -145,6 +145,13 @@ class IncomeViewModel(private val serverUrl: String) : ViewModel() {
         } else _ibMonth.value++
     }
 
+    /** Set the IB period directly — used by the tile picker that replaced
+     *  the prev/next arrows in the IB card header. */
+    fun selectIbMonth(year: Int, month: Int) {
+        _ibYear.value = year
+        _ibMonth.value = month
+    }
+
     /**
      * Saves an initial-balance amount for the given deposit scope. Upserts
      * the existing record if one exists this month, otherwise creates a

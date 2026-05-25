@@ -273,18 +273,20 @@ fun ExpensesScreen(
                                 )
                             }
                             val filterDeposit by vm.filterDeposit.collectAsState()
-                            Row(
+                            androidx.compose.foundation.lazy.LazyRow(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                DepositScopeChip(
-                                    selected = filterDeposit == null,
-                                    label = "Все счета",
-                                    icon = null,
-                                    primaryColor = primaryColor,
-                                    onClick = { vm.setFilterDeposit(null) },
-                                )
-                                DEPOSITS.forEach { meta ->
+                                item {
+                                    DepositScopeChip(
+                                        selected = filterDeposit == null,
+                                        label = "Все счета",
+                                        icon = null,
+                                        primaryColor = primaryColor,
+                                        onClick = { vm.setFilterDeposit(null) },
+                                    )
+                                }
+                                items(DEPOSITS) { meta ->
                                     DepositScopeChip(
                                         selected = filterDeposit == meta.value,
                                         label = meta.label,

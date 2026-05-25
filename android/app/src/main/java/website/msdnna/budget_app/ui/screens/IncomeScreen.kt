@@ -173,99 +173,111 @@ fun IncomeScreen(
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp).fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.Top,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        // Top row: title + month navigator on the left, edit
-                        // button on the right. The per-deposit amounts go on
-                        // the second row inside the same column (see below).
-                        Column(modifier = Modifier.weight(1f)) {
+                        // Left column — title + per-deposit balance rows.
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
                             Text(
                                 "Баланс на начало месяца",
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                IconButton(
-                                    onClick = { vm.ibNavigateBack() },
-                                    modifier = Modifier.size(24.dp),
-                                ) { Text("‹") }
-                                Text(
-                                    "${monthName(ibMonth)} $ibYear",
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                                IconButton(
-                                    onClick = { vm.ibNavigateForward() },
-                                    modifier = Modifier.size(24.dp),
-                                ) { Text("›") }
-                            }
-                            // Per-deposit summary rows. Same layout as the
-                            // web Income view (1.40.0) — each scope owns its
-                            // own row, missing scopes show "Не задан". Eyes-
-                            // closed mode (valuesHidden) replaces digits with
-                            // a coloured pill so the layout stays stable.
-                            Column(
-                                modifier = Modifier.padding(top = 4.dp),
-                                verticalArrangement = Arrangement.spacedBy(2.dp),
-                            ) {
-                                DEPOSITS.forEach { meta ->
-                                    val record = ibByDeposit[meta.value]
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                    ) {
-                                        Icon(
-                                            imageVector = meta.icon,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.size(14.dp),
-                                        )
+                            DEPOSITS.forEach { meta ->
+                                val record = ibByDeposit[meta.value]
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                ) {
+                                    Icon(
+                                        imageVector = meta.icon,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(14.dp),
+                                    )
+                                    Text(
+                                        meta.label,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.weight(1f),
+                                        maxLines = 1,
+                                        softWrap = false,
+                                    )
+                                    if (record == null) {
                                         Text(
-                                            meta.label,
+                                            "Не задан",
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.weight(1f),
                                         )
-                                        if (record == null) {
-                                            Text(
-                                                "Не задан",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            )
-                                        } else if (valuesHidden) {
-                                            Box(
-                                                Modifier.height(14.dp).width(60.dp)
-                                                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
-                                                    .background(primaryColor.copy(alpha = 0.22f)),
-                                            )
-                                        } else {
-                                            Text(
-                                                "${formatMoney(record.amount)} ₽",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = primaryColor,
-                                                fontWeight = FontWeight.SemiBold,
-                                            )
-                                        }
+                                    } else if (valuesHidden) {
+                                        Box(
+                                            Modifier.height(14.dp).width(60.dp)
+                                                .clip(androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
+                                                .background(primaryColor.copy(alpha = 0.22f)),
+                                        )
+                                    } else {
+                                        Text(
+                                            "${formatMoney(record.amount)} ₽",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = primaryColor,
+                                            fontWeight = FontWeight.SemiBold,
+                                        )
                                     }
                                 }
                             }
                         }
-                        Button(
-                            onClick = { showIbForm = true },
-                            colors = ButtonDefaults.buttonColors(containerColor = primaryColor),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                            modifier = Modifier.height(32.dp),
+                        // Right-side action column: period picker (calendar
+                        // glyph) + edit (pencil). Both compact 32dp icons so
+                        // the card stays ~3 rows tall even with two scopes
+                        // populated. The month text was replaced by a popup
+                        // anchored to the calendar icon — saves a row's worth
+                        // of vertical space and looks closer to a control bar
+                        // than a date label.
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                            horizontalAlignment = Alignment.End,
                         ) {
-                            Crossfade(
-                                targetState = ibByDeposit.isNotEmpty(),
-                                animationSpec = tween(180),
-                                label = "ibBtn",
-                            ) { hasIb ->
-                                Text(if (hasIb) "Изменить" else "Задать", fontSize = 12.sp)
+                            Box {
+                                var ibPickerOpen by remember { mutableStateOf(false) }
+                                IconButton(
+                                    onClick = { ibPickerOpen = true },
+                                    modifier = Modifier.size(32.dp),
+                                ) {
+                                    Icon(
+                                        Icons.Default.CalendarMonth,
+                                        contentDescription = "${monthName(ibMonth)} $ibYear",
+                                    )
+                                }
+                                TilePeriodPickerPopup(
+                                    open = ibPickerOpen,
+                                    type = TilePickerType.MONTH,
+                                    year = ibYear,
+                                    month = ibMonth,
+                                    primaryColor = primaryColor,
+                                    onSelect = { y, m ->
+                                        vm.selectIbMonth(y, m)
+                                        ibPickerOpen = false
+                                    },
+                                    onDismiss = { ibPickerOpen = false },
+                                )
                             }
+                            IconButton(
+                                onClick = { showIbForm = true },
+                                modifier = Modifier.size(32.dp),
+                            ) {
+                                Icon(Icons.Default.Edit, contentDescription = "Изменить")
+                            }
+                            // Tiny period label under the icons so the user
+                            // still sees which month is in play without
+                            // opening the picker.
+                            Text(
+                                "${monthName(ibMonth)} $ibYear",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         }
                     }
                 }
@@ -314,20 +326,24 @@ fun IncomeScreen(
                             }
                             // Deposit-scope chip row — mirrors Stats/Forecast
                             // so the user reaches «Все / Карта / Наличные»
-                            // through the same affordance everywhere.
+                            // through the same affordance everywhere. LazyRow
+                            // so long labels horizontally scroll instead of
+                            // truncating to «Нали…».
                             val filterDeposit by vm.filterDeposit.collectAsState()
-                            Row(
+                            androidx.compose.foundation.lazy.LazyRow(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                DepositScopeChip(
-                                    selected = filterDeposit == null,
-                                    label = "Все счета",
-                                    icon = null,
-                                    primaryColor = primaryColor,
-                                    onClick = { vm.setFilterDeposit(null) },
-                                )
-                                DEPOSITS.forEach { meta ->
+                                item {
+                                    DepositScopeChip(
+                                        selected = filterDeposit == null,
+                                        label = "Все счета",
+                                        icon = null,
+                                        primaryColor = primaryColor,
+                                        onClick = { vm.setFilterDeposit(null) },
+                                    )
+                                }
+                                items(DEPOSITS) { meta ->
                                     DepositScopeChip(
                                         selected = filterDeposit == meta.value,
                                         label = meta.label,
