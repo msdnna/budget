@@ -16,6 +16,11 @@
 
 ## API (backend)
 
+### [1.25.1] — 2026-05-25
+
+#### Fixed
+- **Forecast NPE на Android при пустом scope.** `Forecast()` собирал `breakdown` через `for cat, amount := range catMap` — на пустом scope (например `?deposit=cash` без cash-tx) переменная оставалась `nil`, Gin сериализовывал её как `null`, а Gson на Android при reflection-десериализации пихал `null` в non-nullable `List<CategoryStat>` поле модели, в результате `breakdown.isNotEmpty()` крашил приложение. Force-инициализация пустой slice (`[]models.CategoryData{}`) перед return'ом — теперь по проводам всегда `[]`. (Та же защита уже была на `regular_items` и `unpurchased_wishlist`.)
+
 ### [1.25.0] — 2026-05-24
 
 #### Added
@@ -274,6 +279,16 @@
 ---
 
 ## Web (frontend)
+
+### [1.40.1] — 2026-05-25
+
+#### Changed / Fixed
+- **`DepositChip`** теперь оборачивается в `NTooltip` — на hover показывается `Счёт: <Карта|Наличные> · нажмите для смены` (раньше был только нативный `title` attribute, не стилизованный).
+- **Колонка «Счёт»** в десктоп-таблицах Income/Expenses без заголовка (иконка self-explanatory). Width сокращён 44→36 px.
+- **Initial balance** на IncomeView переделан: в карточке шапки одновременно показываются обе суммы (Банковская карта / Наличные) + кнопка «Изменить». Модалка теперь содержит вкладки bank/cash вместо радио-селектора «куда записать» — пользователь редактирует обе суммы за одно открытие. Удаление per-deposit.
+- **NSelect высоты** «Счёт» на Statistics выровняли с соседями — убрали `size="small"` (TilePeriodPicker / NDatePicker по умолчанию medium).
+- **Forecast wishlist таблица** теперь учитывает `forecastDeposit`: `wishlistOnly` фильтрует `wlStore.items` по `deposit`. Раньше при фильтре `cash` donut и summary стояли корректными, а таблица «Список желаний» показывала все элементы независимо от scope'а.
+- **StatisticsView mobile**: триггеры периода и счёта разнесены в две отдельные кнопки — `NPopover` (период + tile picker / daterange внутри) и `NDropdown` (Все / Карта / Наличные). Иконка-триггер для счёта меняется по выбранному scope (wallet/card/cash).
 
 ### [1.40.0] — 2026-05-24
 
@@ -787,6 +802,13 @@
 ---
 
 ## Android
+
+### [1.40.1] — 2026-05-25
+
+#### Changed / Fixed
+- **StatisticsScreen / ForecastScreen**: deposit-фильтр (Все / Карта / Наличные) перенесён внутрь карточки period selector'а (Stats) и в собственную Card-карточку (Forecast) — раньше чипы лежали отдельной свободной строкой и визуально не группировались с периодом. Активный чип красится в primary-цвет (как period-chip).
+- **TopAppBar overflow**: title Text получил `maxLines=1, softWrap=false, overflow=Ellipsis`, Crossfade обёрнут `Modifier.weight(1f, fill=false)`. На route'е `expenses` дата `today` скрывается, чтобы 4-иконочный action-row не давил title до per-letter обрезки.
+- **Forecast crash на фильтре `Наличные`**: добавлен defensive guard в `ForecastViewModel.fetchForecast()` — `breakdown / regularItems / unpurchasedWishlist` приходящие из JSON как `null` (Gson не консультирует kotlin-дефолты при reflection-десериализации) заменяются на `emptyList()`. Связан с фиксом api 1.25.1.
 
 ### [1.40.0] — 2026-05-24
 

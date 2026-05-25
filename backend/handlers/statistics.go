@@ -451,6 +451,14 @@ func (h *StatisticsHandler) Forecast(c *gin.Context) {
 	if unpurchased == nil {
 		unpurchased = []models.WishlistItem{}
 	}
+	// Gin marshals a nil slice as JSON `null`, which Gson on Android happily
+	// assigns to a non-nullable `List<…>` field — the next `.isNotEmpty()`
+	// call then crashes with NPE. Force an empty slice so the wire always
+	// carries `[]`. (Same precaution applied to regular_items / unpurchased
+	// above.)
+	if breakdown == nil {
+		breakdown = []models.CategoryData{}
+	}
 
 	c.JSON(http.StatusOK, models.ForecastResponse{
 		TotalMonthly:        total,
