@@ -620,7 +620,17 @@ fun MainScreen(
                 // to inflate during the gesture. Cold-start cost is one-time;
                 // subsequent swipes are pure layout-translate of cached compositions.
                 beyondViewportPageCount = NAV_ITEMS.size - 1,
-                modifier = Modifier.weight(1f).fillMaxWidth()
+                // Default nested-scroll connection picks up unconsumed
+                // horizontal scroll (from inner LazyRow filter-chips, swipe
+                // cards) and keeps the pager flinging once the inner reaches
+                // its bound — manifesting as "the page leaks to the next tab
+                // when I scroll filter chips to the end". Swap in an empty
+                // connection so the pager only listens to direct gestures on
+                // its own viewport.
+                pageNestedScrollConnection = remember {
+                    object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {}
+                },
+                modifier = Modifier.weight(1f).fillMaxWidth(),
             ) { page ->
                 key(NAV_ITEMS[page].route) {
                     when (NAV_ITEMS[page].route) {
