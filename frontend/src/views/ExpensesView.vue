@@ -615,12 +615,7 @@ import {
 import { useDetailRequestsStore } from '@/stores/detailRequests'
 import { useNotificationsStore } from '@/stores/notifications'
 import { useAuthStore } from '@/stores/auth'
-import {
-  useAdaptiveTable,
-  plainTextCell,
-  renderActionsPopover,
-  renderActionButton,
-} from '@/utils/adaptiveTable'
+import { useAdaptiveTable, plainTextCell, renderActionsRow } from '@/utils/adaptiveTable'
 
 const store = useTransactionsStore('expenses')
 const drStore = useDetailRequestsStore()
@@ -1629,64 +1624,55 @@ const columns = computed(() => {
     {
       title: '',
       key: 'actions',
-      width: compact ? 44 : 140,
+      width: compact ? 44 : 110,
       align: 'right',
       render: (row) => {
-        // Detail-request — единственный «опциональный» action (только у
-        // parent-расходов). В wide-режиме он живёт в фиксированном leftmost-
-        // слоте, чтобы Eye/Copy/Trash оставались в одной вертикали по всем
-        // строкам (мирор Forecast'овского Refresh-placeholder pattern).
-        let detailDesc = null
+        // Eye + Trash — quick (always visible). Template + DR — under «⋯».
+        // Edit (pencil) is handled inline via per-cell pencils, not here.
+        const quick = [
+          {
+            icon: row.hidden ? EyeOffOutline : EyeOutline,
+            label: row.hidden ? 'Показать' : 'Скрыть',
+            type: row.hidden ? 'warning' : 'default',
+            onClick: () => store.toggle(row.id, !row.hidden),
+          },
+          {
+            icon: TrashOutline,
+            label: 'Удалить',
+            type: 'error',
+            confirm: 'Удалить запись?',
+            onClick: () => store.remove(row.id),
+          },
+        ]
+        const more = [
+          {
+            icon: CopyOutline,
+            label: 'Добавить как шаблон',
+            type: 'info',
+            onClick: () => fillFromTemplate(row),
+          },
+        ]
         if (!row.parent_id) {
-          detailDesc = row.detail_request_id
-            ? {
-                icon: ListOutline,
-                label:
-                  row.detail_request_status === 'open'
-                    ? 'Открыть запрос на детализацию'
-                    : 'Закрытый запрос на детализацию',
-                type: 'warning',
-                onClick: () => openDetailRequest(row.detail_request_id),
-              }
-            : {
-                icon: ListOutline,
-                label: 'Создать запрос на детализацию',
-                type: 'primary',
-                onClick: () => startCreateDetailRequest(row),
-              }
+          if (row.detail_request_id) {
+            more.push({
+              icon: ListOutline,
+              label:
+                row.detail_request_status === 'open'
+                  ? 'Открыть запрос на детализацию'
+                  : 'Закрытый запрос на детализацию',
+              type: 'warning',
+              onClick: () => openDetailRequest(row.detail_request_id),
+            })
+          } else {
+            more.push({
+              icon: ListOutline,
+              label: 'Создать запрос на детализацию',
+              type: 'primary',
+              onClick: () => startCreateDetailRequest(row),
+            })
+          }
         }
-        const eyeDesc = {
-          icon: row.hidden ? EyeOffOutline : EyeOutline,
-          label: row.hidden ? 'Показать' : 'Скрыть',
-          type: row.hidden ? 'warning' : 'default',
-          onClick: () => store.toggle(row.id, !row.hidden),
-        }
-        const copyDesc = {
-          icon: CopyOutline,
-          label: 'Добавить как шаблон',
-          type: 'info',
-          onClick: () => fillFromTemplate(row),
-        }
-        const trashDesc = {
-          icon: TrashOutline,
-          label: 'Удалить',
-          type: 'error',
-          confirm: 'Удалить запись?',
-          onClick: () => store.remove(row.id),
-        }
-        if (compact) {
-          return renderActionsPopover([detailDesc, eyeDesc, copyDesc, trashDesc].filter(Boolean))
-        }
-        return h(
-          'div',
-          { style: 'display:flex;justify-content:flex-end;align-items:center;gap:2px' },
-          [
-            detailDesc ? renderActionButton(detailDesc) : h('div', { style: 'width:28px' }),
-            renderActionButton(eyeDesc),
-            renderActionButton(copyDesc),
-            renderActionButton(trashDesc),
-          ],
-        )
+        return renderActionsRow({ quick, more, compact })
       },
     },
   ]

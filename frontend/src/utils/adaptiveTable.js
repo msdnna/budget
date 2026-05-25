@@ -188,6 +188,25 @@ export function renderActionsPopover(actions) {
   )
 }
 
+// Action-row с разделением quick (всегда видны) + more (под «⋯»). В compact-
+// режиме оба массива схлопываются в один popover (renderActionsPopover).
+// Cтандарт: больше 3 действий → quick = 2 наиболее частых (eye/delete),
+// остальное уезжает в more.
+export function renderActionsRow({ quick = [], more = [], compact = false }) {
+  if (compact) return renderActionsPopover([...quick, ...more].filter(Boolean))
+  const items = []
+  for (const a of quick) {
+    if (a) items.push(renderActionButton(a))
+  }
+  const moreFiltered = more.filter(Boolean)
+  if (moreFiltered.length) items.push(renderActionsPopover(moreFiltered))
+  return h(
+    'div',
+    { style: 'display:flex;justify-content:flex-end;align-items:center;gap:2px' },
+    items,
+  )
+}
+
 // Plain-text cell: span с опциональным inline-style. Используется в compact-
 // режиме в паре с column-level `ellipsis: { tooltip: true }`.
 export function plainTextCell(text, extraStyle = '') {

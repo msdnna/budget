@@ -121,6 +121,7 @@ func (h *TransactionHandler) Create(c *gin.Context) {
 // @Param        page              query     int     false  "Страница (1-based)"  default(1)
 // @Param        limit             query     int     false  "Размер страницы (1-100)"  default(20)
 // @Param        include_detailed  query     bool    false  "Показывать родителей закрытых detail-requests"
+// @Param        include_split     query     bool    false  "Показывать родителей разделённых income-транзакций"
 // @Success      200  {object}  map[string]interface{}
 // @Failure      401  {object}  map[string]string
 // @Router       /transactions [get]
@@ -172,6 +173,10 @@ func (h *TransactionHandler) List(c *gin.Context) {
 
 	if v := c.Query("include_detailed"); v == "true" || v == "1" {
 		filter.IncludeDetailed = true
+	}
+
+	if v := c.Query("include_split"); v == "true" || v == "1" {
+		filter.IncludeSplit = true
 	}
 
 	if v := c.Query("unlinked"); v == "true" || v == "1" {

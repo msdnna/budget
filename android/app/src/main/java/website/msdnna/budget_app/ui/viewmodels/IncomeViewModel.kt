@@ -30,6 +30,7 @@ class IncomeViewModel(private val serverUrl: String) : ViewModel() {
     private val _filterFrom = MutableStateFlow<String?>(null)
     private val _filterTo = MutableStateFlow<String?>(null)
     private val _filterDeposit = MutableStateFlow<String?>(null)
+    private val _filterIncludeSplit = MutableStateFlow(false)
     private val _ibYear = MutableStateFlow(now.get(Calendar.YEAR))
     private val _ibMonth = MutableStateFlow(now.get(Calendar.MONTH) + 1)
     private val _selectedIds = MutableStateFlow<Set<String>>(emptySet())
@@ -38,6 +39,7 @@ class IncomeViewModel(private val serverUrl: String) : ViewModel() {
     val filterFrom = _filterFrom.asStateFlow()
     val filterTo = _filterTo.asStateFlow()
     val filterDeposit = _filterDeposit.asStateFlow()
+    val filterIncludeSplit = _filterIncludeSplit.asStateFlow()
     val selectedIds = _selectedIds.asStateFlow()
     val categories: StateFlow<List<Category>> = combine(
         CategoryRepository.income,
@@ -49,15 +51,16 @@ class IncomeViewModel(private val serverUrl: String) : ViewModel() {
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val uiState: StateFlow<IncomeUiState> = combine(
-        _filterCats, _filterFrom, _filterTo, _filterDeposit,
-    ) { c, f, t, d -> FilterTuple(c, f, t, d) }
-        .flatMapLatest { (cats, from, to, deposit) ->
+        _filterCats, _filterFrom, _filterTo, _filterDeposit, _filterIncludeSplit,
+    ) { c, f, t, d, s -> FilterTuple(c, f, t, d, s) }
+        .flatMapLatest { (cats, from, to, deposit, includeSplit) ->
             TransactionRepository.observeFiltered(
                 type = "income",
                 categories = cats.takeIf { it.isNotEmpty() },
                 from = from,
                 to = to,
                 deposit = deposit,
+                includeSplit = includeSplit,
             ).map { txs -> IncomeUiState(transactions = txs, total = txs.size, loading = false) }
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, IncomeUiState(loading = true))
@@ -67,6 +70,7 @@ class IncomeViewModel(private val serverUrl: String) : ViewModel() {
         val from: String?,
         val to: String?,
         val deposit: String?,
+        val includeSplit: Boolean,
     )
 
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -130,14 +134,21 @@ class IncomeViewModel(private val serverUrl: String) : ViewModel() {
         _page.value = 1
     }
 
+    fun setFilterIncludeSplit(value: Boolean) {
+        _filterIncludeSplit.value = value
+        _page.value = 1
+    }
+
     /** Clears every filter knob in one go — categories, date range, deposit
-     *  scope. Used by the «Сбросить» button at the bottom of the filter card
-     *  and by long-pressing the funnel icon in the top app bar. */
+     *  scope, split-parent visibility. Used by the «Сбросить» button at the
+     *  bottom of the filter card and by long-pressing the funnel icon in the
+     *  top app bar. */
     fun resetFilters() {
         _filterCats.value = emptySet()
         _filterFrom.value = null
         _filterTo.value = null
         _filterDeposit.value = null
+        _filterIncludeSplit.value = false
         _page.value = 1
     }
     fun loadMore() { /* no-op: Room observes full list */ }
@@ -262,6 +273,29 @@ class IncomeViewModel(private val serverUrl: String) : ViewModel() {
     suspend fun getUsers(): List<UserInfo> = runCatching {
         RetrofitClient.getService(serverUrl).getUsers()
     }.getOrDefault(emptyList())
+
+    /**
+     * Split an income transaction into N children across deposits via the
+     * server endpoint. Online-only: the server is the source of truth for the
+     * atomic op; once it returns, we kick a sync pull so Room mirrors the new
+     * children + the parent's `excluded_from_stats=true` flip. Returns null on
+     * failure so the caller can surface a Snackbar.
+     */
+    suspend fun splitTransaction(id: String, parts: List<SplitPart>): Throwable? = runCatching {
+        RetrofitClient.getService(serverUrl).splitTransaction(id, SplitRequest(parts))
+        SyncWorker.enqueue(AppContainer.appContext)
+        null
+    }.getOrElse { it }
+
+    /**
+     * Reverse a previous split — soft-deletes every child and restores the
+     * parent's visibility. Same online-only contract as [splitTransaction].
+     */
+    suspend fun unsplitTransaction(id: String): Throwable? = runCatching {
+        RetrofitClient.getService(serverUrl).unsplitTransaction(id)
+        SyncWorker.enqueue(AppContainer.appContext)
+        null
+    }.getOrElse { it }
 
     suspend fun addCategory(name: String): Category? =
         CategoryRepository.addCategory(serverUrl, "income", name)

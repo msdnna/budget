@@ -23,6 +23,7 @@ export function useTransactionsStore(scope = 'default') {
         to: '',
         deposit: '',
         includeDetailed: false,
+        includeSplit: false,
       })
 
       async function fetch() {
@@ -39,6 +40,7 @@ export function useTransactionsStore(scope = 'default') {
           if (filters.value.to) params.to = filters.value.to
           if (filters.value.deposit) params.deposit = filters.value.deposit
           if (filters.value.includeDetailed) params.include_detailed = 'true'
+          if (filters.value.includeSplit) params.include_split = 'true'
 
           const { data } = await api.list(params)
           items.value = data.data || []
@@ -70,6 +72,16 @@ export function useTransactionsStore(scope = 'default') {
         await fetch()
       }
 
+      async function split(id, splits) {
+        await api.split(id, splits)
+        await fetch()
+      }
+
+      async function unsplit(id) {
+        await api.unsplit(id)
+        await fetch()
+      }
+
       function setPage(p) {
         page.value = p
         fetch()
@@ -87,6 +99,7 @@ export function useTransactionsStore(scope = 'default') {
           to: '',
           deposit: '',
           includeDetailed: false,
+          includeSplit: false,
           ...f,
         }
         page.value = 1
@@ -105,6 +118,8 @@ export function useTransactionsStore(scope = 'default') {
         update,
         remove,
         toggle,
+        split,
+        unsplit,
         setPage,
         setFilters,
       }

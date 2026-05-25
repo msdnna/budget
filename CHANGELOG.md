@@ -16,6 +16,17 @@
 
 ## API (backend)
 
+### [1.26.0] — 2026-05-26
+
+#### Added
+- **Разделение дохода по депозитам.** `POST /api/transactions/:id/split` атомарно создаёт N (≥2) дочерних транзакций c заданными `amount`+`deposit` (bank/cash), наследующих категорию/дату/источник/описание у parent'а; parent помечается `excluded_from_stats=true` и пропадает из стандартных списков и агрегаций. Сумма частей должна точно равняться сумме parent'а (допуск 0.01 ₽ на округление). `POST /api/transactions/:id/unsplit` soft-удаляет всех детей и снимает с parent'а `excluded_from_stats` — после этого его можно разделить заново.
+- **Filter `include_split=true` для `GET /api/transactions`.** По умолчанию (`false`) скрывает split-parent income-транзакции; включение — для UI-чекбокса «Показать разделённые». DR-логика расходов не затронута (фильтр `$nor` отдельно проверяет `type=income` + пустой `detail_request_status`).
+- **`TransactionFilter.IncludeSplit`.** Параллель к существующему `IncludeDetailed`.
+
+#### Tests
+- `TestTransactionSplit_FullFlow` — happy path (split → parent hidden / `include_split=true` returns it / stats считают только детей / double-split → 409 / unsplit → восстановление / re-split после unsplit).
+- `TestTransactionSplit_Validation` — sum mismatch / `min=2` / non-income → 400; unsplit на never-split → 409.
+
 ### [1.25.1] — 2026-05-25
 
 #### Fixed
@@ -279,6 +290,15 @@
 ---
 
 ## Web (frontend)
+
+### [1.41.0] — 2026-05-26
+
+#### Added
+- **Разделение дохода по депозитам.** В Income action `Разделить доход` под «⋯» открывает `SplitIncomeModal.vue`: input-number «Делить на» (2–10), список prefilled-карточек `{amount × DepositChip}`, auto-balance последнего слота при правке предыдущих, чёткая валидация sum == parent. После split: parent скрыт из стандартного списка, дети видны со своими деньгами/депозитами. Кнопка `Расформировать` под «⋯» split-parent'а (видна когда включён чекбокс «Показать разделённые») и удаление split-child'а вызывают POST `/transactions/:id/unsplit` через `useDialog` confirm, после чего исходная запись восстанавливается и её можно разделить заново.
+- **Фильтр «Показать разделённые»** на IncomeView (desktop inline + mobile filter-popover) — пробрасывает `include_split=true` в `GET /transactions`. Счётчик `activeFilterCount` учитывает его.
+
+#### Changed
+- **Actions-панель Income/Expenses overhaul.** Больше нет четырёх кнопок в ряд — оставлены только два quick-action (👁 показать/скрыть и 🗑 удалить); вторичные действия (Шаблон, Разделить/ЗнД) ушли под единый «⋯»-popover. Pencil-edit в actions удалён (inline-pencils в каждой клетке решают задачу полностью). Хелпер `renderActionsRow({ quick, more, compact })` в `utils/adaptiveTable.js` — единый рендерер для обоих view; в compact-режиме всё схлопывается в единый popover как раньше.
 
 ### [1.40.3] — 2026-05-25
 
@@ -816,6 +836,19 @@
 ---
 
 ## Android
+
+### [1.42.0] — 2026-05-26
+
+#### Added
+- **Разделение дохода по депозитам.** В bottom-sheet income-транзакции рядом с pencil — кнопка `CallSplit` («Разделить доход»). Видна только для канонической income-записи (не split-child, не split-parent, без DR). Открывает `SplitIncomeSheet`: stepper «Делить на» (2–10), prefilled-карточки `{amount × DepositSegmented}`, auto-balance последней строки на каждый ввод предыдущих, точная валидация sum (допуск 0.01 ₽). После save — POST `/transactions/:id/split` + `SyncWorker.enqueue` для подтягивания children/parent flip.
+- **Filter section «Разделённые»** в IncomeScreen FilterCard — `DepositScopeChip` «Показывать разделённые» (Icons.AutoMirrored.Filled.CallSplit), пробрасывает `include_split=true` через VM/Repo/DAO в новую Room-секцию query.
+- **Back-link на split-child** в TransactionDetailSheet — DetailRow «Разделение» с текстом «Часть от записи «…» от DD.MM.YYYY (… ₽)»; если parent скрыт (когда не включён фильтр) — fallback на «исходного дохода».
+- **Расформировать** — swipe-delete (или delete-fab) на split-child / split-parent вместо обычного удаления показывает `AlertDialog` «Расформировать разделённый доход?»; positive → `POST /transactions/:id/unsplit` (для child использует `parentId`). После — parent восстановлен, его можно разделить заново.
+
+#### Changed
+- **`TransactionDao.observeFiltered`** + `TransactionRepository.observeFiltered` приняли параметр `includeSplit: Boolean = false`. SQL дополнен `$nor`-аналогом на `type='income' AND excluded_from_stats=1 AND parent_id='' AND detail_request_status IS NULL/=''`. Room schema не меняется (новые поля не вводились — переиспользуются `parent_id`/`excluded_from_stats`).
+- **`ApiService.getTransactions`** — параметр `include_split: Boolean?`. **`ApiService.splitTransaction(id, SplitRequest)`** и **`ApiService.unsplitTransaction(id)`** — новые endpoints.
+- **Бамп min API совместимости**: `ANDROID_MIN_REQUIRED` не поднят — фича online-only, старые клиенты просто не увидят кнопок.
 
 ### [1.41.3] — 2026-05-25
 

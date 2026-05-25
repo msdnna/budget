@@ -32,7 +32,8 @@ interface ApiService {
         @Query("from") from: String? = null,
         @Query("to") to: String? = null,
         @Query("deposit") deposit: String? = null,
-        @Query("unlinked") unlinked: Boolean? = null
+        @Query("unlinked") unlinked: Boolean? = null,
+        @Query("include_split") includeSplit: Boolean? = null,
     ): TransactionListResponse
 
     @POST("transactions")
@@ -52,6 +53,15 @@ interface ApiService {
 
     @DELETE("transactions/{id}")
     suspend fun deleteTransaction(@Path("id") id: String): Response<Unit>
+
+    @POST("transactions/{id}/split")
+    suspend fun splitTransaction(
+        @Path("id") id: String,
+        @Body body: website.msdnna.budget_app.data.model.SplitRequest,
+    ): website.msdnna.budget_app.data.model.SplitResponse
+
+    @POST("transactions/{id}/unsplit")
+    suspend fun unsplitTransaction(@Path("id") id: String): Transaction
 
     @GET("statistics/summary")
     suspend fun getStatsSummary(
