@@ -812,6 +812,18 @@
 
 ## Android
 
+### [1.40.3] — 2026-05-25
+
+#### Changed
+- **Statistics: period+deposit оба под funnel-toggle.** Раньше period-card висел всегда, deposit прятался под toggle. Теперь обе строки чипов лежат внутри одной AnimatedVisibility(filtersVisible) — экран по дефолту показывает summary cards сразу под TopAppBar. Чипы перевели на LazyRow, длинные label'ы (Банковская карта / Наличные) горизонтально скроллятся вместо обрезки в «Нали...».
+- **Forecast: «Регулярные расходы» heading + empty-state.** Раньше заголовок и список рендерились только при regular.isNotEmpty(); на cash-scope без рег.расходов секции вообще не было видно — пользователь видел только пустой wishlist и не понимал что регулярных нет. Теперь heading всегда виден, при пустом списке — placeholder «Регулярных расходов нет». Deposit-чипы тоже в LazyRow.
+
+#### Added
+- **IncomeScreen: IB для двух счетов с tab-модалкой** (паритет с web 1.40.0).
+  - `IncomeViewModel.ibByDeposit: StateFlow<Map<String, Transaction>>` — newest record per scope (collapse через `tx.deposit.ifBlank { "bank" }`).
+  - Карточка-шапка показывает обе суммы рядом со своими иконками; «Не задан» для отсутствующего scope; eye-toggled mode заменяет цифры цветным placeholder'ом.
+  - Sheet с TabRow (Карта / Наличные); per-tab amount string'и держатся в `mutableStateMapOf` — переключение табов сохраняет ин-флайт правки; на Save callback получает `Map<deposit, Double?>` и upserts только реально изменившиеся записи (untouched tabs не бампают updated_at).
+
 ### [1.40.2] — 2026-05-25
 
 #### Added

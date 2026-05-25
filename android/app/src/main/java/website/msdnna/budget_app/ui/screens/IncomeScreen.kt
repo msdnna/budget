@@ -80,7 +80,7 @@ fun IncomeScreen(
     val categories by vm.categories.collectAsState()
     val ibYear by vm.ibYear.collectAsState()
     val ibMonth by vm.ibMonth.collectAsState()
-    val ibRecord by vm.ibRecord.collectAsState()
+    val ibByDeposit by vm.ibByDeposit.collectAsState()
     val selectedIds by vm.selectedIds.collectAsState()
     val selectionMode = selectedIds.isNotEmpty()
 
@@ -174,81 +174,97 @@ fun IncomeScreen(
                     Row(
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp).fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
-                        Column {
+                        // Top row: title + month navigator on the left, edit
+                        // button on the right. The per-deposit amounts go on
+                        // the second row inside the same column (see below).
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 "Баланс на начало месяца",
                                 style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
-                                // Month navigator
-                                IconButton(onClick = { vm.ibNavigateBack() }, modifier = Modifier.size(24.dp)) { Text("‹") }
+                                IconButton(
+                                    onClick = { vm.ibNavigateBack() },
+                                    modifier = Modifier.size(24.dp),
+                                ) { Text("‹") }
                                 Text(
                                     "${monthName(ibMonth)} $ibYear",
-                                    style = MaterialTheme.typography.bodySmall
+                                    style = MaterialTheme.typography.bodySmall,
                                 )
-                                IconButton(onClick = { vm.ibNavigateForward() }, modifier = Modifier.size(24.dp)) { Text("›") }
+                                IconButton(
+                                    onClick = { vm.ibNavigateForward() },
+                                    modifier = Modifier.size(24.dp),
+                                ) { Text("›") }
                             }
-                        }
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            // Three-state crossfade: not-set / hidden / value.
-                            // Animating both the placeholder swap and the amount
-                            // itself so set/change feels continuous.
-                            AnimatedContent(
-                                targetState = Triple(ibRecord != null, valuesHidden, ibRecord?.amount),
-                                transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(180)) },
-                                label = "ibValue",
-                            ) { (hasValue, hidden, _) ->
-                                if (!hasValue) {
-                                    Text(
-                                        "Не задан",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                } else if (hidden) {
-                                    Box(
-                                        Modifier.height(18.dp).width(70.dp)
-                                            .clip(androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
-                                            .background(primaryColor.copy(alpha = 0.22f))
-                                    )
-                                } else {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        AnimatedAmountText(
-                                            amount = ibRecord?.amount ?: 0.0,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            fontWeight = FontWeight.Bold,
-                                            color = primaryColor,
+                            // Per-deposit summary rows. Same layout as the
+                            // web Income view (1.40.0) — each scope owns its
+                            // own row, missing scopes show "Не задан". Eyes-
+                            // closed mode (valuesHidden) replaces digits with
+                            // a coloured pill so the layout stays stable.
+                            Column(
+                                modifier = Modifier.padding(top = 4.dp),
+                                verticalArrangement = Arrangement.spacedBy(2.dp),
+                            ) {
+                                DEPOSITS.forEach { meta ->
+                                    val record = ibByDeposit[meta.value]
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    ) {
+                                        Icon(
+                                            imageVector = meta.icon,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(14.dp),
                                         )
                                         Text(
-                                            " ₽",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            fontWeight = FontWeight.Bold,
-                                            color = primaryColor,
+                                            meta.label,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.weight(1f),
                                         )
+                                        if (record == null) {
+                                            Text(
+                                                "Не задан",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                        } else if (valuesHidden) {
+                                            Box(
+                                                Modifier.height(14.dp).width(60.dp)
+                                                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
+                                                    .background(primaryColor.copy(alpha = 0.22f)),
+                                            )
+                                        } else {
+                                            Text(
+                                                "${formatMoney(record.amount)} ₽",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = primaryColor,
+                                                fontWeight = FontWeight.SemiBold,
+                                            )
+                                        }
                                     }
                                 }
                             }
-                            Button(
-                                onClick = { showIbForm = true },
-                                colors = ButtonDefaults.buttonColors(containerColor = primaryColor),
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                                modifier = Modifier.height(32.dp)
-                            ) {
-                                Crossfade(
-                                    targetState = ibRecord != null,
-                                    animationSpec = tween(180),
-                                    label = "ibBtn",
-                                ) { hasIb ->
-                                    Text(if (hasIb) "Изменить" else "Задать", fontSize = 12.sp)
-                                }
+                        }
+                        Button(
+                            onClick = { showIbForm = true },
+                            colors = ButtonDefaults.buttonColors(containerColor = primaryColor),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                            modifier = Modifier.height(32.dp),
+                        ) {
+                            Crossfade(
+                                targetState = ibByDeposit.isNotEmpty(),
+                                animationSpec = tween(180),
+                                label = "ibBtn",
+                            ) { hasIb ->
+                                Text(if (hasIb) "Изменить" else "Задать", fontSize = 12.sp)
                             }
                         }
                     }
@@ -411,13 +427,19 @@ fun IncomeScreen(
     if (showIbForm) {
         AddInitialBalanceSheet(
             primaryColor = primaryColor,
-            currentAmount = ibRecord?.amount,
-            currentDeposit = ibRecord?.deposit,
+            currentByDeposit = ibByDeposit.mapValues { it.value.amount },
             onDismiss = { showIbForm = false },
-            onSave = { amount, deposit ->
-                vm.saveInitialBalance(amount, deposit)
+            onSave = { perDeposit ->
+                perDeposit.forEach { (deposit, amount) ->
+                    val prev = ibByDeposit[deposit]?.amount
+                    // Skip untouched tabs so we don't bump updated_at on
+                    // records the user didn't intend to edit.
+                    if (amount != null && amount != prev) {
+                        vm.saveInitialBalance(amount, deposit)
+                    }
+                }
                 showIbForm = false
-            }
+            },
         )
     }
 }
@@ -1419,17 +1441,35 @@ fun AddIncomeSheet(
 
 // ─── Add / edit initial balance sheet ────────────────────────────────────────
 
+/**
+ * Tabbed initial-balance editor. Each deposit scope gets its own input;
+ * unchanged tabs are skipped by the caller so we don't bump updated_at on
+ * untouched records. Mirrors the web 1.40.0 layout (Income view tabs).
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddInitialBalanceSheet(
     primaryColor: Color,
-    currentAmount: Double?,
-    currentDeposit: String? = null,
+    currentByDeposit: Map<String, Double>,
     onDismiss: () -> Unit,
-    onSave: (Double, String) -> Unit
+    onSave: (Map<String, Double?>) -> Unit,
 ) {
-    var amount by remember { mutableStateOf(currentAmount?.let { if (it == 0.0) "" else it.toInt().toString() } ?: "") }
-    var deposit by remember { mutableStateOf(normalizeDeposit(currentDeposit)) }
+    var selectedTabIndex by remember { mutableStateOf(0) }
+    // One mutable amount string per deposit so tab-switching preserves
+    // in-flight edits. Initialised from existing records (formatted as int
+    // when the cents are zero — matches the legacy single-record behaviour).
+    val amounts = remember {
+        mutableStateMapOf<String, String>().apply {
+            DEPOSITS.forEach { meta ->
+                val cur = currentByDeposit[meta.value]
+                put(
+                    meta.value,
+                    cur?.let { if (it == it.toInt().toDouble()) it.toInt().toString() else it.toString() }
+                        ?: "",
+                )
+            }
+        }
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -1440,30 +1480,57 @@ fun AddInitialBalanceSheet(
                 .padding(horizontal = 20.dp)
                 .imePadding()
                 .padding(bottom = 32.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text("Баланс на начало месяца", style = MaterialTheme.typography.titleLarge)
 
-            OutlinedTextField(
-                value = amount, onValueChange = { amount = it },
-                label = { Text("Сумма, ₽") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(), singleLine = true,
-                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = primaryColor)
-            )
+            TabRow(
+                selectedTabIndex = selectedTabIndex,
+                containerColor = MaterialTheme.colorScheme.surface,
+                contentColor = primaryColor,
+            ) {
+                DEPOSITS.forEachIndexed { index, meta ->
+                    Tab(
+                        selected = selectedTabIndex == index,
+                        onClick = { selectedTabIndex = index },
+                        text = {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                Icon(meta.icon, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Text(meta.label, maxLines = 1, softWrap = false)
+                            }
+                        },
+                    )
+                }
+            }
 
-            Text("Счёт", style = MaterialTheme.typography.labelMedium)
-            DepositSegmented(value = deposit, onChange = { deposit = it })
+            val activeMeta = DEPOSITS[selectedTabIndex]
+            val activeAmount = amounts[activeMeta.value].orEmpty()
+            OutlinedTextField(
+                value = activeAmount,
+                onValueChange = { amounts[activeMeta.value] = it },
+                label = { Text("Сумма на ${activeMeta.label.lowercase()} (₽)") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
+                singleLine = true,
+                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = primaryColor),
+            )
 
             Spacer(Modifier.height(4.dp))
             Button(
                 onClick = {
-                    val amtD = amount.replace(',', '.').toDoubleOrNull() ?: return@Button
-                    onSave(amtD, deposit)
+                    val parsed = DEPOSITS.associate { meta ->
+                        meta.value to amounts[meta.value]
+                            .orEmpty()
+                            .replace(',', '.')
+                            .toDoubleOrNull()
+                    }
+                    onSave(parsed)
                 },
                 modifier = Modifier.fillMaxWidth().height(48.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = primaryColor),
-                enabled = amount.isNotBlank()
             ) { Text("Сохранить", fontWeight = FontWeight.SemiBold) }
         }
     }
