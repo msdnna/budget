@@ -141,6 +141,26 @@ components:
           type: array
           uniqueItems: false
       type: object
+    handlers.SplitPart:
+      properties:
+        amount:
+          type: number
+        deposit:
+          $ref: '#/components/schemas/models.DepositType'
+      required:
+      - amount
+      type: object
+    handlers.SplitRequest:
+      properties:
+        splits:
+          items:
+            $ref: '#/components/schemas/handlers.SplitPart'
+          minItems: 2
+          type: array
+          uniqueItems: false
+      required:
+      - splits
+      type: object
     handlers.StatisticsOverviewResponse:
       properties:
         expenseByCategory:
@@ -2749,6 +2769,11 @@ paths:
         name: include_detailed
         schema:
           type: boolean
+      - description: Показывать родителей разделённых income-транзакций
+        in: query
+        name: include_split
+        schema:
+          type: boolean
       responses:
         "200":
           content:
@@ -2908,6 +2933,122 @@ paths:
       security:
       - BearerAuth: []
       summary: Обновить транзакцию
+      tags:
+      - transactions
+  /transactions/{id}/split:
+    post:
+      description: Атомарно создаёт N дочерних транзакций с заданными суммами и депозитами
+        и скрывает родителя из стандартных списков (excluded_from_stats=true). Каждая
+        часть наследует категорию, дату, источник и описание от родителя. Сумма частей
+        должна точно равняться сумме родителя.
+      parameters:
+      - description: Transaction ID (income, ещё не разделённая)
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              oneOf:
+              - type: object
+              - $ref: '#/components/schemas/handlers.SplitRequest'
+                description: 'Список частей: ≥2'
+                summary: body
+        description: 'Список частей: ≥2'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: {}
+                type: object
+          description: parent + children
+        "400":
+          content:
+            application/json:
+              schema:
+                additionalProperties:
+                  type: string
+                type: object
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                additionalProperties:
+                  type: string
+                type: object
+          description: Unauthorized
+        "404":
+          content:
+            application/json:
+              schema:
+                additionalProperties:
+                  type: string
+                type: object
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                additionalProperties:
+                  type: string
+                type: object
+          description: Уже разделена / уже DR-parent / уже child
+      security:
+      - BearerAuth: []
+      summary: Разделить доход на несколько частей по депозитам
+      tags:
+      - transactions
+  /transactions/{id}/unsplit:
+    post:
+      description: 'Soft-удаляет все дочерние транзакции и снимает с родителя `excluded_from_stats`.
+        Идempotent: запрос на уже-неразделённую запись возвращает 409.'
+      parameters:
+      - description: Transaction ID (родитель ранее разделённый)
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.Transaction'
+          description: Восстановленный родитель
+        "401":
+          content:
+            application/json:
+              schema:
+                additionalProperties:
+                  type: string
+                type: object
+          description: Unauthorized
+        "404":
+          content:
+            application/json:
+              schema:
+                additionalProperties:
+                  type: string
+                type: object
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                additionalProperties:
+                  type: string
+                type: object
+          description: Запись не была разделена
+      security:
+      - BearerAuth: []
+      summary: Отменить разделение дохода
       tags:
       - transactions
   /users:

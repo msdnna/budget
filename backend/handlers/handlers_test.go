@@ -102,6 +102,8 @@ func newFixture(t *testing.T) *fixture {
 			auth.GET("/transactions", txH.List)
 			auth.PUT("/transactions/:id", txH.Update)
 			auth.DELETE("/transactions/:id", txH.Delete)
+			auth.POST("/transactions/:id/split", txH.Split)
+			auth.POST("/transactions/:id/unsplit", txH.Unsplit)
 
 			auth.POST("/wishlist", wlH.Create)
 			auth.GET("/wishlist", wlH.List)
@@ -1035,6 +1037,164 @@ func TestDetailRequest_Cancel(t *testing.T) {
 	}
 	if tx.DetailRequestID != "" || tx.ExcludedFromStats {
 		t.Errorf("parent flags not reset: %+v", tx)
+	}
+}
+
+func TestTransactionSplit_FullFlow(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+
+	parent := mustCreateTx(t, ctx, f.txRepo, models.Income, "Зарплата", 100000, time.Now())
+
+	// Happy path: split 70k bank + 30k cash.
+	w := f.do(t, http.MethodPost, "/api/transactions/"+parent.ID+"/split",
+		handlers.SplitRequest{Splits: []handlers.SplitPart{
+			{Amount: 70000, Deposit: models.DepositBank},
+			{Amount: 30000, Deposit: models.DepositCash},
+		}}, true)
+	if w.Code != http.StatusOK {
+		t.Fatalf("split: %d body=%s", w.Code, w.Body.String())
+	}
+
+	// Parent now hidden from default list.
+	w = f.do(t, http.MethodGet, "/api/transactions?type=income&limit=100", nil, true)
+	if w.Code != http.StatusOK {
+		t.Fatalf("list: %d", w.Code)
+	}
+	list := decodeBody[struct {
+		Data  []models.Transaction `json:"data"`
+		Total int64                `json:"total"`
+	}](t, w)
+	for _, tx := range list.Data {
+		if tx.ID == parent.ID {
+			t.Errorf("split parent should be hidden from default list")
+		}
+	}
+	if list.Total != 2 {
+		t.Errorf("expected 2 children in list, got total=%d", list.Total)
+	}
+
+	// include_split=true brings parent back.
+	w = f.do(t, http.MethodGet, "/api/transactions?type=income&limit=100&include_split=true", nil, true)
+	list = decodeBody[struct {
+		Data  []models.Transaction `json:"data"`
+		Total int64                `json:"total"`
+	}](t, w)
+	var foundParent bool
+	for _, tx := range list.Data {
+		if tx.ID == parent.ID {
+			foundParent = true
+			break
+		}
+	}
+	if !foundParent {
+		t.Errorf("include_split=true should surface the parent")
+	}
+
+	// Stats summary excludes the parent (children replace it deposit-wise).
+	w = f.do(t, http.MethodGet, "/api/statistics/summary?from=2000-01-01&to=2100-01-01", nil, true)
+	if w.Code != http.StatusOK {
+		t.Fatalf("summary: %d", w.Code)
+	}
+	sum := decodeBody[models.SummaryData](t, w)
+	if sum.TotalIncome != 100000 {
+		t.Errorf("stats total_income=%v, want 100000 (parent excluded, children counted)", sum.TotalIncome)
+	}
+
+	// Double-split rejected.
+	w = f.do(t, http.MethodPost, "/api/transactions/"+parent.ID+"/split",
+		handlers.SplitRequest{Splits: []handlers.SplitPart{
+			{Amount: 50000, Deposit: models.DepositBank},
+			{Amount: 50000, Deposit: models.DepositCash},
+		}}, true)
+	if w.Code != http.StatusConflict {
+		t.Errorf("double-split status=%d, want 409", w.Code)
+	}
+
+	// Unsplit restores the parent and soft-deletes children.
+	w = f.do(t, http.MethodPost, "/api/transactions/"+parent.ID+"/unsplit", nil, true)
+	if w.Code != http.StatusOK {
+		t.Fatalf("unsplit: %d body=%s", w.Code, w.Body.String())
+	}
+	restored, err := f.txRepo.FindByID(ctx, parent.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if restored.ExcludedFromStats {
+		t.Errorf("unsplit should clear excluded_from_stats")
+	}
+	kids, err := f.txRepo.FindChildren(ctx, parent.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(kids) != 0 {
+		t.Errorf("unsplit should soft-delete children, still got %d", len(kids))
+	}
+
+	// Re-split a restored parent — should succeed.
+	w = f.do(t, http.MethodPost, "/api/transactions/"+parent.ID+"/split",
+		handlers.SplitRequest{Splits: []handlers.SplitPart{
+			{Amount: 60000, Deposit: models.DepositBank},
+			{Amount: 40000, Deposit: models.DepositCash},
+		}}, true)
+	if w.Code != http.StatusOK {
+		t.Errorf("re-split after unsplit: %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestTransactionSplit_Validation(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+
+	incomeTx := mustCreateTx(t, ctx, f.txRepo, models.Income, "Зарплата", 100, time.Now())
+	expenseTx := mustCreateTx(t, ctx, f.txRepo, models.Expense, "X", 100, time.Now())
+
+	cases := []struct {
+		name string
+		id   string
+		body handlers.SplitRequest
+		code int
+	}{
+		{
+			name: "sum mismatch",
+			id:   incomeTx.ID,
+			body: handlers.SplitRequest{Splits: []handlers.SplitPart{
+				{Amount: 60, Deposit: models.DepositBank},
+				{Amount: 50, Deposit: models.DepositCash},
+			}},
+			code: http.StatusBadRequest,
+		},
+		{
+			name: "single part rejected (min=2)",
+			id:   incomeTx.ID,
+			body: handlers.SplitRequest{Splits: []handlers.SplitPart{
+				{Amount: 100, Deposit: models.DepositBank},
+			}},
+			code: http.StatusBadRequest,
+		},
+		{
+			name: "expense rejected",
+			id:   expenseTx.ID,
+			body: handlers.SplitRequest{Splits: []handlers.SplitPart{
+				{Amount: 60, Deposit: models.DepositBank},
+				{Amount: 40, Deposit: models.DepositCash},
+			}},
+			code: http.StatusBadRequest,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			w := f.do(t, http.MethodPost, "/api/transactions/"+tc.id+"/split", tc.body, true)
+			if w.Code != tc.code {
+				t.Errorf("got %d, want %d, body=%s", w.Code, tc.code, w.Body.String())
+			}
+		})
+	}
+
+	// Unsplit a never-split tx → 409
+	w := f.do(t, http.MethodPost, "/api/transactions/"+incomeTx.ID+"/unsplit", nil, true)
+	if w.Code != http.StatusConflict {
+		t.Errorf("unsplit-unsplit got %d, want 409", w.Code)
 	}
 }
 

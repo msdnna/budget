@@ -7,200 +7,377 @@
   >
     <n-message-provider>
       <n-notification-provider>
-        <!-- First-run wizard takes over the whole UI while the DB has no
+        <n-dialog-provider>
+          <!-- First-run wizard takes over the whole UI while the DB has no
              users. SetupWizard emits `done` after admin creation + optional
              import; we flip needsSetup=false and the normal layout below
              takes over without a page reload. -->
-        <SetupWizard v-if="needsSetup" @done="onSetupDone" />
-        <n-layout v-else style="min-height: 100vh">
-          <!-- ── Desktop sidebar layout ──────────────────────────── -->
-          <n-layout v-if="!isMobile" has-sider style="height: 100vh">
-            <n-layout-sider
-              bordered
-              collapse-mode="width"
-              :collapsed-width="64"
-              :width="220"
-              :collapsed="collapsed"
-              show-trigger
-              @collapse="collapsed = true"
-              @expand="collapsed = false"
-            >
-              <div class="sider-inner">
-                <!-- Logo -->
-                <div class="logo" :class="{ collapsed }">
-                  <MbLogo :color="primaryColor" :size="26" aria-label="msdnna budget" />
-                  <div v-if="!collapsed" class="logo-name">
-                    <span class="logo-name-main">msdnna budget</span>
-                    <span class="logo-name-sub">Система ведения бюджета</span>
+          <SetupWizard v-if="needsSetup" @done="onSetupDone" />
+          <n-layout v-else style="min-height: 100vh">
+            <!-- ── Desktop sidebar layout ──────────────────────────── -->
+            <n-layout v-if="!isMobile" has-sider style="height: 100vh">
+              <n-layout-sider
+                bordered
+                collapse-mode="width"
+                :collapsed-width="64"
+                :width="220"
+                :collapsed="collapsed"
+                show-trigger
+                @collapse="collapsed = true"
+                @expand="collapsed = false"
+              >
+                <div class="sider-inner">
+                  <!-- Logo -->
+                  <div class="logo" :class="{ collapsed }">
+                    <MbLogo :color="primaryColor" :size="26" aria-label="msdnna budget" />
+                    <div v-if="!collapsed" class="logo-name">
+                      <span class="logo-name-main">msdnna budget</span>
+                      <span class="logo-name-sub">Система ведения бюджета</span>
+                    </div>
                   </div>
-                </div>
 
-                <!-- Navigation -->
-                <n-menu
-                  v-model:expanded-keys="expandedMenuKeys"
-                  :collapsed="collapsed"
-                  :collapsed-width="64"
-                  :collapsed-icon-size="22"
-                  :options="menuOptions"
-                  :value="activeKey"
-                  @update:value="navigate"
-                />
+                  <!-- Navigation -->
+                  <n-menu
+                    v-model:expanded-keys="expandedMenuKeys"
+                    :collapsed="collapsed"
+                    :collapsed-width="64"
+                    :collapsed-icon-size="22"
+                    :options="menuOptions"
+                    :value="activeKey"
+                    @update:value="navigate"
+                  />
 
-                <div style="flex: 1" />
+                  <div style="flex: 1" />
 
-                <!-- User / Login section -->
-                <div class="user-section" :class="{ collapsed }">
-                  <template v-if="auth.isAuthenticated">
-                    <div v-if="!collapsed" class="user-info">
-                      <UserAvatar
-                        :display-name="auth.user?.display_name || ''"
-                        :avatar-url="auth.user?.avatar_url || ''"
-                        :size="28"
-                      />
-                      <n-text
-                        depth="2"
-                        style="
-                          font-size: 12px;
-                          flex: 1;
-                          overflow: hidden;
-                          text-overflow: ellipsis;
-                          white-space: nowrap;
-                        "
-                      >
-                        {{ auth.user?.display_name }}
-                      </n-text>
-                      <n-tooltip trigger="hover" placement="top">
+                  <!-- User / Login section -->
+                  <div class="user-section" :class="{ collapsed }">
+                    <template v-if="auth.isAuthenticated">
+                      <div v-if="!collapsed" class="user-info">
+                        <UserAvatar
+                          :display-name="auth.user?.display_name || ''"
+                          :avatar-url="auth.user?.avatar_url || ''"
+                          :size="28"
+                        />
+                        <n-text
+                          depth="2"
+                          style="
+                            font-size: 12px;
+                            flex: 1;
+                            overflow: hidden;
+                            text-overflow: ellipsis;
+                            white-space: nowrap;
+                          "
+                        >
+                          {{ auth.user?.display_name }}
+                        </n-text>
+                        <n-tooltip trigger="hover" placement="top">
+                          <template #trigger>
+                            <n-button
+                              quaternary
+                              circle
+                              size="tiny"
+                              title="Выйти"
+                              @click="handleLogout"
+                            >
+                              <template #icon>
+                                <n-icon size="14"><LogOutOutline /></n-icon>
+                              </template>
+                            </n-button>
+                          </template>
+                          Выйти
+                        </n-tooltip>
+                      </div>
+                      <n-tooltip v-else trigger="hover" placement="right">
                         <template #trigger>
-                          <n-button
-                            quaternary
-                            circle
-                            size="tiny"
-                            title="Выйти"
-                            @click="handleLogout"
-                          >
+                          <div class="user-avatar-btn" @click="handleLogout">
+                            <UserAvatar
+                              :display-name="auth.user?.display_name || ''"
+                              :avatar-url="auth.user?.avatar_url || ''"
+                              :size="32"
+                            />
+                          </div>
+                        </template>
+                        {{ auth.user?.display_name }} — выйти
+                      </n-tooltip>
+                    </template>
+                    <template v-else>
+                      <n-button
+                        v-if="!collapsed"
+                        block
+                        type="primary"
+                        size="small"
+                        ghost
+                        @click="showLogin = true"
+                      >
+                        <template #icon>
+                          <n-icon><LogInOutline /></n-icon>
+                        </template>
+                        Войти
+                      </n-button>
+                      <n-tooltip v-else trigger="hover" placement="right">
+                        <template #trigger>
+                          <n-button quaternary circle @click="showLogin = true">
                             <template #icon>
-                              <n-icon size="14"><LogOutOutline /></n-icon>
+                              <n-icon><LogInOutline /></n-icon>
                             </template>
                           </n-button>
                         </template>
-                        Выйти
+                        Войти
                       </n-tooltip>
-                    </div>
-                    <n-tooltip v-else trigger="hover" placement="right">
-                      <template #trigger>
-                        <div class="user-avatar-btn" @click="handleLogout">
-                          <UserAvatar
-                            :display-name="auth.user?.display_name || ''"
-                            :avatar-url="auth.user?.avatar_url || ''"
-                            :size="32"
-                          />
-                        </div>
-                      </template>
-                      {{ auth.user?.display_name }} — выйти
-                    </n-tooltip>
-                  </template>
-                  <template v-else>
-                    <n-button
-                      v-if="!collapsed"
-                      block
-                      type="primary"
-                      size="small"
-                      ghost
-                      @click="showLogin = true"
-                    >
-                      <template #icon>
-                        <n-icon><LogInOutline /></n-icon>
-                      </template>
-                      Войти
-                    </n-button>
-                    <n-tooltip v-else trigger="hover" placement="right">
-                      <template #trigger>
-                        <n-button quaternary circle @click="showLogin = true">
-                          <template #icon>
-                            <n-icon><LogInOutline /></n-icon>
-                          </template>
-                        </n-button>
-                      </template>
-                      Войти
-                    </n-tooltip>
-                  </template>
+                    </template>
+                  </div>
                 </div>
-              </div>
-              <!-- /sider-inner -->
-            </n-layout-sider>
+                <!-- /sider-inner -->
+              </n-layout-sider>
 
-            <!-- Content. Inner layout is a flex column so the header
+              <!-- Content. Inner layout is a flex column so the header
                  stays pinned at the top while only the content area
                  scrolls — a single scrollbar over the body (not the
                  header) is far less visually noisy. -->
-            <n-layout class="content-layout">
+              <n-layout class="content-layout">
+                <n-layout-header
+                  bordered
+                  class="app-header"
+                  style="
+                    padding: 0 24px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    flex-shrink: 0;
+                  "
+                >
+                  <n-text strong style="font-size: 16px">{{ currentTitle }}</n-text>
+                  <n-space align="center" :size="8">
+                    <n-text depth="3" style="font-size: 13px">{{ today }}</n-text>
+                    <!-- Color picker -->
+                    <n-popover trigger="click" placement="bottom-end" :show-arrow="false">
+                      <template #trigger>
+                        <n-tooltip trigger="hover" placement="bottom">
+                          <template #trigger>
+                            <n-button quaternary circle size="small">
+                              <template #icon>
+                                <n-icon size="16" :style="{ color: primaryColor }">
+                                  <ColorPaletteOutline />
+                                </n-icon>
+                              </template>
+                            </n-button>
+                          </template>
+                          Цвет темы
+                        </n-tooltip>
+                      </template>
+                      <div style="padding: 6px 2px">
+                        <div
+                          :style="{
+                            fontSize: '11px',
+                            color: palette.text3,
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.05em',
+                            marginBottom: '8px',
+                          }"
+                        >
+                          Цвет темы
+                        </div>
+                        <div class="theme-dots">
+                          <div
+                            v-for="t in COLOR_THEMES"
+                            :key="t.key"
+                            class="theme-dot"
+                            :title="t.name"
+                            :style="dotStyle(t)"
+                            @click="selectTheme(t)"
+                          />
+                        </div>
+                      </div>
+                    </n-popover>
+                    <!-- Info popover -->
+                    <n-popover trigger="click" placement="bottom-end" :show-arrow="false">
+                      <template #trigger>
+                        <n-tooltip trigger="hover" placement="bottom">
+                          <template #trigger>
+                            <n-button quaternary circle size="small">
+                              <template #icon>
+                                <n-icon size="18"><InformationCircleOutline /></n-icon>
+                              </template>
+                            </n-button>
+                          </template>
+                          О приложении
+                        </n-tooltip>
+                      </template>
+                      <div class="version-popover">
+                        <div class="version-popover-title" :style="{ color: palette.text3 }">
+                          О приложении
+                        </div>
+                        <div class="version-row">
+                          <span>Веб</span>
+                          <span class="version-val">v{{ webVersion }}</span>
+                        </div>
+                        <div class="version-row">
+                          <span>API</span>
+                          <span class="version-val">{{ apiVersion ? 'v' + apiVersion : '…' }}</span>
+                        </div>
+                      </div>
+                    </n-popover>
+                    <!-- Detail-requests bell -->
+                    <DetailRequestBell v-if="auth.isAuthenticated" />
+                    <!-- Limit-overflow notifications bell -->
+                    <NotificationBell v-if="auth.isAuthenticated" />
+                    <!-- Hide/show values toggle -->
+                    <n-tooltip trigger="hover" placement="bottom">
+                      <template #trigger>
+                        <n-button quaternary circle size="small" @click="toggleValuesHidden">
+                          <template #icon>
+                            <n-icon size="16">
+                              <EyeOutline v-if="valuesHidden" />
+                              <EyeOffOutline v-else />
+                            </n-icon>
+                          </template>
+                        </n-button>
+                      </template>
+                      {{ valuesHidden ? 'Показать суммы' : 'Скрыть суммы' }}
+                    </n-tooltip>
+                    <!-- Pie chart unit toggle -->
+                    <n-tooltip trigger="hover" placement="bottom">
+                      <template #trigger>
+                        <n-button quaternary circle size="small" @click="togglePieChartUnit">
+                          <span style="font-size: 12px; font-weight: 700; line-height: 1">
+                            {{ pieChartUnit === 'percent' ? '%' : '₽' }}
+                          </span>
+                        </n-button>
+                      </template>
+                      {{ pieChartUnit === 'percent' ? 'Диаграммы: проценты' : 'Диаграммы: рубли' }}
+                    </n-tooltip>
+                    <!-- Dark mode toggle -->
+                    <n-tooltip trigger="hover" placement="bottom">
+                      <template #trigger>
+                        <n-button quaternary circle size="small" @click="toggleDarkMode">
+                          <template #icon>
+                            <n-icon size="16">
+                              <SunnyOutline v-if="isDark" />
+                              <MoonOutline v-else />
+                            </n-icon>
+                          </template>
+                        </n-button>
+                      </template>
+                      {{ isDark ? 'Светлая тема' : 'Тёмная тема' }}
+                    </n-tooltip>
+                  </n-space>
+                </n-layout-header>
+                <n-layout-content class="scrollable-content" content-style="padding: 24px">
+                  <AuthGate @login="showLogin = true">
+                    <router-view />
+                  </AuthGate>
+                </n-layout-content>
+              </n-layout>
+            </n-layout>
+
+            <!-- ── Mobile layout ──────────────────────────────────── -->
+            <n-layout v-else>
               <n-layout-header
                 bordered
-                class="app-header"
                 style="
-                  padding: 0 24px;
+                  padding: 10px 16px;
                   display: flex;
                   align-items: center;
                   justify-content: space-between;
-                  flex-shrink: 0;
                 "
               >
-                <n-text strong style="font-size: 16px">{{ currentTitle }}</n-text>
-                <n-space align="center" :size="8">
-                  <n-text depth="3" style="font-size: 13px">{{ today }}</n-text>
-                  <!-- Color picker -->
+                <MbLogo :color="primaryColor" :size="22" aria-label="msdnna budget" />
+                <n-space align="center" :size="6">
+                  <!-- Mobile login/user -->
+                  <template v-if="auth.isAuthenticated">
+                    <n-tooltip trigger="click" placement="bottom-end">
+                      <template #trigger>
+                        <div style="cursor: pointer">
+                          <UserAvatar
+                            :display-name="auth.user?.display_name || ''"
+                            :avatar-url="auth.user?.avatar_url || ''"
+                            :size="28"
+                          />
+                        </div>
+                      </template>
+                      <div>
+                        <div style="font-weight: 600; margin-bottom: 6px">
+                          {{ auth.user?.display_name }}
+                        </div>
+                        <n-button size="small" type="error" ghost @click="handleLogout">
+                          Выйти
+                        </n-button>
+                      </div>
+                    </n-tooltip>
+                  </template>
+                  <!-- Mobile detail-requests bell -->
+                  <DetailRequestBell v-if="auth.isAuthenticated" />
+                  <!-- Mobile notifications bell -->
+                  <NotificationBell v-if="auth.isAuthenticated" />
+                  <!-- Mobile visuals menu — single popover wrapping the four
+                     visual toggles (theme color, hide values, pie unit,
+                     dark mode). Saves three header slots so the row fits
+                     on narrow phones without the wraparound that pushed
+                     `15 мая 2026 г.` onto its own line. -->
                   <n-popover trigger="click" placement="bottom-end" :show-arrow="false">
                     <template #trigger>
-                      <n-tooltip trigger="hover" placement="bottom">
-                        <template #trigger>
-                          <n-button quaternary circle size="small">
-                            <template #icon>
-                              <n-icon size="16" :style="{ color: primaryColor }">
-                                <ColorPaletteOutline />
-                              </n-icon>
-                            </template>
-                          </n-button>
+                      <n-button quaternary circle size="small" title="Внешний вид">
+                        <template #icon>
+                          <n-icon size="18" :style="{ color: primaryColor }">
+                            <ColorPaletteOutline />
+                          </n-icon>
                         </template>
-                        Цвет темы
-                      </n-tooltip>
+                      </n-button>
                     </template>
-                    <div style="padding: 6px 2px">
-                      <div
-                        :style="{
-                          fontSize: '11px',
-                          color: palette.text3,
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.05em',
-                          marginBottom: '8px',
-                        }"
-                      >
-                        Цвет темы
+                    <div class="visuals-menu">
+                      <div class="visuals-menu-section">
+                        <div class="visuals-menu-label" :style="{ color: palette.text3 }">
+                          Цвет темы
+                        </div>
+                        <div class="theme-dots">
+                          <div
+                            v-for="t in COLOR_THEMES"
+                            :key="t.key"
+                            class="theme-dot"
+                            :title="t.name"
+                            :style="dotStyle(t)"
+                            @click="selectTheme(t)"
+                          />
+                        </div>
                       </div>
-                      <div class="theme-dots">
-                        <div
-                          v-for="t in COLOR_THEMES"
-                          :key="t.key"
-                          class="theme-dot"
-                          :title="t.name"
-                          :style="dotStyle(t)"
-                          @click="selectTheme(t)"
-                        />
+                      <div class="visuals-menu-section">
+                        <button type="button" class="visuals-menu-row" @click="toggleValuesHidden">
+                          <n-icon size="16">
+                            <EyeOutline v-if="valuesHidden" />
+                            <EyeOffOutline v-else />
+                          </n-icon>
+                          <span>{{ valuesHidden ? 'Показать суммы' : 'Скрыть суммы' }}</span>
+                        </button>
+                        <button type="button" class="visuals-menu-row" @click="togglePieChartUnit">
+                          <span class="visuals-menu-glyph">
+                            {{ pieChartUnit === 'percent' ? '%' : '₽' }}
+                          </span>
+                          <span>
+                            {{
+                              pieChartUnit === 'percent'
+                                ? 'Диаграммы: проценты'
+                                : 'Диаграммы: рубли'
+                            }}
+                          </span>
+                        </button>
+                        <button type="button" class="visuals-menu-row" @click="toggleDarkMode">
+                          <n-icon size="16">
+                            <SunnyOutline v-if="isDark" />
+                            <MoonOutline v-else />
+                          </n-icon>
+                          <span>{{ isDark ? 'Светлая тема' : 'Тёмная тема' }}</span>
+                        </button>
                       </div>
                     </div>
                   </n-popover>
-                  <!-- Info popover -->
+                  <!-- Mobile info popover -->
                   <n-popover trigger="click" placement="bottom-end" :show-arrow="false">
                     <template #trigger>
-                      <n-tooltip trigger="hover" placement="bottom">
-                        <template #trigger>
-                          <n-button quaternary circle size="small">
-                            <template #icon>
-                              <n-icon size="18"><InformationCircleOutline /></n-icon>
-                            </template>
-                          </n-button>
+                      <n-button quaternary circle size="small">
+                        <template #icon>
+                          <n-icon size="18"><InformationCircleOutline /></n-icon>
                         </template>
-                        О приложении
-                      </n-tooltip>
+                      </n-button>
                     </template>
                     <div class="version-popover">
                       <div class="version-popover-title" :style="{ color: palette.text3 }">
@@ -216,221 +393,48 @@
                       </div>
                     </div>
                   </n-popover>
-                  <!-- Detail-requests bell -->
-                  <DetailRequestBell v-if="auth.isAuthenticated" />
-                  <!-- Limit-overflow notifications bell -->
-                  <NotificationBell v-if="auth.isAuthenticated" />
-                  <!-- Hide/show values toggle -->
-                  <n-tooltip trigger="hover" placement="bottom">
-                    <template #trigger>
-                      <n-button quaternary circle size="small" @click="toggleValuesHidden">
-                        <template #icon>
-                          <n-icon size="16">
-                            <EyeOutline v-if="valuesHidden" />
-                            <EyeOffOutline v-else />
-                          </n-icon>
-                        </template>
-                      </n-button>
-                    </template>
-                    {{ valuesHidden ? 'Показать суммы' : 'Скрыть суммы' }}
-                  </n-tooltip>
-                  <!-- Pie chart unit toggle -->
-                  <n-tooltip trigger="hover" placement="bottom">
-                    <template #trigger>
-                      <n-button quaternary circle size="small" @click="togglePieChartUnit">
-                        <span style="font-size: 12px; font-weight: 700; line-height: 1">
-                          {{ pieChartUnit === 'percent' ? '%' : '₽' }}
-                        </span>
-                      </n-button>
-                    </template>
-                    {{ pieChartUnit === 'percent' ? 'Диаграммы: проценты' : 'Диаграммы: рубли' }}
-                  </n-tooltip>
-                  <!-- Dark mode toggle -->
-                  <n-tooltip trigger="hover" placement="bottom">
-                    <template #trigger>
-                      <n-button quaternary circle size="small" @click="toggleDarkMode">
-                        <template #icon>
-                          <n-icon size="16">
-                            <SunnyOutline v-if="isDark" />
-                            <MoonOutline v-else />
-                          </n-icon>
-                        </template>
-                      </n-button>
-                    </template>
-                    {{ isDark ? 'Светлая тема' : 'Тёмная тема' }}
-                  </n-tooltip>
+                  <n-text depth="3" style="font-size: 12px">{{ today }}</n-text>
                 </n-space>
               </n-layout-header>
-              <n-layout-content class="scrollable-content" content-style="padding: 24px">
+
+              <n-layout-content style="padding: 16px; padding-bottom: 80px">
                 <AuthGate @login="showLogin = true">
+                  <SettingsTabs v-if="isSettingsRoute" />
                   <router-view />
                 </AuthGate>
               </n-layout-content>
+
+              <!-- Bottom navigation -->
+              <div class="mobile-nav">
+                <div
+                  v-for="item in mobileNavItems"
+                  :key="item.key"
+                  class="mobile-nav-item"
+                  :class="{ active: mobileActiveKey === item.key }"
+                  @click="navigate(item.key)"
+                >
+                  <n-icon :component="item.icon" size="22" />
+                  <span>{{ item.label }}</span>
+                </div>
+              </div>
             </n-layout>
           </n-layout>
 
-          <!-- ── Mobile layout ──────────────────────────────────── -->
-          <n-layout v-else>
-            <n-layout-header
-              bordered
-              style="
-                padding: 10px 16px;
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-              "
-            >
-              <MbLogo :color="primaryColor" :size="22" aria-label="msdnna budget" />
-              <n-space align="center" :size="6">
-                <!-- Mobile login/user -->
-                <template v-if="auth.isAuthenticated">
-                  <n-tooltip trigger="click" placement="bottom-end">
-                    <template #trigger>
-                      <div style="cursor: pointer">
-                        <UserAvatar
-                          :display-name="auth.user?.display_name || ''"
-                          :avatar-url="auth.user?.avatar_url || ''"
-                          :size="28"
-                        />
-                      </div>
-                    </template>
-                    <div>
-                      <div style="font-weight: 600; margin-bottom: 6px">
-                        {{ auth.user?.display_name }}
-                      </div>
-                      <n-button size="small" type="error" ghost @click="handleLogout">
-                        Выйти
-                      </n-button>
-                    </div>
-                  </n-tooltip>
-                </template>
-                <!-- Mobile detail-requests bell -->
-                <DetailRequestBell v-if="auth.isAuthenticated" />
-                <!-- Mobile notifications bell -->
-                <NotificationBell v-if="auth.isAuthenticated" />
-                <!-- Mobile visuals menu — single popover wrapping the four
-                     visual toggles (theme color, hide values, pie unit,
-                     dark mode). Saves three header slots so the row fits
-                     on narrow phones without the wraparound that pushed
-                     `15 мая 2026 г.` onto its own line. -->
-                <n-popover trigger="click" placement="bottom-end" :show-arrow="false">
-                  <template #trigger>
-                    <n-button quaternary circle size="small" title="Внешний вид">
-                      <template #icon>
-                        <n-icon size="18" :style="{ color: primaryColor }">
-                          <ColorPaletteOutline />
-                        </n-icon>
-                      </template>
-                    </n-button>
-                  </template>
-                  <div class="visuals-menu">
-                    <div class="visuals-menu-section">
-                      <div class="visuals-menu-label" :style="{ color: palette.text3 }">
-                        Цвет темы
-                      </div>
-                      <div class="theme-dots">
-                        <div
-                          v-for="t in COLOR_THEMES"
-                          :key="t.key"
-                          class="theme-dot"
-                          :title="t.name"
-                          :style="dotStyle(t)"
-                          @click="selectTheme(t)"
-                        />
-                      </div>
-                    </div>
-                    <div class="visuals-menu-section">
-                      <button type="button" class="visuals-menu-row" @click="toggleValuesHidden">
-                        <n-icon size="16">
-                          <EyeOutline v-if="valuesHidden" />
-                          <EyeOffOutline v-else />
-                        </n-icon>
-                        <span>{{ valuesHidden ? 'Показать суммы' : 'Скрыть суммы' }}</span>
-                      </button>
-                      <button type="button" class="visuals-menu-row" @click="togglePieChartUnit">
-                        <span class="visuals-menu-glyph">
-                          {{ pieChartUnit === 'percent' ? '%' : '₽' }}
-                        </span>
-                        <span>
-                          {{
-                            pieChartUnit === 'percent' ? 'Диаграммы: проценты' : 'Диаграммы: рубли'
-                          }}
-                        </span>
-                      </button>
-                      <button type="button" class="visuals-menu-row" @click="toggleDarkMode">
-                        <n-icon size="16">
-                          <SunnyOutline v-if="isDark" />
-                          <MoonOutline v-else />
-                        </n-icon>
-                        <span>{{ isDark ? 'Светлая тема' : 'Тёмная тема' }}</span>
-                      </button>
-                    </div>
-                  </div>
-                </n-popover>
-                <!-- Mobile info popover -->
-                <n-popover trigger="click" placement="bottom-end" :show-arrow="false">
-                  <template #trigger>
-                    <n-button quaternary circle size="small">
-                      <template #icon>
-                        <n-icon size="18"><InformationCircleOutline /></n-icon>
-                      </template>
-                    </n-button>
-                  </template>
-                  <div class="version-popover">
-                    <div class="version-popover-title" :style="{ color: palette.text3 }">
-                      О приложении
-                    </div>
-                    <div class="version-row">
-                      <span>Веб</span>
-                      <span class="version-val">v{{ webVersion }}</span>
-                    </div>
-                    <div class="version-row">
-                      <span>API</span>
-                      <span class="version-val">{{ apiVersion ? 'v' + apiVersion : '…' }}</span>
-                    </div>
-                  </div>
-                </n-popover>
-                <n-text depth="3" style="font-size: 12px">{{ today }}</n-text>
-              </n-space>
-            </n-layout-header>
-
-            <n-layout-content style="padding: 16px; padding-bottom: 80px">
-              <AuthGate @login="showLogin = true">
-                <SettingsTabs v-if="isSettingsRoute" />
-                <router-view />
-              </AuthGate>
-            </n-layout-content>
-
-            <!-- Bottom navigation -->
-            <div class="mobile-nav">
-              <div
-                v-for="item in mobileNavItems"
-                :key="item.key"
-                class="mobile-nav-item"
-                :class="{ active: mobileActiveKey === item.key }"
-                @click="navigate(item.key)"
-              >
-                <n-icon :component="item.icon" size="22" />
-                <span>{{ item.label }}</span>
-              </div>
-            </div>
-          </n-layout>
-        </n-layout>
-
-        <LoginModal :show="showLogin" @success="showLogin = false" @close="showLogin = false" />
-        <DetailRequestModal
-          :show="!!detailReq.openRequestId"
-          :request-id="detailReq.openRequestId"
-          @close="detailReq.closeRequest()"
-          @updated="detailReq.fetchAll()"
-          @closed="detailReq.fetchAll()"
-        />
-        <DetailRequestCreateModal
-          :show="!!detailReq.creatingForTx"
-          :transaction="detailReq.creatingForTx"
-          @close="detailReq.cancelCreate()"
-          @created="onRequestCreated"
-        />
+          <LoginModal :show="showLogin" @success="showLogin = false" @close="showLogin = false" />
+          <DetailRequestModal
+            :show="!!detailReq.openRequestId"
+            :request-id="detailReq.openRequestId"
+            @close="detailReq.closeRequest()"
+            @updated="detailReq.fetchAll()"
+            @closed="detailReq.fetchAll()"
+          />
+          <DetailRequestCreateModal
+            :show="!!detailReq.creatingForTx"
+            :transaction="detailReq.creatingForTx"
+            @close="detailReq.cancelCreate()"
+            @created="onRequestCreated"
+          />
+        </n-dialog-provider>
       </n-notification-provider>
     </n-message-provider>
   </n-config-provider>
@@ -451,6 +455,7 @@ import {
   NText,
   NMessageProvider,
   NNotificationProvider,
+  NDialogProvider,
   NButton,
   NSpace,
   NPopover,

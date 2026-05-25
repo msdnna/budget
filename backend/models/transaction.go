@@ -109,6 +109,12 @@ type TransactionFilter struct {
 	// IncludeDetailed: when false, parents of closed detail-requests are
 	// hidden (they're historical and superseded by their children in stats).
 	IncludeDetailed bool
+	// IncludeSplit: when false, parents of split-income transactions are
+	// hidden (their per-deposit children supersede them in the list).
+	// Split parents are identified by type=income + excluded_from_stats=true
+	// + empty parent_id + empty detail_request_status (DR-closed parents are
+	// expense-only so they don't collide).
+	IncludeSplit bool
 	// Unlinked: when true, restrict to expense transactions that are NOT
 	// already attached to a wishlist item, NOT a child of a parent, and NOT
 	// closed/parent-of-closed DR. Backs the «привязать к существующему

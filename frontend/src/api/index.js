@@ -69,6 +69,8 @@ export const transactions = {
   create: (data) => api.post('/transactions', data),
   update: (id, data) => api.put(`/transactions/${id}`, data),
   remove: (id) => api.delete(`/transactions/${id}`),
+  split: (id, splits) => api.post(`/transactions/${id}/split`, { splits }),
+  unsplit: (id) => api.post(`/transactions/${id}/unsplit`),
 }
 
 export const statistics = {

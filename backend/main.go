@@ -129,6 +129,8 @@ func main() {
 			protected.GET("/transactions", txHandler.List)
 			protected.PUT("/transactions/:id", txHandler.Update)
 			protected.DELETE("/transactions/:id", txHandler.Delete)
+			protected.POST("/transactions/:id/split", txHandler.Split)
+			protected.POST("/transactions/:id/unsplit", txHandler.Unsplit)
 
 			protected.GET("/statistics/summary", statsHandler.Summary)
 			protected.GET("/statistics/by-category", statsHandler.ByCategory)

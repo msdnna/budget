@@ -65,6 +65,22 @@ data class Transaction(
     @SerializedName("wishlist_id") val wishlistId: String = "",
 )
 
+// ===== Split-income DTOs =====
+
+data class SplitPart(
+    val amount: Double,
+    val deposit: String,
+)
+
+data class SplitRequest(
+    val splits: List<SplitPart>,
+)
+
+data class SplitResponse(
+    val parent: Transaction? = null,
+    val children: List<Transaction>? = null,
+)
+
 // ===== Detail-request DTOs =====
 
 data class DetailRequest(

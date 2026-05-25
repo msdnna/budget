@@ -29,6 +29,15 @@ interface TransactionDao {
         WHERE deleted_at IS NULL AND sync_status != :pendingDelete
           AND (parent_id = '' OR excluded_from_stats = 0)
           AND (:includeDetailed = 1 OR detail_request_status != 'closed')
+          AND (
+            :includeSplit = 1
+            OR NOT (
+              type = 'income'
+              AND excluded_from_stats = 1
+              AND parent_id = ''
+              AND (detail_request_status IS NULL OR detail_request_status = '')
+            )
+          )
           AND (:type IS NULL OR type = :type)
           AND (:from IS NULL OR date >= :from)
           AND (:to IS NULL OR date <= :to)
@@ -42,6 +51,7 @@ interface TransactionDao {
         to: String?,
         includeDetailed: Boolean = false,
         deposit: String? = null,
+        includeSplit: Boolean = false,
         pendingDelete: String = SyncStatus.PENDING_DELETE,
     ): Flow<List<TransactionEntity>>
 

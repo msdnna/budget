@@ -729,6 +729,17 @@ func buildTransactionFilter(f models.TransactionFilter) bson.M {
 	if !f.IncludeDetailed {
 		filter["detail_request_status"] = bson.M{"$ne": "closed"}
 	}
+	// Split-income parents are the lump-sum source of per-deposit children.
+	// Hide them from the income list by default; the «показать разделённые»
+	// toggle flips IncludeSplit and they come back.
+	if !f.IncludeSplit {
+		filter["$nor"] = []bson.M{{
+			"type":                  string(models.Income),
+			"excluded_from_stats":   true,
+			"parent_id":             bson.M{"$in": []any{nil, ""}},
+			"detail_request_status": bson.M{"$in": []any{nil, ""}},
+		}}
+	}
 	if f.Unlinked {
 		filter["type"] = string(models.Expense)
 		filter["wishlist_id"] = bson.M{"$in": []any{nil, ""}}

@@ -28,6 +28,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Assignment
+import androidx.compose.material.icons.automirrored.filled.CallSplit
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
@@ -88,7 +89,10 @@ fun IncomeScreen(
     var showAdd by remember { mutableStateOf(false) }
     var template by remember { mutableStateOf<Transaction?>(null) }
     var detailTx by remember { mutableStateOf<Transaction?>(null) }
+    var splitTx by remember { mutableStateOf<Transaction?>(null) }
+    var unsplitConfirmTx by remember { mutableStateOf<Transaction?>(null) }
     var showIbForm by remember { mutableStateOf(false) }
+    val filterIncludeSplit by vm.filterIncludeSplit.collectAsState()
 
     val incomeColor = LocalIncomeColor.current
 
@@ -283,7 +287,8 @@ fun IncomeScreen(
                 val hasActive = filterCats.isNotEmpty() ||
                     filterFrom != null ||
                     filterTo != null ||
-                    filterDeposit != null
+                    filterDeposit != null ||
+                    filterIncludeSplit
                 FilterCard(
                     visible = filtersVisible,
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
@@ -338,6 +343,15 @@ fun IncomeScreen(
                             }
                         }
                     }
+                    FilterSection(title = "Разделённые") {
+                        DepositScopeChip(
+                            selected = filterIncludeSplit,
+                            label = "Показывать разделённые",
+                            icon = Icons.AutoMirrored.Filled.CallSplit,
+                            primaryColor = primaryColor,
+                            onClick = { vm.setFilterIncludeSplit(!filterIncludeSplit) },
+                        )
+                    }
                 }
 
                 when {
@@ -363,7 +377,19 @@ fun IncomeScreen(
                                 serverUrl = serverUrl,
                                 onLongPress = vm::startSelection,
                                 onSelectToggle = vm::toggleSelection,
-                                onDelete = vm::deleteTransaction,
+                                onDelete = { id ->
+                                    // Split children / parents go through unsplit
+                                    // (confirm + restore the source row) instead
+                                    // of a plain row delete.
+                                    val isSplitParent = t.excludedFromStats &&
+                                        t.parentId.isBlank() &&
+                                        t.detailRequestStatus.isBlank()
+                                    if (t.parentId.isNotBlank() || isSplitParent) {
+                                        unsplitConfirmTx = t
+                                    } else {
+                                        vm.deleteTransaction(id)
+                                    }
+                                },
                                 onToggleHidden = vm::toggleHidden,
                                 onCreateFromTemplate = onCreateTemplate,
                                 onDetails = onShowDetails,
@@ -404,6 +430,26 @@ fun IncomeScreen(
     }
 
     detailTx?.let { tx ->
+        val canSplit = tx.type == "income" &&
+            tx.parentId.isBlank() &&
+            !tx.excludedFromStats &&
+            tx.detailRequestId.isBlank()
+        val splitSummary = if (tx.parentId.isNotBlank()) {
+            // Look up the (hidden) parent inside the current uiState — it may
+            // be missing when the user hasn't enabled «Показывать разделённые»,
+            // but Room still keeps the row, so we fall back to a generic blurb.
+            val parent = uiState.transactions.firstOrNull { it.id == tx.parentId }
+            buildString {
+                append("Часть от записи ")
+                if (parent != null) {
+                    append("«${parent.source ?: parent.category}» ")
+                    append("от ${formatDate(parent.date)} ")
+                    append("(${formatMoney(parent.amount)} ₽)")
+                } else {
+                    append("исходного дохода")
+                }
+            }
+        } else null
         TransactionDetailSheet(
             transaction = tx,
             amountColor = incomeColor,
@@ -419,7 +465,41 @@ fun IncomeScreen(
             onSaved = {
                 detailTx = null
                 vm.reload()
-            }
+            },
+            onSplit = if (canSplit) {
+                {
+                    splitTx = tx
+                    detailTx = null
+                }
+            } else null,
+            splitParentSummary = splitSummary,
+        )
+    }
+
+    splitTx?.let { tx ->
+        SplitIncomeSheet(
+            transaction = tx,
+            primaryColor = primaryColor,
+            onDismiss = { splitTx = null },
+            onConfirm = { parts -> vm.splitTransaction(tx.id, parts) },
+        )
+    }
+
+    unsplitConfirmTx?.let { tx ->
+        AlertDialog(
+            onDismissRequest = { unsplitConfirmTx = null },
+            title = { Text("Расформировать разделённый доход?") },
+            text = { Text("Все части будут удалены, исходная запись восстановится. После этого её можно удалить или разделить заново.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    val target = if (tx.parentId.isNotBlank()) tx.parentId else tx.id
+                    unsplitConfirmTx = null
+                    scope.launch { vm.unsplitTransaction(target) }
+                }) { Text("Расформировать") }
+            },
+            dismissButton = {
+                TextButton(onClick = { unsplitConfirmTx = null }) { Text("Отмена") }
+            },
         )
     }
 
@@ -813,6 +893,12 @@ fun TransactionDetailSheet(
      *  «Регулярный расход»; pass «Желаемая покупка» for one-off items. */
     linkedWishlistLabel: String = "Регулярный расход",
     onOpenLinkedWishlist: (() -> Unit)? = null,
+    /** Open the «Разделить доход» sheet — wired only on Income, only when
+     *  the tx is the canonical income (not a child, not already split). */
+    onSplit: (() -> Unit)? = null,
+    /** Set on split-children to describe the source row («Часть от записи
+     *  ‘Зарплата’ от 26.05.2026»). Surfaced as an info-row in view mode. */
+    splitParentSummary: String? = null,
 ) {
     val scope = rememberCoroutineScope()
     var isEditing by remember { mutableStateOf(false) }
@@ -920,6 +1006,15 @@ fun TransactionDetailSheet(
                                         }
                                     }
                                 }
+                                if (onSplit != null) {
+                                    IconButton(onClick = onSplit) {
+                                        Icon(
+                                            Icons.AutoMirrored.Filled.CallSplit,
+                                            contentDescription = "Разделить доход",
+                                            tint = primaryColor,
+                                        )
+                                    }
+                                }
                                 IconButton(onClick = { isEditing = true }) {
                                     // Pencil tinted with primary, not amountColor —
                                     // matches the wishlist (Forecast) edit affordance
@@ -934,6 +1029,9 @@ fun TransactionDetailSheet(
                         Spacer(Modifier.height(16.dp))
 
                         DetailRow("Дата", formatDate(transaction.date))
+                        if (!splitParentSummary.isNullOrBlank()) {
+                            DetailRow("Разделение", splitParentSummary)
+                        }
 
                         val subtitle = transaction.source ?: transaction.purpose
                         if (!subtitle.isNullOrBlank()) {

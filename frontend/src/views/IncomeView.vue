@@ -203,6 +203,9 @@
                     to="body"
                     @update:value="applyFilters"
                   />
+                  <n-checkbox v-model:checked="showSplit" @update:checked="applyFilters">
+                    Показать разделённые
+                  </n-checkbox>
                 </n-space>
                 <!-- Mobile: иконка-кнопка с popover, чтобы фильтры не съедали
                    две полные строки в шапке списка. -->
@@ -247,6 +250,10 @@
                       to="body"
                       @update:value="applyFilters"
                     />
+                    <div class="filter-popover-label">Разделённые</div>
+                    <n-checkbox v-model:checked="showSplit" @update:checked="applyFilters">
+                      Показать
+                    </n-checkbox>
                     <n-button
                       v-if="activeFilterCount > 0"
                       size="small"
@@ -513,6 +520,14 @@
       </template>
     </n-modal>
 
+    <!-- Split income modal -->
+    <SplitIncomeModal
+      :show="splitModal.show"
+      :transaction="splitModal.tx"
+      @close="splitModal = { show: false, tx: null }"
+      @confirmed="onSplitConfirm"
+    />
+
     <!-- Reassign user modal -->
     <n-modal
       v-model:show="showReassign"
@@ -546,9 +561,10 @@ function toLocalDateString(ts) {
   const offset = d.getTimezoneOffset()
   return new Date(d.getTime() - offset * 60000).toISOString()
 }
-import { useMessage } from 'naive-ui'
+import { useMessage, useDialog } from 'naive-ui'
 import {
   NCard,
+  NCheckbox,
   NGrid,
   NGridItem,
   NForm,
@@ -604,17 +620,17 @@ import DepositChip from '@/components/DepositChip.vue'
 import { DEPOSITS, DEPOSIT_DEFAULT, normalizeDeposit } from '@/utils/deposit'
 import { historyOptions, pushHistory } from '@/utils/inputHistory'
 import { users as usersApi, transactions as txApi } from '@/api'
-import {
-  useAdaptiveTable,
-  plainTextCell,
-  renderActionsPopover,
-  renderActionButton,
-} from '@/utils/adaptiveTable'
+import { useAdaptiveTable, plainTextCell, renderActionsRow } from '@/utils/adaptiveTable'
+import SplitIncomeModal from '@/components/SplitIncomeModal.vue'
+import { GitMergeOutline } from '@vicons/ionicons5'
 
 const store = useTransactionsStore('income')
 const { palette, valuesHidden, primaryColor } = storeToRefs(useThemeStore())
 const incomeColor = computed(() => palette.value.income)
 const message = useMessage()
+const dialog = useDialog()
+const splitModal = ref({ show: false, tx: null })
+const showSplit = ref(false)
 const formRef = ref(null)
 const saving = ref(false)
 const filterRange = ref(null)
@@ -1024,6 +1040,7 @@ function applyFilters() {
     f.to = fmtLocalDate(filterRange.value[1])
   }
   if (filterDeposit.value) f.deposit = filterDeposit.value
+  if (showSplit.value) f.includeSplit = true
   store.setFilters(f)
 }
 
@@ -1033,6 +1050,7 @@ const activeFilterCount = computed(() => {
   if (filterRange.value) n += 1
   if (filterCategories.value?.length) n += 1
   if (filterDeposit.value) n += 1
+  if (showSplit.value) n += 1
   return n
 })
 
@@ -1040,6 +1058,7 @@ function resetFilters() {
   filterRange.value = null
   filterCategories.value = []
   filterDeposit.value = ''
+  showSplit.value = false
   applyFilters()
 }
 
@@ -1099,6 +1118,70 @@ async function openReassign(row) {
       loadingUsers.value = false
     }
   }
+}
+
+// ── Split / unsplit ──────────────────────────────────────────────────────────
+
+function openSplit(row) {
+  splitModal.value = { show: true, tx: row }
+}
+
+async function onSplitConfirm(splits) {
+  const tx = splitModal.value.tx
+  if (!tx) return
+  try {
+    await store.split(tx.id, splits)
+    message.success('Доход разделён')
+    splitModal.value = { show: false, tx: null }
+  } catch (e) {
+    message.error(e.message)
+  }
+}
+
+function onUnsplit(row) {
+  dialog.warning({
+    title: 'Расформировать разделённый доход?',
+    content: 'Все части будут удалены, исходная запись восстановится.',
+    positiveText: 'Расформировать',
+    negativeText: 'Отмена',
+    onPositiveClick: async () => {
+      try {
+        await store.unsplit(row.id)
+        message.success('Запись восстановлена')
+      } catch (e) {
+        message.error(e.message)
+      }
+    },
+  })
+}
+
+// Single delete handler that branches: split children/parents go through the
+// unsplit flow with a confirmation dialog, regular rows take the plain delete
+// path (popconfirm inside the action button itself).
+function onDeleteRow(row) {
+  if (row.parent_id) {
+    dialog.warning({
+      title: 'Удалить часть разделённого дохода?',
+      content:
+        'Все части будут удалены, а исходная запись восстановится. Затем её можно удалить или разделить заново.',
+      positiveText: 'Расформировать',
+      negativeText: 'Отмена',
+      onPositiveClick: async () => {
+        try {
+          await store.unsplit(row.parent_id)
+          message.success('Запись восстановлена')
+        } catch (e) {
+          message.error(e.message)
+        }
+      },
+    })
+    return
+  }
+  if (row.excluded_from_stats) {
+    onUnsplit(row)
+    return
+  }
+  store.remove(row.id)
 }
 
 async function changeDeposit(row, deposit) {
@@ -1548,10 +1631,12 @@ const columns = computed(() => {
     {
       title: '',
       key: 'actions',
-      width: compact ? 44 : 100,
+      width: compact ? 44 : 110,
       align: 'right',
       render: (row) => {
-        const actions = [
+        const isSplitParent = row.excluded_from_stats && !row.parent_id
+        const isSplitChild = !!row.parent_id
+        const quick = [
           {
             icon: row.hidden ? EyeOffOutline : EyeOutline,
             label: row.hidden ? 'Показать' : 'Скрыть',
@@ -1559,25 +1644,36 @@ const columns = computed(() => {
             onClick: () => store.toggle(row.id, !row.hidden),
           },
           {
+            icon: TrashOutline,
+            label: 'Удалить',
+            type: 'error',
+            confirm: isSplitChild || isSplitParent ? undefined : 'Удалить запись?',
+            onClick: () => onDeleteRow(row),
+          },
+        ]
+        const more = []
+        if (!isSplitChild && !isSplitParent) {
+          more.push({
             icon: CopyOutline,
             label: 'Добавить как шаблон',
             type: 'info',
             onClick: () => fillFromTemplate(row),
-          },
-          {
-            icon: TrashOutline,
-            label: 'Удалить',
-            type: 'error',
-            confirm: 'Удалить запись?',
-            onClick: () => store.remove(row.id),
-          },
-        ]
-        if (compact) return renderActionsPopover(actions)
-        return h(
-          'div',
-          { style: 'display:flex;justify-content:flex-end;align-items:center;gap:2px' },
-          actions.map((a) => renderActionButton(a)),
-        )
+          })
+          more.push({
+            icon: GitMergeOutline,
+            label: 'Разделить доход',
+            type: 'info',
+            onClick: () => openSplit(row),
+          })
+        } else if (isSplitParent) {
+          more.push({
+            icon: GitMergeOutline,
+            label: 'Расформировать',
+            type: 'warning',
+            onClick: () => onUnsplit(row),
+          })
+        }
+        return renderActionsRow({ quick, more, compact })
       },
     },
   ]
