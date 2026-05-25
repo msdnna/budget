@@ -27,6 +27,10 @@ fun StatisticsScreen(
     primaryColor: Color,
     valuesHidden: Boolean = false,
     pieUnitRuble: Boolean = true,
+    /** Controlled by the FilterAlt action-icon in MainScreen's TopAppBar.
+     *  When true, the deposit-scope card is visible; otherwise it collapses
+     *  away to keep the screen tidy (mirrors income/expenses filters). */
+    filtersVisible: Boolean = false,
     // Drilldown callbacks: invoked when the user taps a slice of the
     // expense / income donut. Parent (MainScreen) is responsible for
     // applying the filter on the destination VM, scrolling the pager,
@@ -175,36 +179,32 @@ fun StatisticsScreen(
                             }
                         }
                     } // /period chips row
-                    // Deposit scope filter — second row inside the same card so
-                    // the period and scope controls stay visually grouped (per
-                    // user feedback: "может имеет смысл сделать фильтр внутри
-                    // карточки").
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        FilterChip(
-                            selected = deposit == null,
-                            onClick = { vm.selectDeposit(null) },
-                            label = { Text("Все счета") },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = primaryColor,
-                                selectedLabelColor = Color.White,
-                            ),
-                        )
-                        DEPOSITS.forEach { meta ->
-                            FilterChip(
-                                selected = deposit == meta.value,
-                                onClick = { vm.selectDeposit(meta.value) },
-                                label = { Text(meta.label) },
-                                leadingIcon = {
-                                    Icon(meta.icon, contentDescription = null, modifier = Modifier.size(16.dp))
-                                },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = primaryColor,
-                                    selectedLabelColor = Color.White,
-                                ),
+                    // Deposit scope filter — collapsed inside an
+                    // AnimatedVisibility driven by MainScreen's filter
+                    // toggle (the funnel icon in the TopAppBar). Lives in
+                    // the same card as the period chips so the two filters
+                    // read as one block.
+                    androidx.compose.animation.AnimatedVisibility(visible = filtersVisible) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            DepositScopeChip(
+                                selected = deposit == null,
+                                label = "Все счета",
+                                icon = null,
+                                primaryColor = primaryColor,
+                                onClick = { vm.selectDeposit(null) },
                             )
+                            DEPOSITS.forEach { meta ->
+                                DepositScopeChip(
+                                    selected = deposit == meta.value,
+                                    label = meta.label,
+                                    icon = meta.icon,
+                                    primaryColor = primaryColor,
+                                    onClick = { vm.selectDeposit(meta.value) },
+                                )
+                            }
                         }
                     }
                 } // /column

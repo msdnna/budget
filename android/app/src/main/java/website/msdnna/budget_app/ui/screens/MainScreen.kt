@@ -248,13 +248,19 @@ fun MainScreen(
     val incFilterCats by incomeVm.filterCats.collectAsStateWithLifecycle()
     val incFilterFrom by incomeVm.filterFrom.collectAsStateWithLifecycle()
     val incFilterTo by incomeVm.filterTo.collectAsStateWithLifecycle()
+    val expFilterDeposit by expensesVm.filterDeposit.collectAsStateWithLifecycle()
+    val incFilterDeposit by incomeVm.filterDeposit.collectAsStateWithLifecycle()
     val activeFilterCount = when (targetRoute) {
         "expenses" -> {
             expFilterCats.size +
                 (if (expFilterFrom != null && expFilterTo != null) 1 else 0) +
-                (if (expIncludeDetailed) 1 else 0)
+                (if (expIncludeDetailed) 1 else 0) +
+                (if (expFilterDeposit != null) 1 else 0)
         }
-        "income" -> incFilterCats.size + (if (incFilterFrom != null && incFilterTo != null) 1 else 0)
+        "income" ->
+            incFilterCats.size +
+                (if (incFilterFrom != null && incFilterTo != null) 1 else 0) +
+                (if (incFilterDeposit != null) 1 else 0)
         else -> 0
     }
 
@@ -491,7 +497,10 @@ fun MainScreen(
                         }
                     }
                     androidx.compose.animation.AnimatedVisibility(
-                        visible = targetRoute == "income" || targetRoute == "expenses",
+                        visible = targetRoute == "income" ||
+                            targetRoute == "expenses" ||
+                            targetRoute == "statistics" ||
+                            targetRoute == "forecast",
                         enter = androidx.compose.animation.fadeIn(animationSpec = tween(200)) +
                             androidx.compose.animation.expandHorizontally(animationSpec = tween(220), clip = false),
                         exit = androidx.compose.animation.fadeOut(animationSpec = tween(160)) +
@@ -620,6 +629,7 @@ fun MainScreen(
                             primaryColor = primaryColor,
                             valuesHidden = valuesHidden,
                             pieUnitRuble = pieUnitRuble,
+                            filtersVisible = filtersVisible,
                             onDrilldownExpense = { category, from, to ->
                                 expensesVm.setFilterCategories(setOf(category))
                                 expensesVm.setDateRange(from, to)
@@ -649,6 +659,7 @@ fun MainScreen(
                         )
                         "forecast" -> ForecastScreen(
                             serverUrl, primaryColor,
+                            filtersVisible = filtersVisible,
                             onSelectionCountChange = { selectionCounts["forecast"] = it },
                             onLinkExisting = { id, name -> linkExpenseTarget = id to name },
                         )

@@ -296,6 +296,31 @@ fun IncomeScreen(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
+                            // Deposit-scope chip row — mirrors Stats/Forecast
+                            // so the user reaches «Все / Карта / Наличные»
+                            // through the same affordance everywhere.
+                            val filterDeposit by vm.filterDeposit.collectAsState()
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                DepositScopeChip(
+                                    selected = filterDeposit == null,
+                                    label = "Все счета",
+                                    icon = null,
+                                    primaryColor = primaryColor,
+                                    onClick = { vm.setFilterDeposit(null) },
+                                )
+                                DEPOSITS.forEach { meta ->
+                                    DepositScopeChip(
+                                        selected = filterDeposit == meta.value,
+                                        label = meta.label,
+                                        icon = meta.icon,
+                                        primaryColor = primaryColor,
+                                        onClick = { vm.setFilterDeposit(meta.value) },
+                                    )
+                                }
+                            }
                         }
                     }
                 }

@@ -9,6 +9,7 @@ import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
@@ -22,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
@@ -91,6 +93,58 @@ fun DepositChip(
             }
         }
     }
+}
+
+/**
+ * Single FilterChip styled for the deposit-scope filter row used on the
+ * Stats / Forecast / Income / Expenses screens. Pulled out as its own
+ * composable to keep maxLines=1+ellipsis behaviour and the
+ * selected-leading-icon tint in one place — the Material3 default
+ * `filterChipColors` doesn't expose a "white selected leading icon" override,
+ * so we tint the icon explicitly based on `selected`.
+ */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+fun DepositScopeChip(
+    selected: Boolean,
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector?,
+    primaryColor: androidx.compose.ui.graphics.Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    FilterChip(
+        modifier = modifier,
+        selected = selected,
+        onClick = onClick,
+        label = {
+            Text(
+                label,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
+            )
+        },
+        leadingIcon = icon?.let {
+            {
+                Icon(
+                    imageVector = it,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    // Explicit tint — default FilterChip leaves the leading
+                    // icon at its source colour on selection, which kept the
+                    // glyph dark on the primary-coloured selected chip.
+                    tint = if (selected) androidx.compose.ui.graphics.Color.White
+                    else LocalContentColor.current,
+                )
+            }
+        },
+        colors = FilterChipDefaults.filterChipColors(
+            selectedContainerColor = primaryColor,
+            selectedLabelColor = androidx.compose.ui.graphics.Color.White,
+            selectedLeadingIconColor = androidx.compose.ui.graphics.Color.White,
+        ),
+    )
 }
 
 /**
