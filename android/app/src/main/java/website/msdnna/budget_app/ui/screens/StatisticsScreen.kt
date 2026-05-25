@@ -109,69 +109,105 @@ fun StatisticsScreen(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             ) {
-                Row(
+                Column(
                     modifier = Modifier.fillMaxWidth().padding(12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    StatsPeriod.values().forEach { p ->
-                        val label = when {
-                            p != period -> when (p) {
-                                StatsPeriod.MONTH -> "Месяц"
-                                StatsPeriod.YEAR -> "Год"
-                                StatsPeriod.RANGE -> "Период"
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        StatsPeriod.values().forEach { p ->
+                            val label = when {
+                                p != period -> when (p) {
+                                    StatsPeriod.MONTH -> "Месяц"
+                                    StatsPeriod.YEAR -> "Год"
+                                    StatsPeriod.RANGE -> "Период"
+                                }
+                                p == StatsPeriod.MONTH -> "${monthName(month)} $year"
+                                p == StatsPeriod.YEAR -> year.toString()
+                                else -> if (from != null && to != null)
+                                    "${shortIsoDate(from!!)} — ${shortIsoDate(to!!)}"
+                                else "Период"
                             }
-                            p == StatsPeriod.MONTH -> "${monthName(month)} $year"
-                            p == StatsPeriod.YEAR -> year.toString()
-                            else -> if (from != null && to != null)
-                                "${shortIsoDate(from!!)} — ${shortIsoDate(to!!)}"
-                            else "Период"
+                            Box {
+                                FilterChip(
+                                    selected = period == p,
+                                    onClick = {
+                                        if (period != p) vm.setPeriod(p)
+                                        pickerOpen = p
+                                    },
+                                    label = { Text(label) },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = primaryColor,
+                                        selectedLabelColor = Color.White,
+                                    ),
+                                )
+                                // Anchor the popups to the chip itself so they
+                                // appear directly below the trigger.
+                                TilePeriodPickerPopup(
+                                    open = pickerOpen == StatsPeriod.MONTH && p == StatsPeriod.MONTH,
+                                    type = TilePickerType.MONTH,
+                                    year = year,
+                                    month = month,
+                                    primaryColor = primaryColor,
+                                    onSelect = { y, m ->
+                                        vm.selectMonth(y, m)
+                                        pickerOpen = null
+                                    },
+                                    onDismiss = { pickerOpen = null },
+                                    // Default anchor offset (trigger height + 8dp gap)
+                                    // is computed inside TilePeriodPickerPopup; don't override.
+                                )
+                                TilePeriodPickerPopup(
+                                    open = pickerOpen == StatsPeriod.YEAR && p == StatsPeriod.YEAR,
+                                    type = TilePickerType.YEAR,
+                                    year = year,
+                                    month = month,
+                                    primaryColor = primaryColor,
+                                    onSelect = { y, _ ->
+                                        vm.selectYear(y)
+                                        pickerOpen = null
+                                    },
+                                    onDismiss = { pickerOpen = null },
+                                    // Default anchor offset (trigger height + 8dp gap)
+                                    // is computed inside TilePeriodPickerPopup; don't override.
+                                )
+                            }
                         }
-                        Box {
+                    } // /period chips row
+                    // Deposit scope filter — second row inside the same card so
+                    // the period and scope controls stay visually grouped (per
+                    // user feedback: "может имеет смысл сделать фильтр внутри
+                    // карточки").
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        FilterChip(
+                            selected = deposit == null,
+                            onClick = { vm.selectDeposit(null) },
+                            label = { Text("Все счета") },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = primaryColor,
+                                selectedLabelColor = Color.White,
+                            ),
+                        )
+                        DEPOSITS.forEach { meta ->
                             FilterChip(
-                                selected = period == p,
-                                onClick = {
-                                    if (period != p) vm.setPeriod(p)
-                                    pickerOpen = p
+                                selected = deposit == meta.value,
+                                onClick = { vm.selectDeposit(meta.value) },
+                                label = { Text(meta.label) },
+                                leadingIcon = {
+                                    Icon(meta.icon, contentDescription = null, modifier = Modifier.size(16.dp))
                                 },
-                                label = { Text(label) },
                                 colors = FilterChipDefaults.filterChipColors(
                                     selectedContainerColor = primaryColor,
                                     selectedLabelColor = Color.White,
                                 ),
                             )
-                            // Anchor the popups to the chip itself so they
-                            // appear directly below the trigger.
-                            TilePeriodPickerPopup(
-                                open = pickerOpen == StatsPeriod.MONTH && p == StatsPeriod.MONTH,
-                                type = TilePickerType.MONTH,
-                                year = year,
-                                month = month,
-                                primaryColor = primaryColor,
-                                onSelect = { y, m ->
-                                    vm.selectMonth(y, m)
-                                    pickerOpen = null
-                                },
-                                onDismiss = { pickerOpen = null },
-                                // Default anchor offset (trigger height + 8dp gap)
-                                // is computed inside TilePeriodPickerPopup; don't override.
-                            )
-                            TilePeriodPickerPopup(
-                                open = pickerOpen == StatsPeriod.YEAR && p == StatsPeriod.YEAR,
-                                type = TilePickerType.YEAR,
-                                year = year,
-                                month = month,
-                                primaryColor = primaryColor,
-                                onSelect = { y, _ ->
-                                    vm.selectYear(y)
-                                    pickerOpen = null
-                                },
-                                onDismiss = { pickerOpen = null },
-                                // Default anchor offset (trigger height + 8dp gap)
-                                // is computed inside TilePeriodPickerPopup; don't override.
-                            )
                         }
                     }
-                }
+                } // /column
             }
             DateRangePickerDialog(
                 open = pickerOpen == StatsPeriod.RANGE,
@@ -184,32 +220,6 @@ fun StatisticsScreen(
                 },
                 onDismiss = { pickerOpen = null },
             )
-
-            // Deposit scope filter — bank / cash / both (default = both).
-            // Shown as a chip row so it stays next to the period selector and
-            // doesn't claim a full settings sheet.
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text("Счёт:", style = MaterialTheme.typography.labelMedium)
-                FilterChip(
-                    selected = deposit == null,
-                    onClick = { vm.selectDeposit(null) },
-                    label = { Text("Все") },
-                )
-                DEPOSITS.forEach { meta ->
-                    FilterChip(
-                        selected = deposit == meta.value,
-                        onClick = { vm.selectDeposit(meta.value) },
-                        label = { Text(meta.label) },
-                        leadingIcon = {
-                            Icon(meta.icon, contentDescription = null, modifier = Modifier.size(16.dp))
-                        },
-                    )
-                }
-            }
 
             when {
                 state.loading -> SkeletonStatisticsContent()
