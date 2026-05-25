@@ -333,36 +333,64 @@ fun MainScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
                         MbLogo(primaryColor = primaryColor, size = 28.dp)
+                        // `weight(1f, fill = false)` claims only as much
+                        // horizontal space as the title needs but yields the
+                        // rest to actions on overflow; combined with single-
+                        // line + ellipsis it prevents the per-letter wrap that
+                        // happened when the action row pushed the title slot
+                        // below its intrinsic width.
                         androidx.compose.animation.Crossfade(
                             targetState = activeSelectionCount > 0,
                             animationSpec = androidx.compose.animation.core.tween(180),
-                            label = "title"
+                            label = "title",
+                            modifier = Modifier.weight(1f, fill = false),
                         ) { showCounter ->
                             if (showCounter) {
                                 Text(
                                     "Выбрано: $activeSelectionCount",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = primaryColor
+                                    color = primaryColor,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                                 )
                             } else {
                                 Text(
                                     PAGE_TITLES[targetRoute] ?: "",
-                                    style = MaterialTheme.typography.titleMedium
+                                    style = MaterialTheme.typography.titleMedium,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                                 )
                             }
                         }
                     }
                 },
                 actions = {
-                    Text(
-                        today,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(end = 4.dp)
-                    )
+                    // Hide the date on routes whose action row already crowds
+                    // the bar — Expenses adds the DR badge and the filter
+                    // toggle on top of the always-on bell/eye/settings. The
+                    // resulting 4-icon row left no room for the title without
+                    // forcing it to wrap per-letter. Income/Statistics still
+                    // show the date.
+                    val showDate = targetRoute != "expenses"
+                    if (showDate) {
+                        Text(
+                            today,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(end = 4.dp),
+                            maxLines = 1,
+                            softWrap = false,
+                        )
+                    }
                     if (conflictCount > 0) {
                         BadgedBox(
                             badge = {

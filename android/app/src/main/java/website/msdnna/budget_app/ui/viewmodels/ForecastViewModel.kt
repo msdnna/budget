@@ -68,7 +68,21 @@ class ForecastViewModel(private val serverUrl: String) : ViewModel() {
         _forecastLoading.value = true
         _forecastError.value = null
         try {
-            val f = withRetry { service.getForecast(deposit = deposit) }
+            val raw = withRetry { service.getForecast(deposit = deposit) }
+
+            // Defensive: Gson installs `null` into non-nullable List fields
+            // when the JSON value is `null` (the kotlin-default isn't
+            // consulted by reflection-based deserialization). Forecast
+            // endpoints with empty scopes used to return `breakdown: null`,
+            // which then crashed Compose with NPE on `.isNotEmpty()`. Force
+            // empty lists across all 3 collections — cheap and version-
+            // proof against future similar regressions on the server side.
+            @Suppress("USELESS_ELVIS")
+            val f = raw.copy(
+                breakdown = raw.breakdown ?: emptyList(),
+                regularItems = raw.regularItems ?: emptyList(),
+                unpurchasedWishlist = raw.unpurchasedWishlist ?: emptyList(),
+            )
             emit(f)
         } catch (e: CancellationException) {
             throw e

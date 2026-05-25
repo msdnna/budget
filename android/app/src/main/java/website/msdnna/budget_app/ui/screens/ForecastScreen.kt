@@ -321,25 +321,40 @@ fun ForecastScreen(
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         val forecastDeposit by vm.filterDeposit.collectAsState()
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
+                        // Deposit scope filter wrapped in its own Card so it
+                        // looks like a sibling of the summary cards rather
+                        // than free-floating chips (per user feedback).
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                         ) {
-                            Text("Счёт:", style = MaterialTheme.typography.labelMedium)
-                            FilterChip(
-                                selected = forecastDeposit == null,
-                                onClick = { vm.setFilterDeposit(null) },
-                                label = { Text("Все") },
-                            )
-                            DEPOSITS.forEach { meta ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(12.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
                                 FilterChip(
-                                    selected = forecastDeposit == meta.value,
-                                    onClick = { vm.setFilterDeposit(meta.value) },
-                                    label = { Text(meta.label) },
-                                    leadingIcon = {
-                                        Icon(meta.icon, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    },
+                                    selected = forecastDeposit == null,
+                                    onClick = { vm.setFilterDeposit(null) },
+                                    label = { Text("Все счета") },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = primaryColor,
+                                        selectedLabelColor = Color.White,
+                                    ),
                                 )
+                                DEPOSITS.forEach { meta ->
+                                    FilterChip(
+                                        selected = forecastDeposit == meta.value,
+                                        onClick = { vm.setFilterDeposit(meta.value) },
+                                        label = { Text(meta.label) },
+                                        leadingIcon = {
+                                            Icon(meta.icon, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        },
+                                        colors = FilterChipDefaults.filterChipColors(
+                                            selectedContainerColor = primaryColor,
+                                            selectedLabelColor = Color.White,
+                                        ),
+                                    )
+                                }
                             }
                         }
                         when {
