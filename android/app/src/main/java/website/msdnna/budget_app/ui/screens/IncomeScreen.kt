@@ -277,101 +277,64 @@ fun IncomeScreen(
                 }
 
                 // Filters card — collapsed by default; toggled by the header
-                // FilterAlt button. Animates open/closed with shrink/expand so the
-                // list below slides up to fill the freed space.
-                androidx.compose.animation.AnimatedVisibility(
+                // FilterAlt button. Shell (animation, header, footer) lives
+                // in FilterCard; this screen only owns its sections.
+                val filterDeposit by vm.filterDeposit.collectAsState()
+                val hasActive = filterCats.isNotEmpty() ||
+                    filterFrom != null ||
+                    filterTo != null ||
+                    filterDeposit != null
+                FilterCard(
                     visible = filtersVisible,
-                    enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
-                    exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut(),
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    totalText = "Всего: ${uiState.total}",
+                    hasActiveFilters = hasActive,
+                    onReset = { vm.resetFilters() },
+                    primaryColor = primaryColor,
                 ) {
-                    Card(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                    FilterSection(title = "Период") {
+                        PeriodChipsRow(
+                            fromIso = filterFrom,
+                            toIso = filterTo,
+                            primaryColor = primaryColor,
+                            onChange = { f, t -> vm.setDateRange(f, t) },
+                        )
+                    }
+                    FilterSection(title = "Категории") {
+                        CategoryChipsRow(
+                            selected = filterCats,
+                            categories = categories,
+                            primaryColor = primaryColor,
+                            serverUrl = serverUrl,
+                            onToggle = { vm.toggleFilterCategory(it) },
+                            onClear = { vm.clearFilterCategories() },
+                        )
+                    }
+                    FilterSection(title = "Счёт") {
+                        val depositRowState = androidx.compose.foundation.lazy.rememberLazyListState()
+                        TrackInnerHorizontalScroll(depositRowState)
+                        androidx.compose.foundation.lazy.LazyRow(
+                            state = depositRowState,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Text(
-                                "Фильтры",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                            FilterSection(title = "Период") {
-                                PeriodChipsRow(
-                                    fromIso = filterFrom,
-                                    toIso = filterTo,
+                            item {
+                                DepositScopeChip(
+                                    selected = filterDeposit == null,
+                                    label = "Все счета",
+                                    icon = null,
                                     primaryColor = primaryColor,
-                                    onChange = { f, t -> vm.setDateRange(f, t) },
+                                    onClick = { vm.setFilterDeposit(null) },
                                 )
                             }
-                            FilterSection(title = "Категории") {
-                                CategoryChipsRow(
-                                    selected = filterCats,
-                                    categories = categories,
+                            items(DEPOSITS) { meta ->
+                                DepositScopeChip(
+                                    selected = filterDeposit == meta.value,
+                                    label = meta.label,
+                                    icon = meta.icon,
                                     primaryColor = primaryColor,
-                                    serverUrl = serverUrl,
-                                    onToggle = { vm.toggleFilterCategory(it) },
-                                    onClear = { vm.clearFilterCategories() },
+                                    onClick = { vm.setFilterDeposit(meta.value) },
                                 )
-                            }
-                            val filterDeposit by vm.filterDeposit.collectAsState()
-                            FilterSection(title = "Счёт") {
-                                val depositRowState = androidx.compose.foundation.lazy.rememberLazyListState()
-                                TrackInnerHorizontalScroll(depositRowState)
-                                androidx.compose.foundation.lazy.LazyRow(
-                                    state = depositRowState,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    item {
-                                        DepositScopeChip(
-                                            selected = filterDeposit == null,
-                                            label = "Все счета",
-                                            icon = null,
-                                            primaryColor = primaryColor,
-                                            onClick = { vm.setFilterDeposit(null) },
-                                        )
-                                    }
-                                    items(DEPOSITS) { meta ->
-                                        DepositScopeChip(
-                                            selected = filterDeposit == meta.value,
-                                            label = meta.label,
-                                            icon = meta.icon,
-                                            primaryColor = primaryColor,
-                                            onClick = { vm.setFilterDeposit(meta.value) },
-                                        )
-                                    }
-                                }
-                            }
-                            val hasActive = filterCats.isNotEmpty() ||
-                                filterFrom != null ||
-                                filterTo != null ||
-                                filterDeposit != null
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Text(
-                                    "Всего: ${uiState.total}",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                                if (hasActive) {
-                                    // Plain clickable Text rather than
-                                    // TextButton — the latter bakes in a
-                                    // 48dp min-height which made this row
-                                    // jump as soon as any filter activated.
-                                    Text(
-                                        "Сбросить",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = primaryColor,
-                                        modifier = Modifier
-                                            .clickable { vm.resetFilters() }
-                                            .padding(horizontal = 8.dp, vertical = 2.dp),
-                                    )
-                                }
                             }
                         }
                     }

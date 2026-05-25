@@ -3,8 +3,6 @@ package website.msdnna.budget_app.ui.screens
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -225,128 +223,96 @@ fun ExpensesScreen(
                 )
 
                 // Filters card — collapsed by default; toggled by the header
-                // FilterAlt button. See IncomeScreen for the same pattern.
-                androidx.compose.animation.AnimatedVisibility(
-                    modifier = Modifier
-                        // Keep the filter card above the LazyColumn during item
-                        // transitions — without zIndex, an item being removed by
-                        // a filter toggle (e.g. closed-request parent disappearing)
-                        // briefly bleeds through the card area.
-                        .zIndex(1f)
-                        .background(MaterialTheme.colorScheme.background),
+                // FilterAlt button. Shell (animation, header, footer) lives
+                // in FilterCard. The zIndex+background modifier keeps the
+                // card above the LazyColumn during item transitions —
+                // without it, an item being removed by a filter toggle
+                // (e.g. closed-request parent disappearing) briefly bleeds
+                // through the card area.
+                val filterDeposit by vm.filterDeposit.collectAsState()
+                val hasActive = filterCats.isNotEmpty() ||
+                    filterFrom != null ||
+                    filterTo != null ||
+                    filterDeposit != null ||
+                    includeDetailed
+                FilterCard(
                     visible = filtersVisible,
-                    enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
-                    exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut(),
+                    modifier = Modifier
+                        .zIndex(1f)
+                        .background(MaterialTheme.colorScheme.background)
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    totalText = "Всего: ${uiState.total}",
+                    hasActiveFilters = hasActive,
+                    onReset = { vm.resetFilters() },
+                    primaryColor = primaryColor,
                 ) {
-                    Card(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                    FilterSection(title = "Период") {
+                        PeriodChipsRow(
+                            fromIso = filterFrom,
+                            toIso = filterTo,
+                            primaryColor = primaryColor,
+                            onChange = { f, t -> vm.setDateRange(f, t) },
+                        )
+                    }
+                    FilterSection(title = "Категории") {
+                        CategoryChipsRow(
+                            selected = filterCats,
+                            categories = categories,
+                            primaryColor = primaryColor,
+                            serverUrl = serverUrl,
+                            onToggle = { vm.toggleFilterCategory(it) },
+                            onClear = { vm.clearFilterCategories() },
+                        )
+                    }
+                    FilterSection(title = "Счёт") {
+                        val depositRowState = androidx.compose.foundation.lazy.rememberLazyListState()
+                        TrackInnerHorizontalScroll(depositRowState)
+                        androidx.compose.foundation.lazy.LazyRow(
+                            state = depositRowState,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Text(
-                                "Фильтры",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.SemiBold,
+                            item {
+                                DepositScopeChip(
+                                    selected = filterDeposit == null,
+                                    label = "Все счета",
+                                    icon = null,
+                                    primaryColor = primaryColor,
+                                    onClick = { vm.setFilterDeposit(null) },
+                                )
+                            }
+                            items(DEPOSITS) { meta ->
+                                DepositScopeChip(
+                                    selected = filterDeposit == meta.value,
+                                    label = meta.label,
+                                    icon = meta.icon,
+                                    primaryColor = primaryColor,
+                                    onClick = { vm.setFilterDeposit(meta.value) },
+                                )
+                            }
+                        }
+                    }
+                    FilterSection(title = "Параметры отображения") {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            // Whole row is the toggle — flat, no ripple
+                            // (the small grey press tint behind the label
+                            // looked like a bug, not a feature).
+                            modifier = Modifier.clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                            ) { vm.setIncludeDetailed(!includeDetailed) },
+                        ) {
+                            Checkbox(
+                                checked = includeDetailed,
+                                onCheckedChange = null,
+                                colors = CheckboxDefaults.colors(checkedColor = primaryColor),
                             )
-                            FilterSection(title = "Период") {
-                                PeriodChipsRow(
-                                    fromIso = filterFrom,
-                                    toIso = filterTo,
-                                    primaryColor = primaryColor,
-                                    onChange = { f, t -> vm.setDateRange(f, t) },
-                                )
-                            }
-                            FilterSection(title = "Категории") {
-                                CategoryChipsRow(
-                                    selected = filterCats,
-                                    categories = categories,
-                                    primaryColor = primaryColor,
-                                    serverUrl = serverUrl,
-                                    onToggle = { vm.toggleFilterCategory(it) },
-                                    onClear = { vm.clearFilterCategories() },
-                                )
-                            }
-                            val filterDeposit by vm.filterDeposit.collectAsState()
-                            FilterSection(title = "Счёт") {
-                                val depositRowState = androidx.compose.foundation.lazy.rememberLazyListState()
-                                TrackInnerHorizontalScroll(depositRowState)
-                                androidx.compose.foundation.lazy.LazyRow(
-                                    state = depositRowState,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    item {
-                                        DepositScopeChip(
-                                            selected = filterDeposit == null,
-                                            label = "Все счета",
-                                            icon = null,
-                                            primaryColor = primaryColor,
-                                            onClick = { vm.setFilterDeposit(null) },
-                                        )
-                                    }
-                                    items(DEPOSITS) { meta ->
-                                        DepositScopeChip(
-                                            selected = filterDeposit == meta.value,
-                                            label = meta.label,
-                                            icon = meta.icon,
-                                            primaryColor = primaryColor,
-                                            onClick = { vm.setFilterDeposit(meta.value) },
-                                        )
-                                    }
-                                }
-                            }
-                            FilterSection(title = "Параметры отображения") {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    // Whole row is the toggle — flat, no ripple
-                                    // (the small grey press tint behind the
-                                    // label looked like a bug, not a feature).
-                                    modifier = Modifier.clickable(
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        indication = null,
-                                    ) { vm.setIncludeDetailed(!includeDetailed) },
-                                ) {
-                                    Checkbox(
-                                        checked = includeDetailed,
-                                        onCheckedChange = null,
-                                        colors = CheckboxDefaults.colors(checkedColor = primaryColor),
-                                    )
-                                    Text(
-                                        "Показать закрытые запросы",
-                                        style = MaterialTheme.typography.bodySmall,
-                                    )
-                                }
-                            }
-                            val hasActive = filterCats.isNotEmpty() ||
-                                filterFrom != null ||
-                                filterTo != null ||
-                                filterDeposit != null ||
-                                includeDetailed
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Text(
-                                    "Всего: ${uiState.total}",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                                if (hasActive) {
-                                    Text(
-                                        "Сбросить",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = primaryColor,
-                                        modifier = Modifier
-                                            .clickable { vm.resetFilters() }
-                                            .padding(horizontal = 8.dp, vertical = 2.dp),
-                                    )
-                                }
-                            }
+                            Text(
+                                "Показать закрытые запросы",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
                         }
                     }
                 }
