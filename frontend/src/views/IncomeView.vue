@@ -1824,10 +1824,11 @@ onMounted(() => {
 
 /* IB modal tabs: bump the tab-trigger height + give the content below the
    tab strip its own breathing room (the default tab pane sat flush against
-   the input, no gap). Also: the focused n-input-number's primary border was
-   getting clipped on left/right because the tab pane has overflow:hidden
-   for animation purposes — give it a tiny horizontal padding so the 2px
-   focus ring stays visible. */
+   the input, no gap). The focused n-input-number's 2px primary border was
+   still getting clipped because the n-tabs pane-wrapper has
+   overflow: hidden for slide-animation purposes — we override that AND
+   add horizontal margin/padding so the ring has 6px to breathe on each
+   side without colliding with the modal edges. */
 :deep(.ib-tabs .n-tabs-tab) {
   padding-top: 10px;
   padding-bottom: 10px;
@@ -1838,14 +1839,18 @@ onMounted(() => {
   gap: 6px;
   line-height: 1;
 }
-:deep(.ib-tabs .n-tab-pane) {
-  padding: 12px 4px 4px;
+:deep(.ib-tabs .n-tabs-pane-wrapper) {
+  overflow: visible;
 }
-/* The line-type indicator under the active tab has its own underline.
-   Default sits 1px below the tab content; pulling the form content down a
-   bit (above) makes that line breathe. */
+:deep(.ib-tabs .n-tab-pane) {
+  /* Outer padding + a tiny inner margin on the form below provides the
+     symmetric 6dp gutter the focus ring needs without nudging the input
+     visually off-centre. */
+  padding: 14px 6px 6px;
+  overflow: visible;
+}
 .ib-tab-form {
-  margin-top: 4px;
+  margin: 0 2px;
 }
 
 /* Bulk-mode marker (replaces author avatar on selected cards). */
