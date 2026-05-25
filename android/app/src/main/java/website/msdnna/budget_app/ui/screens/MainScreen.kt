@@ -2,8 +2,10 @@ package website.msdnna.budget_app.ui.screens
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -103,6 +105,7 @@ private val PAGE_TITLES = mapOf(
     "export" to "Экспорт",
 )
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MainScreen(
     serverUrl: String,
@@ -269,6 +272,12 @@ fun MainScreen(
     // the header button below toggles it. Shared across both routes so a user
     // who expanded filters on Income sees them already expanded on Expenses.
     var filtersVisible by remember { mutableStateOf(false) }
+    // Long-press on the funnel resets every filter on the current screen.
+    // For Income/Expenses we call the VM directly (shared instance); for
+    // Statistics/Forecast the VMs are owned by the screens, so we bump
+    // these counters and the screens trigger `vm.resetFilters()` on change.
+    var statsResetTrigger by remember { mutableStateOf(0) }
+    var forecastResetTrigger by remember { mutableStateOf(0) }
     // Per-route selection count published by each transactional screen via callback;
     // we read the entry for the currently visible route to decide between the
     // section title and a "Выбрано: N" counter in the top app bar.
@@ -513,12 +522,31 @@ fun MainScreen(
                             modifier = Modifier.size(48.dp),
                             contentAlignment = Alignment.Center,
                         ) {
-                            IconButton(onClick = { filtersVisible = !filtersVisible }) {
-                                // Outlined variants match the visual weight of the
-                                // eye/settings glyphs alongside (the filled
-                                // FilterAlt sat heavier than its neighbours in
-                                // light theme and lighter in dark — both broke
-                                // visual balance).
+                            // Long-press resets every filter on the current
+                            // tab; short-press toggles the drawer. Custom
+                            // Box+combinedClickable since M3 IconButton
+                            // exposes only onClick.
+                            val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(androidx.compose.foundation.shape.CircleShape)
+                                    .combinedClickable(
+                                        onClick = { filtersVisible = !filtersVisible },
+                                        onLongClick = {
+                                            haptic.performHapticFeedback(
+                                                androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress,
+                                            )
+                                            when (targetRoute) {
+                                                "income" -> incomeVm.resetFilters()
+                                                "expenses" -> expensesVm.resetFilters()
+                                                "statistics" -> statsResetTrigger++
+                                                "forecast" -> forecastResetTrigger++
+                                            }
+                                        },
+                                    ),
+                                contentAlignment = Alignment.Center,
+                            ) {
                                 Icon(
                                     if (filtersVisible) Icons.Outlined.FilterAltOff else Icons.Outlined.FilterAlt,
                                     if (filtersVisible) "Скрыть фильтры" else "Показать фильтры",
@@ -644,6 +672,7 @@ fun MainScreen(
                                 valuesHidden = valuesHidden,
                                 pieUnitRuble = pieUnitRuble,
                                 filtersVisible = filtersVisible,
+                                resetTrigger = statsResetTrigger,
                                 onDrilldownExpense = { category, from, to ->
                                     expensesVm.setFilterCategories(setOf(category))
                                     expensesVm.setDateRange(from, to)
@@ -674,6 +703,7 @@ fun MainScreen(
                             "forecast" -> ForecastScreen(
                                 serverUrl, primaryColor,
                                 filtersVisible = filtersVisible,
+                                resetTrigger = forecastResetTrigger,
                                 onSelectionCountChange = { selectionCounts["forecast"] = it },
                                 onLinkExisting = { id, name -> linkExpenseTarget = id to name },
                             )

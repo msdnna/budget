@@ -243,9 +243,14 @@ fun ExpensesScreen(
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     ) {
                         Column(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
+                            Text(
+                                "Фильтры",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                            )
                             FilterSection(title = "Период") {
                                 PeriodChipsRow(
                                     fromIso = filterFrom,
@@ -316,11 +321,34 @@ fun ExpensesScreen(
                                     )
                                 }
                             }
-                            Text(
-                                "Всего: ${uiState.total}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+                            val hasActive = filterCats.isNotEmpty() ||
+                                filterFrom != null ||
+                                filterTo != null ||
+                                filterDeposit != null ||
+                                includeDetailed
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    "Всего: ${uiState.total}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                if (hasActive) {
+                                    TextButton(
+                                        onClick = { vm.resetFilters() },
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                    ) {
+                                        Text(
+                                            "Сбросить",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = primaryColor,
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }

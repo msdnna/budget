@@ -129,6 +129,17 @@ class IncomeViewModel(private val serverUrl: String) : ViewModel() {
         _filterDeposit.value = deposit?.takeIf { it.isNotBlank() }
         _page.value = 1
     }
+
+    /** Clears every filter knob in one go — categories, date range, deposit
+     *  scope. Used by the «Сбросить» button at the bottom of the filter card
+     *  and by long-pressing the funnel icon in the top app bar. */
+    fun resetFilters() {
+        _filterCats.value = emptySet()
+        _filterFrom.value = null
+        _filterTo.value = null
+        _filterDeposit.value = null
+        _page.value = 1
+    }
     fun loadMore() { /* no-op: Room observes full list */ }
 
     fun ibNavigateBack() {
