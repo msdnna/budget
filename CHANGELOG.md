@@ -280,6 +280,11 @@
 
 ## Web (frontend)
 
+### [1.40.3] — 2026-05-25
+
+#### Fixed
+- **IB модалка**: focus-border `n-input-number` всё ещё обрезался по бокам — на `n-tabs-pane-wrapper` стоит `overflow: hidden` для slide-анимации. Override на `overflow: visible` + горизонтальное padding 6px на pane даёт 2px primary-ring место отрисоваться полностью.
+
 ### [1.40.2] — 2026-05-25
 
 #### Fixed
@@ -811,6 +816,15 @@
 ---
 
 ## Android
+
+### [1.40.4] — 2026-05-25
+
+#### Changed
+- **IB header**: компактная компоновка. Title + per-deposit balance rows слева; справа компактная Column с `CalendarMonth`-иконкой (открывает `TilePeriodPickerPopup` для выбора месяца) + `Edit`-иконкой (открывает sheet с табами) + крошечный label выбранного месяца под иконками. Раньше month-navigator `‹ Май 2026 ›` стоял отдельной строкой между title и amounts — дублировал control space с кнопкой «Изменить» и не масштабировался когда добавились два scope-row'а. Добавлен `IncomeViewModel.selectIbMonth(year, month)` для произвольного выбора (не только prev/next).
+- **Income/Expenses фильтр**: deposit-чипы Row → LazyRow. Длинные label'ы («Банковская карта») горизонтально скроллятся вместо обрезки.
+
+#### Fixed
+- **HorizontalPager nested-scroll**: при горизонтальном свайпе внутри LazyRow (фильтр-чипы Stats/Forecast/Income/Expenses) после конца LazyRow pager инерционно листал на соседний экран. Дефолтный `PagerDefaults.pageNestedScrollConnection(Orientation.Horizontal)` забирает unconsumed scroll same-orientation детей. Заменили на пустой `NestedScrollConnection` — pager теперь слушает только прямые жесты на своём viewport'е.
 
 ### [1.40.3] — 2026-05-25
 
