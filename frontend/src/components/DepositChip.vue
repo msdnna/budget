@@ -1,29 +1,30 @@
 <template>
-  <NDropdown
-    v-if="editable"
-    trigger="click"
-    placement="bottom-start"
-    :options="dropdownOptions"
-    @select="onSelect"
-  >
-    <button
-      type="button"
-      class="dep-chip dep-chip-btn"
-      :title="`Счёт: ${meta.label} (нажмите, чтобы изменить)`"
-    >
-      <NIcon :component="meta.icon" :size="iconSize" />
-      <span v-if="withLabel" class="dep-chip-label">{{ meta.shortLabel }}</span>
-    </button>
-  </NDropdown>
-  <span v-else class="dep-chip" :title="`Счёт: ${meta.label}`">
-    <NIcon :component="meta.icon" :size="iconSize" />
-    <span v-if="withLabel" class="dep-chip-label">{{ meta.shortLabel }}</span>
-  </span>
+  <NTooltip placement="top" :delay="150">
+    <template #trigger>
+      <NDropdown
+        v-if="editable"
+        trigger="click"
+        placement="bottom-start"
+        :options="dropdownOptions"
+        @select="onSelect"
+      >
+        <button type="button" class="dep-chip dep-chip-btn" :aria-label="ariaLabel">
+          <NIcon :component="meta.icon" :size="iconSize" />
+          <span v-if="withLabel" class="dep-chip-label">{{ meta.shortLabel }}</span>
+        </button>
+      </NDropdown>
+      <span v-else class="dep-chip" :aria-label="ariaLabel">
+        <NIcon :component="meta.icon" :size="iconSize" />
+        <span v-if="withLabel" class="dep-chip-label">{{ meta.shortLabel }}</span>
+      </span>
+    </template>
+    {{ tooltipText }}
+  </NTooltip>
 </template>
 
 <script setup>
 import { computed, h } from 'vue'
-import { NDropdown, NIcon } from 'naive-ui'
+import { NDropdown, NIcon, NTooltip } from 'naive-ui'
 import { DEPOSITS, depositMeta, normalizeDeposit } from '@/utils/deposit'
 
 const props = defineProps({
@@ -36,6 +37,10 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue', 'change'])
 
 const meta = computed(() => depositMeta(normalizeDeposit(props.modelValue)))
+const tooltipText = computed(() =>
+  props.editable ? `Счёт: ${meta.value.label} · нажмите для смены` : `Счёт: ${meta.value.label}`,
+)
+const ariaLabel = computed(() => `Счёт: ${meta.value.label}`)
 
 const dropdownOptions = computed(() =>
   DEPOSITS.map((d) => ({

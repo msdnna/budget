@@ -1095,9 +1095,24 @@ function refreshNameHistory() {
 }
 
 // Wishlist list excludes recurring items — those live in «Регулярные расходы».
-const wishlistOnly = computed(() =>
-  wlStore.items.filter((it) => !it.frequency || it.frequency === 'once'),
-)
+const forecastDeposit = ref('')
+const forecastDepositOptions = [
+  { label: 'Все счета', value: '' },
+  ...DEPOSITS.map((d) => ({ label: d.label, value: d.value })),
+]
+
+const wishlistOnly = computed(() => {
+  let items = wlStore.items.filter((it) => !it.frequency || it.frequency === 'once')
+  // The deposit filter is set by the Прогноз scope-chip row. We filter
+  // client-side because wlStore mirrors Room/sync state and isn't aware of
+  // the screen-level filter — the server-side `forecast.regular_items` slice
+  // already comes pre-filtered, so we only have to worry about wishlist.
+  if (forecastDeposit.value) {
+    const dep = forecastDeposit.value
+    items = items.filter((it) => (it.deposit || 'bank') === dep)
+  }
+  return items
+})
 
 // ── Inline editing — per-field pencil icons ─────────────────────────────────
 //
@@ -2490,12 +2505,6 @@ function getWishlistRowProps(row) {
   }
   return {}
 }
-
-const forecastDeposit = ref('')
-const forecastDepositOptions = [
-  { label: 'Все счета', value: '' },
-  ...DEPOSITS.map((d) => ({ label: d.label, value: d.value })),
-]
 
 async function loadForecast() {
   loadingForecast.value = true

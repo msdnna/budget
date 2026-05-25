@@ -45,56 +45,62 @@
           <n-select
             v-model:value="selectedDeposit"
             :options="depositFilterOptions"
-            size="small"
             style="width: 180px"
             to="body"
             @update:value="onPeriodValueChange"
           />
         </template>
         <!-- Mobile: маленькая кнопка-триггер value-picker'a справа. -->
-        <n-popover v-else trigger="click" placement="bottom-end" :show-arrow="false">
-          <template #trigger>
+        <template v-else>
+          <n-popover trigger="click" placement="bottom-end" :show-arrow="false">
+            <template #trigger>
+              <n-button size="small">
+                <template #icon><n-icon :component="CalendarOutline" /></template>
+                {{ periodLabel }}
+              </n-button>
+            </template>
+            <div class="period-popover">
+              <TilePeriodPicker
+                v-if="period === 'month'"
+                v-model:value="selectedMonth"
+                type="month"
+                size="small"
+                width="100%"
+                @update:value="onPeriodValueChange"
+              />
+              <TilePeriodPicker
+                v-if="period === 'year'"
+                v-model:value="selectedYear"
+                type="year"
+                size="small"
+                width="100%"
+                @update:value="onPeriodValueChange"
+              />
+              <n-date-picker
+                v-if="period === 'custom'"
+                v-model:value="dateRange"
+                type="daterange"
+                clearable
+                size="small"
+                style="width: 100%"
+                @update:value="onPeriodValueChange"
+              />
+            </div>
+          </n-popover>
+          <!-- Deposit scope picker — separate icon-button so it doesn't get
+               buried inside the period popover. Icon mirrors the current
+               selection (карта / купюра / shapes-icon для «Все»). -->
+          <n-dropdown
+            :options="depositDropdownOptions"
+            placement="bottom-end"
+            trigger="click"
+            @select="onDepositSelect"
+          >
             <n-button size="small">
-              <template #icon><n-icon :component="CalendarOutline" /></template>
-              {{ periodLabel }}
+              <template #icon><n-icon :component="depositTriggerIcon" /></template>
             </n-button>
-          </template>
-          <div class="period-popover">
-            <TilePeriodPicker
-              v-if="period === 'month'"
-              v-model:value="selectedMonth"
-              type="month"
-              size="small"
-              width="100%"
-              @update:value="onPeriodValueChange"
-            />
-            <TilePeriodPicker
-              v-if="period === 'year'"
-              v-model:value="selectedYear"
-              type="year"
-              size="small"
-              width="100%"
-              @update:value="onPeriodValueChange"
-            />
-            <n-date-picker
-              v-if="period === 'custom'"
-              v-model:value="dateRange"
-              type="daterange"
-              clearable
-              size="small"
-              style="width: 100%"
-              @update:value="onPeriodValueChange"
-            />
-            <n-select
-              v-model:value="selectedDeposit"
-              :options="depositFilterOptions"
-              size="small"
-              style="width: 100%; margin-top: 8px"
-              to="body"
-              @update:value="onPeriodValueChange"
-            />
-          </div>
-        </n-popover>
+          </n-dropdown>
+        </template>
       </n-space>
     </n-card>
 
@@ -277,8 +283,15 @@ import {
   NPopover,
   NIcon,
   NSelect,
+  NDropdown,
 } from 'naive-ui'
-import { CalendarOutline, TrendingUpOutline, TrendingDownOutline } from '@vicons/ionicons5'
+import { h } from 'vue'
+import {
+  CalendarOutline,
+  TrendingUpOutline,
+  TrendingDownOutline,
+  WalletOutline,
+} from '@vicons/ionicons5'
 import { statistics, categories as catApi } from '@/api'
 import { storeToRefs } from 'pinia'
 import { useThemeStore } from '@/stores/theme'
@@ -351,6 +364,30 @@ const depositFilterOptions = [
   { label: 'Все счета', value: '' },
   ...DEPOSITS.map((d) => ({ label: d.label, value: d.value })),
 ]
+
+// Mobile shape: NDropdown wants {key, label, icon} per option. The "Все"
+// entry uses a wallet glyph as a neutral catch-all; bank/cash inherit from
+// the shared DEPOSITS metadata.
+const depositDropdownOptions = computed(() => [
+  {
+    key: '',
+    label: 'Все счета',
+    icon: () => h(NIcon, { component: WalletOutline }),
+  },
+  ...DEPOSITS.map((d) => ({
+    key: d.value,
+    label: d.label,
+    icon: () => h(NIcon, { component: d.icon }),
+  })),
+])
+const depositTriggerIcon = computed(() => {
+  if (!selectedDeposit.value) return WalletOutline
+  return DEPOSITS.find((d) => d.value === selectedDeposit.value)?.icon ?? WalletOutline
+})
+function onDepositSelect(key) {
+  selectedDeposit.value = key
+  onPeriodValueChange()
+}
 
 const windowWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1024)
 const isMobile = computed(() => windowWidth.value < 768)
