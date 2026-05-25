@@ -119,95 +119,99 @@ fun StatisticsScreen(
                 ) {
                     Column(
                         modifier = Modifier.fillMaxWidth().padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        val periodRowState = androidx.compose.foundation.lazy.rememberLazyListState()
-                        TrackInnerHorizontalScroll(periodRowState)
-                        androidx.compose.foundation.lazy.LazyRow(
-                            state = periodRowState,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            items(StatsPeriod.values().toList()) { p ->
-                                val label = when {
-                                    p != period -> when (p) {
-                                        StatsPeriod.MONTH -> "Месяц"
-                                        StatsPeriod.YEAR -> "Год"
-                                        StatsPeriod.RANGE -> "Период"
+                        FilterSection(title = "Период") {
+                            val periodRowState = androidx.compose.foundation.lazy.rememberLazyListState()
+                            TrackInnerHorizontalScroll(periodRowState)
+                            androidx.compose.foundation.lazy.LazyRow(
+                                state = periodRowState,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                items(StatsPeriod.values().toList()) { p ->
+                                    val label = when {
+                                        p != period -> when (p) {
+                                            StatsPeriod.MONTH -> "Месяц"
+                                            StatsPeriod.YEAR -> "Год"
+                                            StatsPeriod.RANGE -> "Период"
+                                        }
+                                        p == StatsPeriod.MONTH -> "${monthName(month)} $year"
+                                        p == StatsPeriod.YEAR -> year.toString()
+                                        else -> if (from != null && to != null) {
+                                            "${shortIsoDate(from!!)} — ${shortIsoDate(to!!)}"
+                                        } else {
+                                            "Период"
+                                        }
                                     }
-                                    p == StatsPeriod.MONTH -> "${monthName(month)} $year"
-                                    p == StatsPeriod.YEAR -> year.toString()
-                                    else -> if (from != null && to != null) {
-                                        "${shortIsoDate(from!!)} — ${shortIsoDate(to!!)}"
-                                    } else {
-                                        "Период"
+                                    Box {
+                                        FilterChip(
+                                            selected = period == p,
+                                            onClick = {
+                                                if (period != p) vm.setPeriod(p)
+                                                pickerOpen = p
+                                            },
+                                            label = { Text(label, maxLines = 1, softWrap = false) },
+                                            colors = FilterChipDefaults.filterChipColors(
+                                                selectedContainerColor = primaryColor,
+                                                selectedLabelColor = Color.White,
+                                            ),
+                                        )
+                                        TilePeriodPickerPopup(
+                                            open = pickerOpen == StatsPeriod.MONTH && p == StatsPeriod.MONTH,
+                                            type = TilePickerType.MONTH,
+                                            year = year,
+                                            month = month,
+                                            primaryColor = primaryColor,
+                                            onSelect = { y, m ->
+                                                vm.selectMonth(y, m)
+                                                pickerOpen = null
+                                            },
+                                            onDismiss = { pickerOpen = null },
+                                        )
+                                        TilePeriodPickerPopup(
+                                            open = pickerOpen == StatsPeriod.YEAR && p == StatsPeriod.YEAR,
+                                            type = TilePickerType.YEAR,
+                                            year = year,
+                                            month = month,
+                                            primaryColor = primaryColor,
+                                            onSelect = { y, _ ->
+                                                vm.selectYear(y)
+                                                pickerOpen = null
+                                            },
+                                            onDismiss = { pickerOpen = null },
+                                        )
                                     }
                                 }
-                                Box {
-                                    FilterChip(
-                                        selected = period == p,
-                                        onClick = {
-                                            if (period != p) vm.setPeriod(p)
-                                            pickerOpen = p
-                                        },
-                                        label = { Text(label, maxLines = 1, softWrap = false) },
-                                        colors = FilterChipDefaults.filterChipColors(
-                                            selectedContainerColor = primaryColor,
-                                            selectedLabelColor = Color.White,
-                                        ),
-                                    )
-                                    TilePeriodPickerPopup(
-                                        open = pickerOpen == StatsPeriod.MONTH && p == StatsPeriod.MONTH,
-                                        type = TilePickerType.MONTH,
-                                        year = year,
-                                        month = month,
+                            }
+                        } // /period FilterSection
+                        FilterSection(title = "Счёт") {
+                            val depositRowState = androidx.compose.foundation.lazy.rememberLazyListState()
+                            TrackInnerHorizontalScroll(depositRowState)
+                            androidx.compose.foundation.lazy.LazyRow(
+                                state = depositRowState,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                item {
+                                    DepositScopeChip(
+                                        selected = deposit == null,
+                                        label = "Все счета",
+                                        icon = null,
                                         primaryColor = primaryColor,
-                                        onSelect = { y, m ->
-                                            vm.selectMonth(y, m)
-                                            pickerOpen = null
-                                        },
-                                        onDismiss = { pickerOpen = null },
+                                        onClick = { vm.selectDeposit(null) },
                                     )
-                                    TilePeriodPickerPopup(
-                                        open = pickerOpen == StatsPeriod.YEAR && p == StatsPeriod.YEAR,
-                                        type = TilePickerType.YEAR,
-                                        year = year,
-                                        month = month,
+                                }
+                                items(DEPOSITS) { meta ->
+                                    DepositScopeChip(
+                                        selected = deposit == meta.value,
+                                        label = meta.label,
+                                        icon = meta.icon,
                                         primaryColor = primaryColor,
-                                        onSelect = { y, _ ->
-                                            vm.selectYear(y)
-                                            pickerOpen = null
-                                        },
-                                        onDismiss = { pickerOpen = null },
+                                        onClick = { vm.selectDeposit(meta.value) },
                                     )
                                 }
                             }
-                        }
-                        val depositRowState = androidx.compose.foundation.lazy.rememberLazyListState()
-                        TrackInnerHorizontalScroll(depositRowState)
-                        androidx.compose.foundation.lazy.LazyRow(
-                            state = depositRowState,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            item {
-                                DepositScopeChip(
-                                    selected = deposit == null,
-                                    label = "Все счета",
-                                    icon = null,
-                                    primaryColor = primaryColor,
-                                    onClick = { vm.selectDeposit(null) },
-                                )
-                            }
-                            items(DEPOSITS) { meta ->
-                                DepositScopeChip(
-                                    selected = deposit == meta.value,
-                                    label = meta.label,
-                                    icon = meta.icon,
-                                    primaryColor = primaryColor,
-                                    onClick = { vm.selectDeposit(meta.value) },
-                                )
-                            }
-                        }
+                        } // /deposit FilterSection
                     }
                 }
             }

@@ -817,6 +817,18 @@
 
 ## Android
 
+### [1.41.0] — 2026-05-25
+
+#### Changed
+- **Унификация фильтров.** Income / Expenses / Statistics / Forecast теперь показывают фильтр одним способом — карточка с группами `FilterSection(title)` + LazyRow чипов. Заголовки групп слева сверху над каждым рядом, чипы единого стиля, активный = primary-фон + белая иконка.
+- **Income / Expenses фильтр переписан** под chip-row подход:
+  - **«Период»** — `PeriodChipsRow` (Месяц / Год / Период с пиктом-pickerами и DateRangeDialog). Активный chip отображает выбранное значение («Май 2026», «2026», «01.05 – 31.05»); тап по активному сбрасывает фильтр. Заменяет `DateRangePickerField` (большой outlined input).
+  - **«Категории»** — `CategoryChipsRow` (multi-select c [`Все`] первой, иконка + название). Тап «Все» сбрасывает выбор; тап любой категории deactivates «Все» и activates её; накопительный выбор. Заменяет `CategoryFilterField` (dropdown + chip-pills).
+  - **«Счёт»** — тот же deposit-chip LazyRow.
+  - **Expenses**: «Параметры отображения» (чекбокс «Показать закрытые запросы») вынесен в свою FilterSection.
+- **Statistics / Forecast**: chip-rows обёрнуты в FilterSection с заголовками «Период» / «Счёт».
+- **Новые компоненты**: `components/FilterSection.kt`, `components/PeriodChipsRow.kt`, `components/CategoryChipsRow.kt`. `IncomeViewModel.selectIbMonth(year, month)` теперь принимает произвольный месяц.
+
 ### [1.40.6] — 2026-05-25
 
 #### Changed

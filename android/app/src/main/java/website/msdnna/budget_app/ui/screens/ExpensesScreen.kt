@@ -244,82 +244,83 @@ fun ExpensesScreen(
                     ) {
                         Column(
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
-                            DateRangePickerField(
-                                fromIso = filterFrom,
-                                toIso = filterTo,
-                                primaryColor = primaryColor,
-                                onChange = { f, t -> vm.setDateRange(f, t) },
-                            )
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                CategoryFilterField(
+                            FilterSection(title = "Период") {
+                                PeriodChipsRow(
+                                    fromIso = filterFrom,
+                                    toIso = filterTo,
+                                    primaryColor = primaryColor,
+                                    onChange = { f, t -> vm.setDateRange(f, t) },
+                                )
+                            }
+                            FilterSection(title = "Категории") {
+                                CategoryChipsRow(
                                     selected = filterCats,
                                     categories = categories,
                                     primaryColor = primaryColor,
                                     serverUrl = serverUrl,
                                     onToggle = { vm.toggleFilterCategory(it) },
                                     onClear = { vm.clearFilterCategories() },
-                                    onDelete = { id -> scope.launch { vm.deleteCategory(id) } },
-                                    modifier = Modifier.weight(1f),
-                                )
-                                Text(
-                                    "Всего: ${uiState.total}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                             val filterDeposit by vm.filterDeposit.collectAsState()
-                            val depositRowState = androidx.compose.foundation.lazy.rememberLazyListState()
-                            TrackInnerHorizontalScroll(depositRowState)
-                            androidx.compose.foundation.lazy.LazyRow(
-                                state = depositRowState,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                item {
-                                    DepositScopeChip(
-                                        selected = filterDeposit == null,
-                                        label = "Все счета",
-                                        icon = null,
-                                        primaryColor = primaryColor,
-                                        onClick = { vm.setFilterDeposit(null) },
-                                    )
+                            FilterSection(title = "Счёт") {
+                                val depositRowState = androidx.compose.foundation.lazy.rememberLazyListState()
+                                TrackInnerHorizontalScroll(depositRowState)
+                                androidx.compose.foundation.lazy.LazyRow(
+                                    state = depositRowState,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    item {
+                                        DepositScopeChip(
+                                            selected = filterDeposit == null,
+                                            label = "Все счета",
+                                            icon = null,
+                                            primaryColor = primaryColor,
+                                            onClick = { vm.setFilterDeposit(null) },
+                                        )
+                                    }
+                                    items(DEPOSITS) { meta ->
+                                        DepositScopeChip(
+                                            selected = filterDeposit == meta.value,
+                                            label = meta.label,
+                                            icon = meta.icon,
+                                            primaryColor = primaryColor,
+                                            onClick = { vm.setFilterDeposit(meta.value) },
+                                        )
+                                    }
                                 }
-                                items(DEPOSITS) { meta ->
-                                    DepositScopeChip(
-                                        selected = filterDeposit == meta.value,
-                                        label = meta.label,
-                                        icon = meta.icon,
-                                        primaryColor = primaryColor,
-                                        onClick = { vm.setFilterDeposit(meta.value) },
+                            }
+                            FilterSection(title = "Параметры отображения") {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    // Whole row is the toggle — flat, no ripple
+                                    // (the small grey press tint behind the
+                                    // label looked like a bug, not a feature).
+                                    modifier = Modifier.clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null,
+                                    ) { vm.setIncludeDetailed(!includeDetailed) },
+                                ) {
+                                    Checkbox(
+                                        checked = includeDetailed,
+                                        onCheckedChange = null,
+                                        colors = CheckboxDefaults.colors(checkedColor = primaryColor),
+                                    )
+                                    Text(
+                                        "Показать закрытые запросы",
+                                        style = MaterialTheme.typography.bodySmall,
                                     )
                                 }
                             }
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                // Whole row is the toggle — flat, no ripple (the
-                                // small grey press tint behind the label looked
-                                // like a bug, not a feature).
-                                modifier = Modifier.clickable(
-                                    interactionSource = remember { MutableInteractionSource() },
-                                    indication = null,
-                                ) { vm.setIncludeDetailed(!includeDetailed) },
-                            ) {
-                                Checkbox(
-                                    checked = includeDetailed,
-                                    onCheckedChange = null,
-                                    colors = CheckboxDefaults.colors(checkedColor = primaryColor),
-                                )
-                                Text(
-                                    "Показать закрытые запросы",
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                            }
+                            Text(
+                                "Всего: ${uiState.total}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         }
                     }
                 }
