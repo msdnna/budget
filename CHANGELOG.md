@@ -280,6 +280,15 @@
 
 ## Web (frontend)
 
+### [1.40.2] — 2026-05-25
+
+#### Fixed
+- **DepositChip tooltip**: NTooltip перестал «прицепляться» к NDropdown'у — теперь tooltip оборачивает именно `<button>` чипа, а NDropdown снаружи. Хинт появляется при наведении на саму иконку, а не при раскрытии popover'а с опциями.
+
+#### Changed
+- **Initial balance шапка**: размер шрифта суммы 16→14px (строка с двумя счетами теперь не выпирает за рамку карточки на узких pane). «Не задан» — 13px.
+- **Initial balance модалка**: таб-триггеры получили padding 10px по вертикали (раньше слипались с текстом «Сумма на…»), tab-pane получил `padding: 12px 4px 4px` чтобы 2px primary-border на focus'е `n-input-number` не обрезался по бокам, форма получила небольшой top-margin для воздуха под индикатором активной вкладки.
+
 ### [1.40.1] — 2026-05-25
 
 #### Changed / Fixed
@@ -802,6 +811,18 @@
 ---
 
 ## Android
+
+### [1.40.2] — 2026-05-25
+
+#### Added
+- **Фильтр «Счёт» в Stats/Forecast** — карточка чипов теперь сворачивается под общий funnel-toggle (`FilterAlt` в TopAppBar), который раньше был только для Доходов/Расходов. AnimatedVisibility(expand/shrink) синхронизирована с `filtersVisible`. activeFilterCount badge учитывает deposit-фильтр на Доходах/Расходах.
+- **Фильтр «Счёт» в Доходах/Расходах** — отдельная Row под Category/DateRange в drawer'е фильтров с теми же чипами Все / Карта / Наличные, что и в Stats.
+
+#### Changed
+- **`DepositScopeChip` компонент** — единая реализация FilterChip-а с `maxLines=1+softWrap=false+TextOverflow.Ellipsis` (фикс переноса «Налич\nные» на узких экранах) и явным белым tint иконки на selected (раньше Material3-default оставлял её тёмной поверх primary-фона).
+
+#### Fixed
+- **Forecast: regulars/wishlist при фильтре «Наличные»** — `forecast.regularItems?.takeIf { isNotEmpty }` слишком grubo фолбэчился к synthesize при пустом server-result (легитимный сценарий: scope без рег. расходов). Теперь fallback только когда `forecast == null` (offline). `wishlistOneOff` и synthesize-fallback дополнительно фильтруются по `filterDeposit` локально, чтобы wishlist карточки не лезли наружу из чужого scope.
 
 ### [1.40.1] — 2026-05-25
 

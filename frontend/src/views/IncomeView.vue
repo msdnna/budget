@@ -29,11 +29,11 @@
               </span>
               <span
                 v-if="ibByDeposit[d.value]"
-                :style="`color:${incomeColor};font-weight:600;font-size:16px${valuesHidden ? ';filter:blur(7px);user-select:none' : ''}`"
+                :style="`color:${incomeColor};font-weight:600;font-size:14px${valuesHidden ? ';filter:blur(7px);user-select:none' : ''}`"
               >
                 {{ ibByDeposit[d.value].amount.toLocaleString('ru-RU') }} ₽
               </span>
-              <n-text v-else depth="3" style="font-size: 14px">Не задан</n-text>
+              <n-text v-else depth="3" style="font-size: 13px">Не задан</n-text>
               <n-button
                 v-if="ibByDeposit[d.value]"
                 size="tiny"
@@ -483,15 +483,15 @@
       title="Баланс на начало месяца"
       style="max-width: 360px"
     >
-      <n-tabs v-model:value="ibTab" type="line" animated size="small">
+      <n-tabs v-model:value="ibTab" type="line" animated class="ib-tabs">
         <n-tab-pane v-for="d in DEPOSITS" :key="d.value" :name="d.value">
           <template #tab>
-            <span class="dep-radio-content">
+            <span class="ib-tab-label">
               <n-icon :component="d.icon" />
               {{ d.label }}
             </span>
           </template>
-          <n-form label-placement="top">
+          <n-form label-placement="top" class="ib-tab-form">
             <n-form-item :label="`Сумма на ${d.label.toLowerCase()} (₽)`">
               <n-input-number
                 v-model:value="ibFormAmount[d.value]"
@@ -1820,6 +1820,32 @@ onMounted(() => {
   font-size: 13px;
   color: var(--text-3, currentColor);
   opacity: 0.85;
+}
+
+/* IB modal tabs: bump the tab-trigger height + give the content below the
+   tab strip its own breathing room (the default tab pane sat flush against
+   the input, no gap). Also: the focused n-input-number's primary border was
+   getting clipped on left/right because the tab pane has overflow:hidden
+   for animation purposes — give it a tiny horizontal padding so the 2px
+   focus ring stays visible. */
+:deep(.ib-tabs .n-tabs-tab) {
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+.ib-tab-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  line-height: 1;
+}
+:deep(.ib-tabs .n-tab-pane) {
+  padding: 12px 4px 4px;
+}
+/* The line-type indicator under the active tab has its own underline.
+   Default sits 1px below the tab content; pulling the form content down a
+   bit (above) makes that line breathe. */
+.ib-tab-form {
+  margin-top: 4px;
 }
 
 /* Bulk-mode marker (replaces author avatar on selected cards). */
