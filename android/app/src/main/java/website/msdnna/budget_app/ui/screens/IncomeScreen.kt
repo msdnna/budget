@@ -174,9 +174,11 @@ fun IncomeScreen(
                     Row(
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp).fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
                     ) {
-                        // Left column — title + per-deposit balance rows.
+                        // Left column — title (centred to the card's width
+                        // via Modifier.fillMaxWidth on the Text) + per-
+                        // deposit balance rows.
                         Column(
                             modifier = Modifier.weight(1f),
                             verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -185,6 +187,8 @@ fun IncomeScreen(
                                 "Баланс на начало месяца",
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.fillMaxWidth(),
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                             )
                             DEPOSITS.forEach { meta ->
                                 val record = ibByDeposit[meta.value]
@@ -230,12 +234,9 @@ fun IncomeScreen(
                             }
                         }
                         // Right-side action row: period picker + edit, both
-                        // tinted in primary so they read as actionable. The
-                        // month-label was removed — the picker is one tap
-                        // away and the current period is anchored to the
-                        // selected month inside the popup itself.
+                        // tinted in primary so they read as actionable.
                         Row(
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Box {
@@ -1500,7 +1501,11 @@ fun AddInitialBalanceSheet(
 
             TabRow(
                 selectedTabIndex = selectedTabIndex,
-                containerColor = MaterialTheme.colorScheme.surface,
+                // Transparent so the TabRow inherits the bottom-sheet's
+                // surfaceColorAtElevation rather than picking up the lower
+                // baseline `surface` colour, which sat a shade darker than
+                // the sheet itself in dark theme.
+                containerColor = Color.Transparent,
                 contentColor = primaryColor,
             ) {
                 DEPOSITS.forEachIndexed { index, meta ->

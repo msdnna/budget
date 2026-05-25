@@ -817,6 +817,12 @@
 
 ## Android
 
+### [1.40.6] — 2026-05-25
+
+#### Changed
+- **IB header polish**: title «Баланс на начало месяца» центрирован по карточке; gap между Calendar и Edit увеличен (4→12 dp), общий spacing между title-блоком и action-row 8→16 dp — выглядит менее зажато.
+- **IB модалка под тёмной темой**: `TabRow.containerColor = Color.Transparent`, чтобы он наследовал `surfaceColorAtElevation` ModalBottomSheet'а вместо более тёмного `colorScheme.surface`.
+
 ### [1.40.5] — 2026-05-25
 
 #### Changed
