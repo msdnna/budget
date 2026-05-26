@@ -1,0 +1,99 @@
+name: Release Bot
+
+on:
+  push:
+    tags:
+      - 'bot/v*'
+
+permissions:
+  contents: write
+  packages: write
+
+concurrency:
+  group: release-bot-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build, test, publish telegram-bot
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify tag matches telegram_bot/pyproject.toml version
+        run: |
+          TAG="${GITHUB_REF#refs/tags/bot/v}"
+          # Read `version = "X.Y.Z"` from pyproject. tomllib lands in
+          # Python 3.11+ which the runner image already ships.
+          FILE="$(python3 -c 'import tomllib,sys; print(tomllib.loads(open("telegram_bot/pyproject.toml","rb").read().decode())["project"]["version"])')"
+          if [ "$TAG" != "$FILE" ]; then
+            echo "::error::Git tag bot/v$TAG does not match telegram_bot/pyproject.toml version ($FILE). Bump pyproject.toml or retag."
+            exit 1
+          fi
+          echo "BOT_VERSION=$TAG" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dev deps
+        working-directory: telegram_bot
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e '.[dev]'
+
+      - name: Lint (ruff)
+        working-directory: telegram_bot
+        run: ruff check src
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/budget-telegram-bot
+          # Same tagging scheme as backend/frontend: pinned X.Y.Z + X.Y +
+          # `latest`. Pinned-only deploys (see docker-compose.rpi.yml)
+          # ignore `latest`; it's there for convenience local-pulls.
+          tags: |
+            type=match,pattern=bot/v(.*),group=1
+            type=match,pattern=bot/v(\d+\.\d+)\.\d+,group=1
+            type=raw,value=latest
+          labels: |
+            org.opencontainers.image.version=${{ env.BOT_VERSION }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+
+      - name: Build & push telegram-bot image
+        uses: docker/build-push-action@v6
+        with:
+          context: telegram_bot
+          file: telegram_bot/Dockerfile
+          push: true
+          # Multi-arch so the RPi 4/5 can pull arm64. arm64 leg cross-builds
+          # via QEMU — slow (~10-20 min thanks to ctranslate2 + numpy wheels
+          # in faster-whisper deps), but acceptable on release tags.
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            BOT_VERSION=${{ env.BOT_VERSION }}
+            VCS_REF=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Bot v${{ env.BOT_VERSION }}
+          generate_release_notes: true
+          make_latest: 'false'

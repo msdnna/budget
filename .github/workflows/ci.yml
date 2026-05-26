@@ -31,6 +31,7 @@ jobs:
       backend: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.backend == 'true' }}
       web:     ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.web == 'true' }}
       android: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.android == 'true' }}
+      bot:     ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.bot == 'true' }}
     steps:
       - uses: actions/checkout@v4
       - id: filter
@@ -51,6 +52,10 @@ jobs:
               - 'android/**'
               - 'tools/build-android-release.sh'
               - 'Makefile'
+              - '.github/workflows/ci.yml'
+            bot:
+              - 'telegram_bot/**'
+              - 'docker-compose*.yml'
               - '.github/workflows/ci.yml'
 
   # Job display names are kept short and ASCII-only so they can be filtered
@@ -212,6 +217,31 @@ jobs:
           path: _badges/android.json
           retention-days: 1
 
+  bot:
+    name: Bot
+    needs: changes
+    if: ${{ needs.changes.outputs.bot == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dev deps
+        working-directory: telegram_bot
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e '.[dev]'
+
+      - name: Lint (ruff)
+        working-directory: telegram_bot
+        run: ruff check src
+
+      # No unit tests yet — placeholder so the job stays meaningful as the
+      # bot grows. Once `tests/` lands, swap to `pytest`.
+
   # ─── Build verification (only on push to main/develop) ────────────────────
   # Validates that production Dockerfiles / Gradle release path still produce
   # an image / APK after merge, before anyone cuts a release tag. Skipped on
@@ -285,6 +315,32 @@ jobs:
         run: touch android/local.env
       - name: Assemble debug APK
         run: cd android && ./gradlew --no-daemon :app:assembleDebug
+
+  bot-build:
+    name: Bot build
+    needs: [changes, bot]
+    if: ${{ needs.changes.outputs.bot == 'true' && github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build telegram-bot image (no push, amd64 only)
+        uses: docker/build-push-action@v6
+        with:
+          context: telegram_bot
+          file: telegram_bot/Dockerfile
+          push: false
+          # arm64 leg is left to the release workflow — cross-builds of
+          # faster-whisper/ctranslate2 via QEMU are slow (~10-20 min) and
+          # would balloon PR-feedback time. amd64-only is enough to catch
+          # `pip install` and import-time breakages on every push.
+          platforms: linux/amd64
+          tags: budget-telegram-bot:ci-${{ github.sha }}
+          build-args: |
+            BOT_VERSION=ci-${{ github.sha }}
+            VCS_REF=${{ github.sha }}
+          cache-from: type=gha,scope=bot
+          cache-to: type=gha,mode=max,scope=bot
 
   # ─── Publish coverage badges to the `badges` orphan branch ────────────────
   # Single consolidated job: avoids three component jobs racing for `git push`.
