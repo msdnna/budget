@@ -577,8 +577,16 @@ fun ForecastScreen(
             nextDueDate = detailRegularCtx?.nextDueDate.orEmpty(),
             // Link button replaces the swipe-link rail on the card. Hidden for
             // already-purchased one-off items (one wishlist row = one tx).
+            // Closes the info-sheet first — the picker is a full-screen
+            // destination, the sheet shouldn't linger on top of it.
             onLinkExisting = if (detailRegularCtx != null || !item.purchased) {
-                { onLinkExisting(item.id, item.name) }
+                {
+                    val id = item.id
+                    val name = item.name
+                    detailItem = null
+                    detailRegularCtx = null
+                    onLinkExisting(id, name)
+                }
             } else null,
         )
     }
