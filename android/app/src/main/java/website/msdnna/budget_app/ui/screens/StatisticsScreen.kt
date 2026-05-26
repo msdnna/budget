@@ -113,7 +113,9 @@ fun StatisticsScreen(
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            // No spacedBy: FilterCard's outerSpacing handles the gap below
+            // itself so it can collapse with the card. Other gaps come from
+            // explicit Spacer/padding below.
         ) {
             // Period + deposit filters — both collapse under the TopAppBar
             // funnel toggle so the screen defaults to showing the summary
@@ -127,6 +129,7 @@ fun StatisticsScreen(
                 hasActiveFilters = deposit != null,
                 onReset = { vm.resetFilters() },
                 primaryColor = primaryColor,
+                outerSpacing = 16.dp,
             ) {
                 FilterSection(title = "Период") {
                     val periodRowState = androidx.compose.foundation.lazy.rememberLazyListState()
@@ -239,7 +242,7 @@ fun StatisticsScreen(
                     onRetry = { vm.reload() },
                     modifier = Modifier.height(300.dp)
                 )
-                else -> {
+                else -> Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     val s = state.summary
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         SummaryCard(
@@ -355,7 +358,7 @@ fun StatisticsScreen(
                             }
                         }
                     }
-                }
+                } // end else-Column
             }
         }
     }

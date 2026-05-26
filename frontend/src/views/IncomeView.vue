@@ -310,6 +310,7 @@
                   :loading="store.loading"
                   :pagination="pagination"
                   :row-props="getRowProps"
+                  :row-class-name="getRowClass"
                   remote
                   @update:page="store.setPage"
                 />
@@ -637,7 +638,7 @@ import { historyOptions, pushHistory } from '@/utils/inputHistory'
 import { users as usersApi, transactions as txApi } from '@/api'
 import { useAdaptiveTable, plainTextCell, renderActionsRow } from '@/utils/adaptiveTable'
 import SplitIncomeModal from '@/components/SplitIncomeModal.vue'
-import { groupTint } from '@/utils/groupColor'
+import { groupClass, groupSolidBg } from '@/utils/groupColor'
 import { GitMergeOutline } from '@vicons/ionicons5'
 
 const store = useTransactionsStore('income')
@@ -1022,26 +1023,30 @@ function canMobileSplitAction(row) {
   return !row.parent_id
 }
 
-// Inline style for the mobile tx card: bulk-selected wins over group tint,
-// group tint is applied to split-parents / split-children (mobile mirror of
-// the desktop NDataTable row-props logic).
+// Mobile card background: solid composite so the swipe rail doesn't bleed
+// through during gesture. Priority: bulk-selected > group tint.
 function cardStyle(row) {
   if (bulkMode.value && selectedIds.value.has(row.id)) {
     return `background:${primaryColor.value}1f`
   }
-  const tint = groupTint(row)
-  return tint ? `background:${tint}` : ''
+  const bg = groupSolidBg(row, palette.value.cardSurface || '#FFFFFF')
+  return bg ? `background:${bg}` : ''
 }
 
+// Desktop row props: opacity for hidden + bulk-selected style. Group tint is
+// applied via `row-class-name` (see [getRowClass]) because Naive paints td
+// backgrounds that override row inline-style.
 function getRowProps(row) {
   const styles = []
   if (row.hidden) styles.push('opacity:0.4')
-  const tint = groupTint(row)
-  if (tint) styles.push(`background:${tint}`)
   if (bulkMode.value && selectedIds.value.has(row.id)) {
     styles.push(`background:${primaryColor.value}1f`)
   }
   return { style: styles.join(';') }
+}
+
+function getRowClass(row) {
+  return groupClass(row) || ''
 }
 
 function fillFromTemplate(row) {
@@ -1683,7 +1688,7 @@ const columns = computed(() => {
           {
             icon: CopyOutline,
             label: 'Добавить как шаблон',
-            type: 'success',
+            type: 'info',
             onClick: () => fillFromTemplate(row),
           },
         ]
@@ -1693,7 +1698,7 @@ const columns = computed(() => {
           more.push({
             icon: GitMergeOutline,
             label: 'Разделить доход',
-            type: 'primary',
+            type: 'success',
             onClick: () => openSplit(row),
           })
         } else if (isSplitParent) {
@@ -1930,6 +1935,47 @@ onMounted(() => {
   /* Naive's primary green — matches the desktop ⋯-menu «Разделить» entry. */
   background: #18a058;
 }
+/* Group tint background — applied as a class on the row so Naive's
+   per-cell background overrides don't strip it. Alpha kept low so the
+   row colour reads as "this belongs to a group" without dominating the
+   text. Palette + algorithm mirror utils/groupColor.js. */
+:deep(.n-data-table-tr.tx-grp-0 > .n-data-table-td) {
+  background: #b39ddb22;
+}
+:deep(.n-data-table-tr.tx-grp-1 > .n-data-table-td) {
+  background: #ffb74d22;
+}
+:deep(.n-data-table-tr.tx-grp-2 > .n-data-table-td) {
+  background: #81c78422;
+}
+:deep(.n-data-table-tr.tx-grp-3 > .n-data-table-td) {
+  background: #4fc3f722;
+}
+:deep(.n-data-table-tr.tx-grp-4 > .n-data-table-td) {
+  background: #e5737322;
+}
+:deep(.n-data-table-tr.tx-grp-5 > .n-data-table-td) {
+  background: #ffd54f22;
+}
+:deep(.n-data-table-tr.tx-grp-6 > .n-data-table-td) {
+  background: #a1887f22;
+}
+:deep(.n-data-table-tr.tx-grp-7 > .n-data-table-td) {
+  background: #f0629222;
+}
+:deep(.n-data-table-tr.tx-grp-8 > .n-data-table-td) {
+  background: #7986cb22;
+}
+:deep(.n-data-table-tr.tx-grp-9 > .n-data-table-td) {
+  background: #aed58122;
+}
+:deep(.n-data-table-tr.tx-grp-10 > .n-data-table-td) {
+  background: #4dd0e122;
+}
+:deep(.n-data-table-tr.tx-grp-11 > .n-data-table-td) {
+  background: #ff8a6522;
+}
+
 .swipe-action-success {
   background: #18a058;
 }

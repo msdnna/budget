@@ -231,6 +231,12 @@ defineExpose({ reset })
   border-top-left-radius: v-bind('props.radius + "px"');
   border-bottom-left-radius: v-bind('props.radius + "px"');
 }
+/* Single-action left rail: the button stretches to fill the reveal width
+   so the card's right edge meets the button's right edge — no gap between
+   them during swipe-right. */
+.sc-actions-left :slotted(.swipe-action) {
+  width: 100%;
+}
 .sc-actions.revealed {
   visibility: visible;
   transition-delay: 0s;

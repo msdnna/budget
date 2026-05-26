@@ -323,6 +323,7 @@
                   :loading="store.loading"
                   :pagination="pagination"
                   :row-props="getRowProps"
+                  :row-class-name="getRowClass"
                   remote
                   @update:page="store.setPage"
                 />
@@ -629,7 +630,7 @@ import { useDetailRequestsStore } from '@/stores/detailRequests'
 import { useNotificationsStore } from '@/stores/notifications'
 import { useAuthStore } from '@/stores/auth'
 import { useAdaptiveTable, plainTextCell, renderActionsRow } from '@/utils/adaptiveTable'
-import { groupTint } from '@/utils/groupColor'
+import { groupClass, groupSolidBg } from '@/utils/groupColor'
 
 const store = useTransactionsStore('expenses')
 const drStore = useDetailRequestsStore()
@@ -1008,31 +1009,37 @@ function canMobileDrAction(row) {
   return !row.parent_id
 }
 
-// Mobile card style. Priority: my-open-DR yellow > bulk-selected primary >
-// group tint (split/DR-closed groups).
+// Mobile card background: solid composite (semi-transparent backgrounds
+// bleed through during swipe). Priority: my-open-DR yellow > bulk-selected
+// primary > group tint.
 function cardStyle(row) {
   if (hasMyOpenRequest(row)) return 'background:rgba(240,160,32,0.16)'
   if (bulkMode.value && selectedIds.value.has(row.id)) {
     return `background:${primaryColor.value}1f`
   }
-  const tint = groupTint(row)
-  return tint ? `background:${tint}` : ''
+  const bg = groupSolidBg(row, palette.value.cardSurface || '#FFFFFF')
+  return bg ? `background:${bg}` : ''
 }
 
+// Desktop row props — opacity for hidden + bulk/my-open-DR background.
+// Group tint goes through `row-class-name` so per-td bg overrides don't
+// strip the row inline-style.
 function getRowProps(row) {
   const styles = []
   if (row.hidden) styles.push('opacity:0.4')
-  const tint = groupTint(row)
-  if (tint) styles.push(`background:${tint}`)
   if (bulkMode.value && selectedIds.value.has(row.id)) {
     styles.push(`background:${primaryColor.value}1f`)
   }
   if (hasMyOpenRequest(row)) {
-    // Yellow highlight overrides the group tint — pending action takes
-    // priority over passive grouping.
     styles.push('background:rgba(240,160,32,0.16)')
   }
   return { style: styles.join(';') }
+}
+
+function getRowClass(row) {
+  // Open-DR highlight wins — it's an actionable signal, not a passive group.
+  if (hasMyOpenRequest(row)) return ''
+  return groupClass(row) || ''
 }
 
 const myOpenRequestParentIds = computed(
@@ -1673,7 +1680,7 @@ const columns = computed(() => {
           {
             icon: CopyOutline,
             label: 'Добавить как шаблон',
-            type: 'success',
+            type: 'info',
             onClick: () => fillFromTemplate(row),
           },
         ]
@@ -1694,7 +1701,7 @@ const columns = computed(() => {
             more.push({
               icon: ListOutline,
               label: 'Создать запрос на детализацию',
-              type: 'primary',
+              type: 'success',
               onClick: () => startCreateDetailRequest(row),
             })
           }
@@ -1920,6 +1927,44 @@ watch(
   font-variant-numeric: tabular-nums;
   transition: filter 0.25s;
   user-select: none;
+}
+
+/* Group tint backgrounds — mirror IncomeView. */
+:deep(.n-data-table-tr.tx-grp-0 > .n-data-table-td) {
+  background: #b39ddb22;
+}
+:deep(.n-data-table-tr.tx-grp-1 > .n-data-table-td) {
+  background: #ffb74d22;
+}
+:deep(.n-data-table-tr.tx-grp-2 > .n-data-table-td) {
+  background: #81c78422;
+}
+:deep(.n-data-table-tr.tx-grp-3 > .n-data-table-td) {
+  background: #4fc3f722;
+}
+:deep(.n-data-table-tr.tx-grp-4 > .n-data-table-td) {
+  background: #e5737322;
+}
+:deep(.n-data-table-tr.tx-grp-5 > .n-data-table-td) {
+  background: #ffd54f22;
+}
+:deep(.n-data-table-tr.tx-grp-6 > .n-data-table-td) {
+  background: #a1887f22;
+}
+:deep(.n-data-table-tr.tx-grp-7 > .n-data-table-td) {
+  background: #f0629222;
+}
+:deep(.n-data-table-tr.tx-grp-8 > .n-data-table-td) {
+  background: #7986cb22;
+}
+:deep(.n-data-table-tr.tx-grp-9 > .n-data-table-td) {
+  background: #aed58122;
+}
+:deep(.n-data-table-tr.tx-grp-10 > .n-data-table-td) {
+  background: #4dd0e122;
+}
+:deep(.n-data-table-tr.tx-grp-11 > .n-data-table-td) {
+  background: #ff8a6522;
 }
 
 .swipe-action {
