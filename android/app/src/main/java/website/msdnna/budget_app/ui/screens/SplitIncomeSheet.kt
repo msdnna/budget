@@ -69,6 +69,9 @@ fun SplitIncomeSheet(
     val total = transaction.amount
     var count by remember { mutableStateOf(2) }
     val rows = remember { mutableStateListOf<SplitRow>() }
+    // Indices the user manually edited — they're locked from auto-balance.
+    // The untouched rows split the remaining amount equally among themselves.
+    val touched = remember { mutableStateListOf<Int>() }
     var error by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -85,6 +88,7 @@ fun SplitIncomeSheet(
         }
         rows.clear()
         rows.addAll(newRows)
+        touched.clear()
     }
 
     val sum = rows.sumOf { it.amount.toDoubleOrNull() ?: 0.0 }
@@ -154,14 +158,27 @@ fun SplitIncomeSheet(
                             val cleaned = v.filter { it.isDigit() || it == '.' || it == ',' }
                                 .replace(',', '.')
                             rows[idx] = row.copy(amount = cleaned)
-                            // Auto-balance the last row on edits to any other row.
-                            if (idx != rows.lastIndex) {
-                                val sumExceptLast = rows.dropLast(1)
-                                    .sumOf { it.amount.toDoubleOrNull() ?: 0.0 }
-                                val remainder = roundHalfUp(total - sumExceptLast)
-                                rows[rows.lastIndex] = rows.last().copy(
-                                    amount = formatAmountInput(remainder),
-                                )
+                            if (idx !in touched) touched.add(idx)
+                            // Redistribute the remainder over still-untouched
+                            // rows. If everything is touched the user fixes
+                            // any drift manually (sum-mismatch warns).
+                            val touchedSum = rows.mapIndexedNotNull { i, r ->
+                                if (i in touched) r.amount.toDoubleOrNull() ?: 0.0 else null
+                            }.sum()
+                            val untouchedIdx = rows.indices.filter { it !in touched }
+                            if (untouchedIdx.isNotEmpty()) {
+                                val remainder = roundHalfUp(total - touchedSum)
+                                val each = roundHalfUp(remainder / untouchedIdx.size)
+                                var allocated = 0.0
+                                untouchedIdx.forEachIndexed { k, i ->
+                                    val amt = if (k == untouchedIdx.lastIndex) {
+                                        roundHalfUp(remainder - allocated)
+                                    } else {
+                                        each
+                                    }
+                                    allocated += amt
+                                    rows[i] = rows[i].copy(amount = formatAmountInput(amt))
+                                }
                             }
                         },
                         modifier = Modifier.fillMaxWidth(),

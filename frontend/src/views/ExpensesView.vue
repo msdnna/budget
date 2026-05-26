@@ -342,9 +342,30 @@
                     :key="row.id"
                     :long-press-ms="bulkMode ? 0 : 1000"
                     :radius="3"
+                    :reveal-left-width="canMobileDrAction(row) ? 96 : 0"
                     @tap="onCardTap(row)"
                     @longpress="onCardLongPress(row.id)"
                   >
+                    <template v-if="canMobileDrAction(row)" #actionsLeft>
+                      <button
+                        v-if="row.detail_request_id"
+                        class="swipe-action swipe-action-warning"
+                        title="Открыть запрос на детализацию"
+                        @click="openDetailRequest(row.detail_request_id)"
+                      >
+                        <n-icon :component="ListOutline" :size="20" />
+                        <span class="swipe-action-label">ЗнД</span>
+                      </button>
+                      <button
+                        v-else
+                        class="swipe-action swipe-action-primary"
+                        title="Создать запрос на детализацию"
+                        @click="startCreateDetailRequest(row)"
+                      >
+                        <n-icon :component="ListOutline" :size="20" />
+                        <span class="swipe-action-label">ЗнД</span>
+                      </button>
+                    </template>
                     <template #actions>
                       <button
                         class="swipe-action swipe-action-info"
@@ -374,14 +395,7 @@
                       </button>
                     </template>
                     <!-- n-card embedded — единый visual style с Forecast. -->
-                    <n-card
-                      size="small"
-                      :bordered="true"
-                      embedded
-                      :style="
-                        bulkMode && selectedIds.has(row.id) ? `background:${primaryColor}1f` : ''
-                      "
-                    >
+                    <n-card size="small" :bordered="true" embedded :style="cardStyle(row)">
                       <div class="tx-row" :class="{ hidden: row.hidden }">
                         <div class="tx-card-left">
                           <!-- Avatar ↔ bulk-circle fade-swap; см. theme.css
@@ -413,6 +427,8 @@
                               :display-name="row.created_by?.display_name || ''"
                               :avatar-url="row.created_by?.avatar_url || ''"
                               :size="32"
+                              style="cursor: pointer"
+                              @click.stop="openReassign(row)"
                             />
                           </Transition>
                         </div>
@@ -421,12 +437,9 @@
                             <span class="tx-card-date">
                               {{ new Date(row.date).toLocaleDateString('ru-RU') }}
                             </span>
-                            <DepositChip
-                              :model-value="row.deposit"
-                              editable
-                              :icon-size="14"
-                              @change="(v) => changeDeposit(row, v)"
-                            />
+                            <!-- Mobile: read-only deposit indicator (mirror
+                                 of IncomeView mobile rationale). -->
+                            <DepositChip :model-value="row.deposit" :icon-size="14" />
                             <CategoryLabel
                               class="tx-card-category"
                               :name="row.category"
@@ -616,6 +629,7 @@ import { useDetailRequestsStore } from '@/stores/detailRequests'
 import { useNotificationsStore } from '@/stores/notifications'
 import { useAuthStore } from '@/stores/auth'
 import { useAdaptiveTable, plainTextCell, renderActionsRow } from '@/utils/adaptiveTable'
+import { groupTint } from '@/utils/groupColor'
 
 const store = useTransactionsStore('expenses')
 const drStore = useDetailRequestsStore()
@@ -987,15 +1001,35 @@ async function submit() {
   }
 }
 
+// Mobile swipe-right: только canonical расходы (без parent) — DR-children
+// не открывают action слева. На parent — DR-create или DR-open в зависимости
+// от состояния.
+function canMobileDrAction(row) {
+  return !row.parent_id
+}
+
+// Mobile card style. Priority: my-open-DR yellow > bulk-selected primary >
+// group tint (split/DR-closed groups).
+function cardStyle(row) {
+  if (hasMyOpenRequest(row)) return 'background:rgba(240,160,32,0.16)'
+  if (bulkMode.value && selectedIds.value.has(row.id)) {
+    return `background:${primaryColor.value}1f`
+  }
+  const tint = groupTint(row)
+  return tint ? `background:${tint}` : ''
+}
+
 function getRowProps(row) {
   const styles = []
   if (row.hidden) styles.push('opacity:0.4')
+  const tint = groupTint(row)
+  if (tint) styles.push(`background:${tint}`)
   if (bulkMode.value && selectedIds.value.has(row.id)) {
     styles.push(`background:${primaryColor.value}1f`)
   }
   if (hasMyOpenRequest(row)) {
-    // Yellow highlight for transactions where the current user has an open
-    // detail-request waiting to be filled in.
+    // Yellow highlight overrides the group tint — pending action takes
+    // priority over passive grouping.
     styles.push('background:rgba(240,160,32,0.16)')
   }
   return { style: styles.join(';') }
@@ -1627,8 +1661,8 @@ const columns = computed(() => {
       width: compact ? 44 : 110,
       align: 'right',
       render: (row) => {
-        // Eye + Trash — quick (always visible). Template + DR — under «⋯».
-        // Edit (pencil) is handled inline via per-cell pencils, not here.
+        // Quick: только показать/скрыть и шаблон. Edit — через inline pencils
+        // в каждой клетке; удаление и DR — под ⋯, по палитре действий.
         const quick = [
           {
             icon: row.hidden ? EyeOffOutline : EyeOutline,
@@ -1637,21 +1671,14 @@ const columns = computed(() => {
             onClick: () => store.toggle(row.id, !row.hidden),
           },
           {
-            icon: TrashOutline,
-            label: 'Удалить',
-            type: 'error',
-            confirm: 'Удалить запись?',
-            onClick: () => store.remove(row.id),
-          },
-        ]
-        const more = [
-          {
             icon: CopyOutline,
             label: 'Добавить как шаблон',
-            type: 'info',
+            type: 'success',
             onClick: () => fillFromTemplate(row),
           },
         ]
+        // More: DR action вверху (если применимо), удалить — последним.
+        const more = []
         if (!row.parent_id) {
           if (row.detail_request_id) {
             more.push({
@@ -1660,7 +1687,7 @@ const columns = computed(() => {
                 row.detail_request_status === 'open'
                   ? 'Открыть запрос на детализацию'
                   : 'Закрытый запрос на детализацию',
-              type: 'warning',
+              type: row.detail_request_status === 'open' ? 'warning' : 'default',
               onClick: () => openDetailRequest(row.detail_request_id),
             })
           } else {
@@ -1672,6 +1699,13 @@ const columns = computed(() => {
             })
           }
         }
+        more.push({
+          icon: TrashOutline,
+          label: 'Удалить',
+          type: 'error',
+          confirm: 'Удалить запись?',
+          onClick: () => store.remove(row.id),
+        })
         return renderActionsRow({ quick, more, compact })
       },
     },
@@ -1919,6 +1953,9 @@ watch(
 }
 .swipe-action-danger {
   background: #d03050;
+}
+.swipe-action-primary {
+  background: #18a058;
 }
 
 .dep-radio-content {

@@ -45,6 +45,10 @@ object TransactionRepository {
 
     fun observeConflictCount(): Flow<Int> = dao.observeConflictCount()
 
+    /** One-shot lookup. Used by detail-sheet to resolve split-parent links
+     *  even when the parent isn't surfaced by the active filter set. */
+    suspend fun findById(id: String): Transaction? = dao.findById(id)?.toModel()
+
     suspend fun create(
         type: String,
         amount: Double,

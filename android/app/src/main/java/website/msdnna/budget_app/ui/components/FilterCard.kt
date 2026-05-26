@@ -11,7 +11,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.material3.Card
@@ -50,62 +52,73 @@ fun FilterCard(
     primaryColor: Color = MaterialTheme.colorScheme.primary,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    // Callers historically passed `padding(vertical=6.dp)` in [modifier], which
+    // stayed in the layout even when the card was collapsed — leaving a 12dp
+    // gap between the card above and the list below. Vertical spacers live
+    // *inside* AnimatedVisibility so they shrink together with the card; the
+    // caller's modifier still applies its horizontal padding around the root.
     AnimatedVisibility(
         visible = visible,
         modifier = modifier,
         enter = expandVertically() + fadeIn(),
         exit = shrinkVertically() + fadeOut(),
     ) {
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        ) {
-            Column(
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+        Column {
+            Spacer(Modifier.height(6.dp))
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                ),
             ) {
-                Text(
-                    title,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                content()
-                val showReset = hasActiveFilters && onReset != null
-                if (totalText != null || showReset) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        if (totalText != null) {
-                            Text(
-                                totalText,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        } else {
-                            // Empty Box keeps «Сбросить» pinned to the right
-                            // when no total is shown (SpaceBetween needs two
-                            // children to position correctly).
-                            Box {}
-                        }
-                        if (showReset) {
-                            // Plain clickable Text rather than TextButton —
-                            // the latter bakes in a 48dp min-height which
-                            // made this row jump as soon as any filter
-                            // activated.
-                            Text(
-                                "Сбросить",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = primaryColor,
-                                modifier = Modifier
-                                    .clickable { onReset() }
-                                    .padding(horizontal = 8.dp, vertical = 2.dp),
-                            )
+                Column(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Text(
+                        title,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    content()
+                    val showReset = hasActiveFilters && onReset != null
+                    if (totalText != null || showReset) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            if (totalText != null) {
+                                Text(
+                                    totalText,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            } else {
+                                // Empty Box keeps «Сбросить» pinned to the right
+                                // when no total is shown (SpaceBetween needs two
+                                // children to position correctly).
+                                Box {}
+                            }
+                            if (showReset) {
+                                // Plain clickable Text rather than TextButton —
+                                // the latter bakes in a 48dp min-height which
+                                // made this row jump as soon as any filter
+                                // activated.
+                                Text(
+                                    "Сбросить",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = primaryColor,
+                                    modifier = Modifier
+                                        .clickable { onReset() }
+                                        .padding(horizontal = 8.dp, vertical = 2.dp),
+                                )
+                            }
                         }
                     }
                 }
             }
+            Spacer(Modifier.height(6.dp))
         }
     }
 }

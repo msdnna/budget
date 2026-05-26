@@ -334,9 +334,30 @@
                     :key="row.id"
                     :long-press-ms="bulkMode ? 0 : 1000"
                     :radius="3"
+                    :reveal-left-width="canMobileSplitAction(row) ? 96 : 0"
                     @tap="onCardTap(row)"
                     @longpress="onCardLongPress(row.id)"
                   >
+                    <template v-if="canMobileSplitAction(row)" #actionsLeft>
+                      <button
+                        v-if="row.excluded_from_stats && !row.parent_id"
+                        class="swipe-action swipe-action-warning"
+                        title="Расформировать"
+                        @click="onUnsplit(row)"
+                      >
+                        <n-icon :component="GitMergeOutline" :size="20" />
+                        <span class="swipe-action-label">Расформ.</span>
+                      </button>
+                      <button
+                        v-else-if="!row.parent_id && !row.excluded_from_stats"
+                        class="swipe-action swipe-action-primary"
+                        title="Разделить доход"
+                        @click="openSplit(row)"
+                      >
+                        <n-icon :component="GitMergeOutline" :size="20" />
+                        <span class="swipe-action-label">Разделить</span>
+                      </button>
+                    </template>
                     <template #actions>
                       <button
                         class="swipe-action swipe-action-info"
@@ -368,14 +389,7 @@
                     <!-- n-card embedded — единый visual style с Forecast'овыми
                      карточками (тот же surface bg, border, radius от Naive
                      темы). Flex-разметка живёт во вложенном `.tx-row`. -->
-                    <n-card
-                      size="small"
-                      :bordered="true"
-                      embedded
-                      :style="
-                        bulkMode && selectedIds.has(row.id) ? `background:${primaryColor}1f` : ''
-                      "
-                    >
+                    <n-card size="small" :bordered="true" embedded :style="cardStyle(row)">
                       <div class="tx-row" :class="{ hidden: row.hidden }">
                         <div class="tx-card-left">
                           <!-- Avatar ↔ bulk-circle fade-swap; см. theme.css
@@ -408,6 +422,8 @@
                               :display-name="row.created_by?.display_name || ''"
                               :avatar-url="row.created_by?.avatar_url || ''"
                               :size="32"
+                              style="cursor: pointer"
+                              @click.stop="openReassign(row)"
                             />
                           </Transition>
                         </div>
@@ -416,12 +432,11 @@
                             <span class="tx-card-date">
                               {{ new Date(row.date).toLocaleDateString('ru-RU') }}
                             </span>
-                            <DepositChip
-                              :model-value="row.deposit"
-                              editable
-                              :icon-size="14"
-                              @change="(v) => changeDeposit(row, v)"
-                            />
+                            <!-- Mobile: read-only deposit indicator. Editing
+                                 lives in the edit-form (open via tap on row);
+                                 a dropdown here was confusing because the tap
+                                 target overlaps the row's tap-to-edit gesture. -->
+                            <DepositChip :model-value="row.deposit" :icon-size="14" />
                             <CategoryLabel
                               class="tx-card-category"
                               :name="row.category"
@@ -622,6 +637,7 @@ import { historyOptions, pushHistory } from '@/utils/inputHistory'
 import { users as usersApi, transactions as txApi } from '@/api'
 import { useAdaptiveTable, plainTextCell, renderActionsRow } from '@/utils/adaptiveTable'
 import SplitIncomeModal from '@/components/SplitIncomeModal.vue'
+import { groupTint } from '@/utils/groupColor'
 import { GitMergeOutline } from '@vicons/ionicons5'
 
 const store = useTransactionsStore('income')
@@ -1000,9 +1016,28 @@ async function submit() {
   }
 }
 
+// Mobile swipe-right gating: only canonical rows + split-parents get a left
+// action; split-children expose nothing on swipe-right.
+function canMobileSplitAction(row) {
+  return !row.parent_id
+}
+
+// Inline style for the mobile tx card: bulk-selected wins over group tint,
+// group tint is applied to split-parents / split-children (mobile mirror of
+// the desktop NDataTable row-props logic).
+function cardStyle(row) {
+  if (bulkMode.value && selectedIds.value.has(row.id)) {
+    return `background:${primaryColor.value}1f`
+  }
+  const tint = groupTint(row)
+  return tint ? `background:${tint}` : ''
+}
+
 function getRowProps(row) {
   const styles = []
   if (row.hidden) styles.push('opacity:0.4')
+  const tint = groupTint(row)
+  if (tint) styles.push(`background:${tint}`)
   if (bulkMode.value && selectedIds.value.has(row.id)) {
     styles.push(`background:${primaryColor.value}1f`)
   }
@@ -1636,6 +1671,8 @@ const columns = computed(() => {
       render: (row) => {
         const isSplitParent = row.excluded_from_stats && !row.parent_id
         const isSplitChild = !!row.parent_id
+        // Quick: только показать/скрыть и шаблон (две частые операции,
+        // template на split-child тоже валиден — делает копию-черновик).
         const quick = [
           {
             icon: row.hidden ? EyeOffOutline : EyeOutline,
@@ -1644,25 +1681,19 @@ const columns = computed(() => {
             onClick: () => store.toggle(row.id, !row.hidden),
           },
           {
-            icon: TrashOutline,
-            label: 'Удалить',
-            type: 'error',
-            confirm: isSplitChild || isSplitParent ? undefined : 'Удалить запись?',
-            onClick: () => onDeleteRow(row),
+            icon: CopyOutline,
+            label: 'Добавить как шаблон',
+            type: 'success',
+            onClick: () => fillFromTemplate(row),
           },
         ]
+        // More: split/unsplit вверху, удалить — всегда последним.
         const more = []
         if (!isSplitChild && !isSplitParent) {
           more.push({
-            icon: CopyOutline,
-            label: 'Добавить как шаблон',
-            type: 'info',
-            onClick: () => fillFromTemplate(row),
-          })
-          more.push({
             icon: GitMergeOutline,
             label: 'Разделить доход',
-            type: 'info',
+            type: 'primary',
             onClick: () => openSplit(row),
           })
         } else if (isSplitParent) {
@@ -1673,6 +1704,13 @@ const columns = computed(() => {
             onClick: () => onUnsplit(row),
           })
         }
+        more.push({
+          icon: TrashOutline,
+          label: 'Удалить',
+          type: 'error',
+          confirm: isSplitChild || isSplitParent ? undefined : 'Удалить запись?',
+          onClick: () => onDeleteRow(row),
+        })
         return renderActionsRow({ quick, more, compact })
       },
     },
@@ -1887,6 +1925,13 @@ onMounted(() => {
 }
 .swipe-action-danger {
   background: #d03050;
+}
+.swipe-action-primary {
+  /* Naive's primary green — matches the desktop ⋯-menu «Разделить» entry. */
+  background: #18a058;
+}
+.swipe-action-success {
+  background: #18a058;
 }
 
 /* Deposit radio-button content (icon + label inline). */

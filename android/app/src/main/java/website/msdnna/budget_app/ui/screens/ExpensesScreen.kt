@@ -5,7 +5,6 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -14,6 +13,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Assignment
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Visibility
@@ -240,7 +240,7 @@ fun ExpensesScreen(
                     modifier = Modifier
                         .zIndex(1f)
                         .background(MaterialTheme.colorScheme.background)
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                        .padding(horizontal = 12.dp),
                     totalText = "Всего: ${uiState.total}",
                     hasActiveFilters = hasActive,
                     onReset = { vm.resetFilters() },
@@ -292,28 +292,14 @@ fun ExpensesScreen(
                             }
                         }
                     }
-                    FilterSection(title = "Параметры отображения") {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            // Whole row is the toggle — flat, no ripple
-                            // (the small grey press tint behind the label
-                            // looked like a bug, not a feature).
-                            modifier = Modifier.clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                            ) { vm.setIncludeDetailed(!includeDetailed) },
-                        ) {
-                            Checkbox(
-                                checked = includeDetailed,
-                                onCheckedChange = null,
-                                colors = CheckboxDefaults.colors(checkedColor = primaryColor),
-                            )
-                            Text(
-                                "Показать закрытые запросы",
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        }
+                    FilterSection(title = "Запросы на детализацию") {
+                        DepositScopeChip(
+                            selected = includeDetailed,
+                            label = "Показывать закрытые ЗнД",
+                            icon = Icons.AutoMirrored.Filled.Assignment,
+                            primaryColor = primaryColor,
+                            onClick = { vm.setIncludeDetailed(!includeDetailed) },
+                        )
                     }
                 }
 

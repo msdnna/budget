@@ -86,6 +86,9 @@ const emit = defineEmits(['close', 'confirmed'])
 
 const count = ref(2)
 const parts = ref([])
+// Indices the user manually edited — they're locked from auto-balance. The
+// untouched rows split the remaining amount equally among themselves.
+const touched = ref(new Set())
 const loading = ref(false)
 
 const total = computed(() => props.transaction?.amount || 0)
@@ -117,6 +120,7 @@ function rebuild(n) {
     })
   }
   parts.value = rows
+  touched.value = new Set()
 }
 
 function onCountChange(v) {
@@ -124,14 +128,27 @@ function onCountChange(v) {
   rebuild(v)
 }
 
-// When the user types in any row except the last, the last row auto-balances
-// so the sum stays equal to the parent amount. If the user edits the last
-// row, leave it alone (the «sum mismatch» warning catches drift).
+// User edited row [idx]: mark it as touched and redistribute the remainder
+// equally across the still-untouched rows. If every row has been touched,
+// nothing auto-balances — the sum-mismatch warning surfaces any drift and the
+// user fixes it manually.
 function onAmountChange(idx) {
-  if (idx === parts.value.length - 1) return
-  const sumExceptLast = parts.value.slice(0, -1).reduce((a, p) => a + (p.amount || 0), 0)
-  const remainder = Math.round((total.value - sumExceptLast) * 100) / 100
-  parts.value[parts.value.length - 1].amount = remainder
+  touched.value = new Set(touched.value).add(idx)
+  const touchedSum = parts.value.reduce(
+    (acc, p, i) => acc + (touched.value.has(i) ? Number(p.amount) || 0 : 0),
+    0,
+  )
+  const untouchedIndices = parts.value.map((_, i) => i).filter((i) => !touched.value.has(i))
+  if (untouchedIndices.length === 0) return
+  const remainder = Math.round((total.value - touchedSum) * 100) / 100
+  const each = Math.round((remainder / untouchedIndices.length) * 100) / 100
+  let allocated = 0
+  untouchedIndices.forEach((i, k) => {
+    const amt =
+      k === untouchedIndices.length - 1 ? Math.round((remainder - allocated) * 100) / 100 : each
+    allocated += amt
+    parts.value[i].amount = amt
+  })
 }
 
 const sum = computed(() => parts.value.reduce((acc, p) => acc + (Number(p.amount) || 0), 0))

@@ -291,7 +291,9 @@ fun IncomeScreen(
                     filterIncludeSplit
                 FilterCard(
                     visible = filtersVisible,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    // Vertical padding lives inside FilterCard so it shrinks
+                    // with the AnimatedVisibility on hide.
+                    modifier = Modifier.padding(horizontal = 12.dp),
                     totalText = "Всего: ${uiState.total}",
                     hasActiveFilters = hasActive,
                     onReset = { vm.resetFilters() },
@@ -434,22 +436,18 @@ fun IncomeScreen(
             tx.parentId.isBlank() &&
             !tx.excludedFromStats &&
             tx.detailRequestId.isBlank()
-        val splitSummary = if (tx.parentId.isNotBlank()) {
-            // Look up the (hidden) parent inside the current uiState — it may
-            // be missing when the user hasn't enabled «Показывать разделённые»,
-            // but Room still keeps the row, so we fall back to a generic blurb.
-            val parent = uiState.transactions.firstOrNull { it.id == tx.parentId }
-            buildString {
-                append("Часть от записи ")
-                if (parent != null) {
-                    append("«${parent.source ?: parent.category}» ")
-                    append("от ${formatDate(parent.date)} ")
-                    append("(${formatMoney(parent.amount)} ₽)")
-                } else {
-                    append("исходного дохода")
-                }
+        // Resolve the (possibly hidden) parent through Room — works even when
+        // the user hasn't enabled «Показывать разделённые». Fallback name
+        // ensures the link still renders if the parent row has been purged.
+        var splitParent by remember(tx.id) { mutableStateOf<Transaction?>(null) }
+        LaunchedEffect(tx.parentId) {
+            splitParent = tx.parentId.takeIf { it.isNotBlank() }?.let {
+                website.msdnna.budget_app.data.repository.TransactionRepository.findById(it)
             }
-        } else null
+        }
+        val splitName = splitParent?.let {
+            it.source?.takeIf { s -> s.isNotBlank() } ?: it.category
+        } ?: if (tx.parentId.isNotBlank()) "Исходный доход" else null
         TransactionDetailSheet(
             transaction = tx,
             amountColor = incomeColor,
@@ -472,7 +470,10 @@ fun IncomeScreen(
                     detailTx = null
                 }
             } else null,
-            splitParentSummary = splitSummary,
+            splitParentName = splitName,
+            onOpenSplitParent = splitParent?.let { parent ->
+                { detailTx = parent }
+            },
         )
     }
 
@@ -725,10 +726,14 @@ fun SwipeableTransactionCard(
         val baseSurface = MaterialTheme.colorScheme.surface
         val hiddenBg = MaterialTheme.colorScheme.surfaceVariant
         val warningBg = Color(0xFFF0A020).copy(alpha = 0.18f).compositeOver(baseSurface)
+        // Split/DR groups paint a pastel band shared by the parent + every
+        // child, so the user can spot a group at a glance.
+        val groupBg = transaction.groupTint()
         val targetBg = when {
             selected -> primaryColor.copy(alpha = 0.16f).compositeOver(baseSurface)
             highlightWarning -> warningBg
             transaction.hidden -> hiddenBg
+            groupBg != null -> groupBg
             else -> baseSurface
         }
         val animatedBg by animateColorAsState(
@@ -896,9 +901,12 @@ fun TransactionDetailSheet(
     /** Open the «Разделить доход» sheet — wired only on Income, only when
      *  the tx is the canonical income (not a child, not already split). */
     onSplit: (() -> Unit)? = null,
-    /** Set on split-children to describe the source row («Часть от записи
-     *  ‘Зарплата’ от 26.05.2026»). Surfaced as an info-row in view mode. */
-    splitParentSummary: String? = null,
+    /** Display name of the parent transaction's source (or category fallback)
+     *  shown as a clickable back-link on split-children. */
+    splitParentName: String? = null,
+    /** Open the parent transaction's detail sheet — wired on split-children
+     *  alongside [splitParentName]. */
+    onOpenSplitParent: (() -> Unit)? = null,
 ) {
     val scope = rememberCoroutineScope()
     var isEditing by remember { mutableStateOf(false) }
@@ -1029,8 +1037,33 @@ fun TransactionDetailSheet(
                         Spacer(Modifier.height(16.dp))
 
                         DetailRow("Дата", formatDate(transaction.date))
-                        if (!splitParentSummary.isNullOrBlank()) {
-                            DetailRow("Разделение", splitParentSummary)
+                        // Split-child → clickable back-link to the (hidden)
+                        // parent. Mirrors the DR-link row layout below so
+                        // column baselines align with «Дата» / «Источник».
+                        if (!splitParentName.isNullOrBlank() && onOpenSplitParent != null) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 6.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.Top,
+                            ) {
+                                Text(
+                                    "Разделение",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.weight(0.4f),
+                                )
+                                Text(
+                                    text = splitParentName,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Medium,
+                                    color = primaryColor,
+                                    modifier = Modifier
+                                        .weight(0.6f)
+                                        .clickable { onOpenSplitParent() },
+                                )
+                            }
                         }
 
                         val subtitle = transaction.source ?: transaction.purpose
