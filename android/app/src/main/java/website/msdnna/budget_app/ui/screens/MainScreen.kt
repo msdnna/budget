@@ -253,6 +253,7 @@ fun MainScreen(
     val incFilterTo by incomeVm.filterTo.collectAsStateWithLifecycle()
     val expFilterDeposit by expensesVm.filterDeposit.collectAsStateWithLifecycle()
     val incFilterDeposit by incomeVm.filterDeposit.collectAsStateWithLifecycle()
+    val incFilterIncludeSplit by incomeVm.filterIncludeSplit.collectAsStateWithLifecycle()
     val activeFilterCount = when (targetRoute) {
         "expenses" -> {
             expFilterCats.size +
@@ -263,7 +264,8 @@ fun MainScreen(
         "income" ->
             incFilterCats.size +
                 (if (incFilterFrom != null && incFilterTo != null) 1 else 0) +
-                (if (incFilterDeposit != null) 1 else 0)
+                (if (incFilterDeposit != null) 1 else 0) +
+                (if (incFilterIncludeSplit) 1 else 0)
         else -> 0
     }
 

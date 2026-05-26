@@ -472,7 +472,18 @@ fun IncomeScreen(
             } else null,
             splitParentName = splitName,
             onOpenSplitParent = splitParent?.let { parent ->
-                { detailTx = parent }
+                {
+                    // Animate sheet→sheet swap: close the current sheet first,
+                    // wait for the slide-down animation, then open the parent.
+                    // Setting [detailTx] in one step swaps contents abruptly
+                    // because the ModalBottomSheet stays mounted on the same
+                    // state. 280 ms ≈ M3 ModalBottomSheet's exit duration.
+                    scope.launch {
+                        detailTx = null
+                        kotlinx.coroutines.delay(280)
+                        detailTx = parent
+                    }
+                }
             },
         )
     }
