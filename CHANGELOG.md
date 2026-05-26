@@ -864,6 +864,15 @@
 
 ## Android
 
+### [1.43.2] — 2026-05-26
+
+#### Changed
+- **«Привязать существующий расход» — из swipe-rail в bottom-sheet.** Регулярные расходы и одноразовые wishlist-карточки больше не показывают кнопку «Привязать» при свайпе влево — она переехала к иконке-pencil в info-sheet (mirror Income «Разделить»). Освободилось 80–88 px reveal-зоны: для regular осталось «Оплачено / Отменить / Удалить», для wishlist — «Куплено / Удалить». Свайп-link скрывал второй экран при ошибочном жесте; в bottom-sheet это явное действие с предсказуемой позицией.
+
+#### Fixed
+- **TopAppBar funnel-badge на Income не учитывал «Показывать разделённые».** Добавил `incFilterIncludeSplit` в `MainScreen.activeFilterCount`. Поведение теперь mirror Expenses «Показать закрытые ЗнД».
+- **Sheet→sheet jarring swap при кликe на split-parent link.** ModalBottomSheet оставался на месте, контент мгновенно подменялся. Теперь caller сначала закрывает текущий sheet (`detailTx = null`), ждёт 280 мс (M3 exit duration) и открывает родительский — slide-down → slide-up без резкого скачка.
+
 ### [1.43.1] — 2026-05-26
 
 #### Fixed

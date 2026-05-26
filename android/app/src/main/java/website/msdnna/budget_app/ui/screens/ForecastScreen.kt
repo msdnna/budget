@@ -492,7 +492,6 @@ fun ForecastScreen(
                             },
                             onMarkPaid = { payRegular = regItem },
                             onCancelPaid = { vm.unlinkRegularPeriod(regItem.id) },
-                            onLinkExisting = { onLinkExisting(regItem.id, regItem.name) },
                             onDelete = { vm.deleteWishlistItem(regItem.id) },
                             // Regular items reuse expense categories (the
                             // backend stores them in the wishlist collection
@@ -525,7 +524,6 @@ fun ForecastScreen(
                             onSelectToggle = vm::toggleSelection,
                             onPurchase = { wl -> payWishlist = wl },
                             onUnpurchase = { id -> vm.unpurchaseWishlist(id) },
-                            onLinkExisting = { onLinkExisting(item.id, item.name) },
                             onDelete = vm::deleteWishlistItem,
                             onDetails = onShowDetails,
                             categories = categories,
@@ -577,6 +575,11 @@ fun ForecastScreen(
             // (one-off) — sheet falls back to «Куплено / Не куплено».
             paidThisPeriod = detailRegularCtx?.paidThisPeriod,
             nextDueDate = detailRegularCtx?.nextDueDate.orEmpty(),
+            // Link button replaces the swipe-link rail on the card. Hidden for
+            // already-purchased one-off items (one wishlist row = one tx).
+            onLinkExisting = if (detailRegularCtx != null || !item.purchased) {
+                { onLinkExisting(item.id, item.name) }
+            } else null,
         )
     }
 
@@ -708,7 +711,6 @@ private fun SwipeableRegularItemCard(
     onSelectToggle: (id: String) -> Unit = {},
     onMarkPaid: () -> Unit,
     onCancelPaid: () -> Unit,
-    onLinkExisting: () -> Unit = {},
     onDelete: (id: String) -> Unit,
     categories: List<website.msdnna.budget_app.data.model.Category> = emptyList(),
     serverUrl: String = "",
@@ -720,11 +722,9 @@ private fun SwipeableRegularItemCard(
     val payRevealDp = 88.dp
     val cancelRevealDp = 88.dp
     val deleteRevealDp = 88.dp
-    val linkRevealDp = 88.dp
 
     val leftRevealDp = payRevealDp
-    val rightRevealDp =
-        (if (item.paidThisPeriod) cancelRevealDp else 0.dp) + linkRevealDp + deleteRevealDp
+    val rightRevealDp = (if (item.paidThisPeriod) cancelRevealDp else 0.dp) + deleteRevealDp
 
     val leftRevealPx = with(density) { leftRevealDp.toPx() }
     val rightRevealPx = with(density) { rightRevealDp.toPx() }
@@ -830,26 +830,6 @@ private fun SwipeableRegularItemCard(
                                 )
                             }
                         }
-                    }
-                }
-                // «Привязать» — открывает экран выбора несвязанного расхода.
-                // В отличие от destructive-действий рядом, подтверждение здесь
-                // не двухступенчатое: финальный конфирм происходит на экране
-                // выбора, по второй tap-у на выбранной строке.
-                Box(
-                    modifier = Modifier
-                        .width(linkRevealDp)
-                        .fillMaxHeight()
-                        .background(ColourLinkExisting)
-                        .clickable {
-                            snapTo(0f)
-                            onLinkExisting()
-                        },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icons.Default.Link, null, tint = Color.White, modifier = Modifier.size(22.dp))
-                        Text("Привязать", color = Color.White, fontSize = 10.sp)
                     }
                 }
                 Box(
@@ -1050,7 +1030,6 @@ fun SwipeableWishlistCard(
      *  purchased flag — keeps the original tx in расходах. */
     onUnpurchase: (id: String) -> Unit = {},
     /** Open the «привязать существующий расход» picker. */
-    onLinkExisting: () -> Unit = {},
     onDelete: (id: String) -> Unit,
     onDetails: (WishlistItem) -> Unit = {},
     categories: List<website.msdnna.budget_app.data.model.Category> = emptyList(),
@@ -1065,11 +1044,9 @@ fun SwipeableWishlistCard(
     // handled by SwipeableRegularItemCard, but kept simple here too).
     // «Привязать» прячется когда `purchased=true` — одну запись можно связать
     // только с одной wishlist-позицией.
-    val showLink = !item.purchased
-    val linkRevealDp = 80.dp
     val deleteRevealDp = 72.dp
     val leftRevealDp = if (!recurring) 80.dp else 0.dp
-    val rightRevealDp = (if (showLink) linkRevealDp else 0.dp) + deleteRevealDp
+    val rightRevealDp = deleteRevealDp
 
     val leftRevealPx = with(density) { leftRevealDp.toPx() }
     val rightRevealPx = with(density) { rightRevealDp.toPx() }
@@ -1140,31 +1117,13 @@ fun SwipeableWishlistCard(
                 }
             }
 
-            // ── Right backgrounds: [Привязать?] + Удалить ──
+            // ── Right background: Удалить (link → bottom-sheet) ──
             Row(
                 modifier = Modifier
                     .width(rightRevealDp)
                     .fillMaxHeight()
                     .align(Alignment.CenterEnd),
             ) {
-                if (showLink) {
-                    Box(
-                        modifier = Modifier
-                            .width(linkRevealDp)
-                            .fillMaxHeight()
-                            .background(ColourLinkExisting)
-                            .clickable {
-                                snapTo(0f)
-                                onLinkExisting()
-                            },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(Icons.Default.Link, null, tint = Color.White, modifier = Modifier.size(22.dp))
-                            Text("Привязать", color = Color.White, fontSize = 10.sp)
-                        }
-                    }
-                }
                 Box(
                     modifier = Modifier
                         .width(deleteRevealDp)
@@ -1377,6 +1336,10 @@ fun WishlistInteractiveSheet(
      *  alongside the status row so the user knows when the next payment
      *  rolls around. Empty = don't render. */
     nextDueDate: String = "",
+    /** Open the «link existing expense» picker. When non-null, surfaces a
+     *  link IconButton next to the edit pencil in view mode — mirrors the
+     *  Income split-button placement. Hidden by default. */
+    onLinkExisting: (() -> Unit)? = null,
 ) {
     val scope = rememberCoroutineScope()
     var isEditing by remember { mutableStateOf(false) }
@@ -1440,8 +1403,19 @@ fun WishlistInteractiveSheet(
                                     color = if (item.purchased) MaterialTheme.colorScheme.onSurfaceVariant else primaryColor
                                 )
                             }
-                            IconButton(onClick = { isEditing = true }) {
-                                Icon(Icons.Default.Edit, "Редактировать", tint = primaryColor)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (onLinkExisting != null) {
+                                    IconButton(onClick = onLinkExisting) {
+                                        Icon(
+                                            Icons.Default.Link,
+                                            contentDescription = "Привязать существующий расход",
+                                            tint = primaryColor,
+                                        )
+                                    }
+                                }
+                                IconButton(onClick = { isEditing = true }) {
+                                    Icon(Icons.Default.Edit, "Редактировать", tint = primaryColor)
+                                }
                             }
                         }
 
