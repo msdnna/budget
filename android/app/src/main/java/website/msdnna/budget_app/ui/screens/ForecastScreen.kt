@@ -334,7 +334,9 @@ fun ForecastScreen(
                 // small; the heavy lists below benefit from LazyColumn
                 // recycling as separate items.
                 item {
-                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    // No outer spacedBy: FilterCard.outerSpacing manages the
+                    // gap below itself so it can collapse with the card.
+                    Column {
                         val forecastDeposit by vm.filterDeposit.collectAsState()
                         // Deposit scope filter: same UX as Stats — collapsed
                         // under the TopAppBar funnel toggle.
@@ -343,6 +345,7 @@ fun ForecastScreen(
                             hasActiveFilters = forecastDeposit != null,
                             onReset = { vm.resetFilters() },
                             primaryColor = primaryColor,
+                            outerSpacing = 16.dp,
                         ) {
                             FilterSection(title = "Счёт") {
                                 val depositRowState = androidx.compose.foundation.lazy.rememberLazyListState()
@@ -380,7 +383,7 @@ fun ForecastScreen(
                                 message = "Офлайн-режим. Прогноз недоступен",
                                 onRetry = { vm.reload() }
                             )
-                            else -> {
+                            else -> Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                                 val fc = uiState.forecast ?: website.msdnna.budget_app.data.model.ForecastData()
                                 // 2×2 summary grid: Прогноз / Ср.3мес on top,
                                 // Регулярные / Желания on the second row. The

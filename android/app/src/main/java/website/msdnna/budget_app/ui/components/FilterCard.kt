@@ -29,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import website.msdnna.budget_app.ui.theme.BudgetTheme
 
@@ -50,13 +51,19 @@ fun FilterCard(
     hasActiveFilters: Boolean = false,
     onReset: (() -> Unit)? = null,
     primaryColor: Color = MaterialTheme.colorScheme.primary,
+    /** Bottom-spacer height that's part of the AnimatedVisibility (animates
+     *  away on close). Set this to the outer-arrangement gap your screen
+     *  would have used (16.dp on Stats/Forecast, 6.dp on Income/Expenses). */
+    outerSpacing: Dp = 6.dp,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    // Callers historically passed `padding(vertical=6.dp)` in [modifier], which
-    // stayed in the layout even when the card was collapsed — leaving a 12dp
-    // gap between the card above and the list below. Vertical spacers live
-    // *inside* AnimatedVisibility so they shrink together with the card; the
-    // caller's modifier still applies its horizontal padding around the root.
+    // Callers historically passed `padding(vertical=…)` in [modifier], and
+    // outer Columns sometimes use `Arrangement.spacedBy(N.dp)` — both leave a
+    // gap when the card is collapsed (AnimatedVisibility shrinks the child to
+    // 0px but the outer arrangement's gap is constant). Vertical spacers live
+    // *inside* AnimatedVisibility so they shrink together with the card. For
+    // the outer-arrangement case, callers should drop spacedBy() and rely on
+    // [outerSpacing] which animates with the card.
     AnimatedVisibility(
         visible = visible,
         modifier = modifier,
@@ -118,7 +125,10 @@ fun FilterCard(
                     }
                 }
             }
-            Spacer(Modifier.height(6.dp))
+            // Bottom spacer doubles as the outer-arrangement gap, since this
+            // one's animated; the absent-when-collapsed property is what
+            // Stats/Forecast need (their outer Column dropped spacedBy).
+            Spacer(Modifier.height(outerSpacing))
         }
     }
 }

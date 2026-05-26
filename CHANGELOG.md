@@ -291,6 +291,17 @@
 
 ## Web (frontend)
 
+### [1.42.1] — 2026-05-26
+
+#### Fixed
+- **Desktop NDataTable не подсвечивал группы.** Inline `row-style` подменялся per-cell background'ом Naive, поэтому tint не было видно. Перешёл на `:row-class-name="getRowClass"` + 12 CSS-правил под `:deep(.n-data-table-tr.tx-grp-N > .n-data-table-td)`. Group-tint теперь стабильно виден на Income/Expenses таблицах.
+- **Mobile swipe-rail просвечивал через карту.** Карточка имела background через alpha-suffix (`#XXXX22`), при свайпе виден action-rail сквозь карту. Перешёл на `groupSolidBg(row, palette.cardSurface)` — JS-композитит tint поверх opaque surface и возвращает solid hex.
+- **Mobile swipe-right overshoot.** Кнопка «Разделить»/«ЗнД» имела width:60px, а левая reveal-зона = 96px → 36px пустого фона за кнопкой при свайпе. Добавил `.sc-actions-left :slotted(.swipe-action){ width: 100% }` — кнопка растягивается на всю reveal-зону.
+- **Cветовой палитры коллизии.** Hash на полиноме 31 + 6-цветная палитра давали collision для UUID parent-id'ов (последние 6 байт UUID дoминантны → одинаковый slot). Перешёл на FNV-1a hash и расширил палитру до 12 цветов (одинаковый алгоритм с Android).
+
+#### Changed
+- **Actions палитра**: Шаблон — `info` (синий, по умолчанию в Naive); Разделить доход / Создать ЗнД — `success` (зелёный). Это инвертирует прежнее соотношение, делает primary-action (разделить/создать) визуально приоритетнее nice-to-have (шаблон).
+
 ### [1.42.0] — 2026-05-26
 
 #### Added
@@ -852,6 +863,12 @@
 ---
 
 ## Android
+
+### [1.43.1] — 2026-05-26
+
+#### Fixed
+- **Group-color collision** на Income/Expenses: hash `*31` + 6-палитра давал одинаковые цвета визуально-разным группам (UUID parent-id'ов перекатываются в один slot). Перешёл на FNV-1a + 12 пастельных оттенков. Алгоритм идентичен web `groupColor.js` — общая группа получает одинаковый tint в обоих клиентах.
+- **FilterCard close-anim gap на Statistics/Forecast.** Outer Column'ы там используют `Arrangement.spacedBy(16.dp)` — spacedBy ставит gap между children независимо от их высоты, так что AnimatedVisibility shrinking до 0 не убирал 16dp отступ. Ввёл параметр `outerSpacing: Dp = 6.dp` на FilterCard (animates вместе с card), убрал `spacedBy` в обоих экранах + обернул внутренние секции в локальный Column с собственным `spacedBy(16.dp)`.
 
 ### [1.43.0] — 2026-05-26
 
