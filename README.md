@@ -384,6 +384,11 @@ make prod-up    # docker compose сам пересоздаст контейне�
 | MongoDB          | `0.0.0.0:27017` | _(не выставлен наружу)_ |
 | Vue dev-server   | `0.0.0.0:5173` | — |
 
+## Дополнительные документы
+
+- [`docs/RPI_DEPLOY.md`](docs/RPI_DEPLOY.md) — деплой на Raspberry Pi
+- [`docs/TELEGRAM_BOT.md`](docs/TELEGRAM_BOT.md) — Telegram-бот: привязка, LLM-тюнинг, удалённый Whisper
+
 ## История изменений
 
 См. [CHANGELOG.md](CHANGELOG.md).

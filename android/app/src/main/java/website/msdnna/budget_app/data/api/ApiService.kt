@@ -237,4 +237,19 @@ interface ApiService {
         @Query("to") to: String? = null,
         @Query("type") type: String? = null
     ): ResponseBody
+
+    // ── Telegram link ────────────────────────────────────────────────
+    // Per-user binding to the telegram-bot service. `init` returns a fresh
+    // 6-char code; the user pastes it to the bot as `/link CODE` and the
+    // bot finalizes the binding service-side. `status` is polled by the
+    // UI to flip from "code shown" to "linked".
+
+    @GET("telegram/link")
+    suspend fun getTelegramLink(): TelegramLinkStatus
+
+    @POST("telegram/link/init")
+    suspend fun initTelegramLink(): TelegramLinkInitResponse
+
+    @DELETE("telegram/link")
+    suspend fun deleteTelegramLink(): Response<Unit>
 }

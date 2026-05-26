@@ -258,6 +258,22 @@
                 </div>
               </n-form-item>
 
+              <n-form-item
+                v-if="activeSection === 'expense' || activeSection === 'income'"
+                label="Подсказки для Telegram-бота"
+              >
+                <div style="width: 100%">
+                  <n-dynamic-tags v-model:value="editForm.keywords" type="primary" :round="false" />
+                  <n-text depth="3" style="font-size: 12px">
+                    Слова, при упоминании которых LLM-бот выберет эту категорию. Например:
+                    <code>магнит</code>
+                    ,
+                    <code>пятёрочка</code>
+                    для «Продукты».
+                  </n-text>
+                </div>
+              </n-form-item>
+
               <n-form-item v-if="activeSection === 'expense'" label="Месячный лимит (₽)">
                 <div class="limit-row">
                   <n-input-number
@@ -356,6 +372,7 @@ import {
   NModal,
   NSlider,
   NDivider,
+  NDynamicTags,
   NProgress,
   useMessage,
 } from 'naive-ui'
@@ -618,7 +635,14 @@ function pickFromSearch(name) {
 
 // ── Editor state ────────────────────────────────────────────────────
 const editing = ref(null)
-const editForm = ref({ name: '', color: '', icon: '', icon_scale: 1, monthly_limit: null })
+const editForm = ref({
+  name: '',
+  color: '',
+  icon: '',
+  icon_scale: 1,
+  monthly_limit: null,
+  keywords: [],
+})
 const selectedId = computed(() => editing.value?.id || null)
 const isCreating = computed(() => editing.value && !editing.value.id)
 const saving = ref(false)
@@ -653,6 +677,7 @@ function select(c) {
     icon: c.icon || '',
     icon_scale: c.icon_scale && c.icon_scale > 0 ? c.icon_scale : 1,
     monthly_limit: typeof c.monthly_limit === 'number' ? c.monthly_limit : null,
+    keywords: Array.isArray(c.keywords) ? [...c.keywords] : [],
   }
   const cid = parseCustomIconKey(c.icon)
   if (cid) iconCache.resolve(cid).catch(() => {})
@@ -666,6 +691,7 @@ function startCreate() {
     icon: '',
     icon_scale: 1,
     monthly_limit: null,
+    keywords: [],
   }
 }
 
@@ -684,8 +710,8 @@ async function saveEdit() {
         color: editForm.value.color || '',
         icon: editForm.value.icon || '',
       })
-      // Scale + monthly_limit aren't part of Create — issue a follow-up
-      // PATCH if the user set them during creation.
+      // Scale + monthly_limit + keywords aren't part of Create — issue a
+      // follow-up PATCH if the user set them during creation.
       let finalRow = created
       const followUp = {}
       if (parseCustomIconKey(created.icon) && editForm.value.icon_scale !== 1) {
@@ -693,6 +719,9 @@ async function saveEdit() {
       }
       if (activeSection.value === 'expense' && typeof editForm.value.monthly_limit === 'number') {
         followUp.monthly_limit = editForm.value.monthly_limit
+      }
+      if (Array.isArray(editForm.value.keywords) && editForm.value.keywords.length) {
+        followUp.keywords = editForm.value.keywords
       }
       if (Object.keys(followUp).length) {
         const { data: patched } = await catApi.update(created.id, followUp)
@@ -714,6 +743,14 @@ async function saveEdit() {
       }
       if (!editing.value.is_default && editForm.value.name.trim() !== editing.value.name) {
         patch.name = editForm.value.name.trim()
+      }
+      // keywords: full replacement. Diff against the previous value so the
+      // PATCH only carries what changed; empty-array still ships when the
+      // admin wipes all tags so backend $unsets the field.
+      const prevKw = Array.isArray(editing.value.keywords) ? editing.value.keywords : []
+      const nextKw = Array.isArray(editForm.value.keywords) ? editForm.value.keywords : []
+      if (JSON.stringify(prevKw) !== JSON.stringify(nextKw)) {
+        patch.keywords = nextKw
       }
       // monthly_limit uses tri-state: present number = set; explicit `null`
       // = clear; key absent = leave unchanged. Backend's NullableFloat

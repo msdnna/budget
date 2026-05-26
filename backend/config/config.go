@@ -9,11 +9,12 @@ import (
 )
 
 type Config struct {
-	MongoURI  string
-	DBName    string
-	Port      string
-	FontPath  string
-	JWTSecret string
+	MongoURI     string
+	DBName       string
+	Port         string
+	FontPath     string
+	JWTSecret    string
+	ServiceToken string // Shared secret for trusted server-side integrations (Telegram bot) acting on behalf of a user via X-Act-As-User. Empty = service-auth disabled.
 }
 
 // New reads configuration from the environment. In production (`APP_ENV=production`)
@@ -62,12 +63,18 @@ func New() *Config {
 		log.Println("WARNING: MONGO_URI not set — using local dev default")
 	}
 
+	svcToken := os.Getenv("SERVICE_TOKEN")
+	if svcToken != "" && len(svcToken) < 32 {
+		log.Printf("WARNING: SERVICE_TOKEN is shorter than 32 chars (%d) — generate a stronger one", len(svcToken))
+	}
+
 	return &Config{
-		MongoURI:  mongoURI,
-		DBName:    dbName,
-		Port:      getEnv("PORT", "8080"),
-		FontPath:  getEnv("PDF_FONT_PATH", "/usr/share/fonts/dejavu/DejaVuSans.ttf"),
-		JWTSecret: jwt,
+		MongoURI:     mongoURI,
+		DBName:       dbName,
+		Port:         getEnv("PORT", "8080"),
+		FontPath:     getEnv("PDF_FONT_PATH", "/usr/share/fonts/dejavu/DejaVuSans.ttf"),
+		JWTSecret:    jwt,
+		ServiceToken: svcToken,
 	}
 }
 

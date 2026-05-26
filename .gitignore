@@ -27,6 +27,18 @@ frontend/.yarn/*
 !frontend/.yarn/versions
 frontend/.pnp.*
 
+# ─── Telegram bot (Python) ──────────────────────────────────────────────────
+telegram_bot/.venv/
+telegram_bot/**/__pycache__/
+telegram_bot/**/*.pyc
+telegram_bot/**/*.pyo
+telegram_bot/.pytest_cache/
+telegram_bot/.ruff_cache/
+
+# ─── Docs site build (MkDocs) ───────────────────────────────────────────────
+site/
+docs/api/
+
 # ─── Android ─────────────────────────────────────────────────────────────────
 android/build/
 android/app/build/

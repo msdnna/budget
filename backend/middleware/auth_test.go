@@ -19,7 +19,10 @@ func init() {
 
 func newTestRouter(cfg *config.Config) *gin.Engine {
 	r := gin.New()
-	r.GET("/protected", Auth(cfg), func(c *gin.Context) {
+	// userRepo == nil here — the JWT path doesn't need it, and the
+	// service-token branch is exercised separately in service_auth_test.go
+	// (which spins up a real Mongo via testcontainers).
+	r.GET("/protected", Auth(cfg, nil), func(c *gin.Context) {
 		uid := c.GetString("user_id")
 		c.JSON(http.StatusOK, gin.H{"user_id": uid})
 	})

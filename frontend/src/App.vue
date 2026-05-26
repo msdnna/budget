@@ -634,6 +634,8 @@ const currentTitle = computed(() => {
     'settings/categories': 'Настройки · Категории',
     'settings/users': 'Настройки · Пользователи',
     'settings/portability': 'Настройки · Импорт/экспорт',
+    'settings/glossary': 'Настройки · Глоссарий',
+    'settings/telegram': 'Настройки · Telegram',
   }
   return map[activeKey.value] ?? 'Статистика'
 })
@@ -657,18 +659,25 @@ const menuOptions = computed(() => {
     { label: 'Прогноз', key: 'forecast', icon: icon(BulbOutline) },
     { label: 'Экспорт', key: 'export', icon: icon(CloudDownloadOutline) },
   ]
+  // Settings menu is visible to everyone; admin-only subsections (Категории /
+  // Пользователи / Импорт-экспорт) appear only for admins. Regular users see
+  // just the Telegram tab — they can still bind their personal bot account.
+  const settingsChildren = []
   if (auth.isAdmin) {
-    items.push({
-      label: 'Настройки',
-      key: 'settings',
-      icon: icon(SettingsOutline),
-      children: [
-        { label: 'Категории', key: 'settings/categories' },
-        { label: 'Пользователи', key: 'settings/users' },
-        { label: 'Импорт/экспорт', key: 'settings/portability' },
-      ],
-    })
+    settingsChildren.push(
+      { label: 'Категории', key: 'settings/categories' },
+      { label: 'Пользователи', key: 'settings/users' },
+      { label: 'Глоссарий', key: 'settings/glossary' },
+      { label: 'Импорт/экспорт', key: 'settings/portability' },
+    )
   }
+  settingsChildren.push({ label: 'Telegram', key: 'settings/telegram' })
+  items.push({
+    label: 'Настройки',
+    key: 'settings',
+    icon: icon(SettingsOutline),
+    children: settingsChildren,
+  })
   return items
 })
 
@@ -683,22 +692,23 @@ const mobileNavItems = computed(() => {
     { label: 'Прогноз', key: 'forecast', icon: BulbOutline },
     { label: 'Экспорт', key: 'export', icon: CloudDownloadOutline },
   ]
-  if (auth.isAdmin) {
-    // Mobile bottom-nav «Настройки» открывает дефолтную вкладку
-    // (Категории), внутренний tab-strip переключает между подразделами.
-    items.push({
-      label: 'Настройки',
-      key: 'settings/categories',
-      icon: SettingsOutline,
-    })
-  }
+  // Mobile bottom-nav «Настройки» теперь видна всем — открывает дефолтную
+  // вкладку по роли (Категории для админа, Telegram для остальных). Внутренний
+  // tab-strip переключает между подразделами в зависимости от прав.
+  items.push({
+    label: 'Настройки',
+    key: auth.isAdmin ? 'settings/categories' : 'settings/telegram',
+    icon: SettingsOutline,
+  })
   return items
 })
 
-// Bottom-nav active-state matcher: и для /settings/categories, и для
-// /settings/users подсвечиваем единственную «Настройки» вкладку.
+// Bottom-nav active-state matcher: любая /settings/* вкладка подсвечивает
+// единственную «Настройки» — используем тот же дефолтный key, что и в items.
 const mobileActiveKey = computed(() => {
-  if (activeKey.value.startsWith('settings/')) return 'settings/categories'
+  if (activeKey.value.startsWith('settings/')) {
+    return auth.isAdmin ? 'settings/categories' : 'settings/telegram'
+  }
   return activeKey.value
 })
 

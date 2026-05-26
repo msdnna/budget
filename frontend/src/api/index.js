@@ -134,6 +134,25 @@ export const notifications = {
   read: (id) => api.post(`/notifications/${id}/read`),
 }
 
+export const telegram = {
+  // Returns { linked, telegram_user_id?, telegram_username?, linked_at? }.
+  status: () => api.get('/telegram/link'),
+  // Returns { code, expires_at } — short-lived (5 min, see backend
+  // repository/telegram_repo.go linkCodeTTL).
+  init: () => api.post('/telegram/link/init'),
+  unlink: () => api.delete('/telegram/link'),
+}
+
+// Common-family glossary (term → meaning) used by the telegram bot as
+// system-prompt aliases. List is open to any authed user; mutations are
+// admin-only.
+export const glossary = {
+  list: () => api.get('/glossary'),
+  create: (term, meaning) => api.post('/glossary', { term, meaning }),
+  update: (id, payload) => api.patch(`/glossary/${id}`, payload),
+  remove: (id) => api.delete(`/glossary/${id}`),
+}
+
 export const icons = {
   list: () => api.get('/icons'),
   upload: (file) => {

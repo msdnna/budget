@@ -21,7 +21,12 @@ type Category struct {
 	// MonthlyLimit caps spending for an expense category over the current
 	// calendar month (1st–end). Nil = no limit tracked. Only meaningful for
 	// section="expense"; ignored for income/wishlist.
-	MonthlyLimit   *float64   `bson:"monthly_limit,omitempty" json:"monthly_limit,omitempty"`
+	MonthlyLimit *float64 `bson:"monthly_limit,omitempty" json:"monthly_limit,omitempty"`
+	// Keywords — подсказки для LLM-парсера (telegram-бот). Каждое слово
+	// повышает приоритет этой категории, если встречается в тексте. Поле
+	// видно всем (отдаётся через /categories/all), но редактируется только
+	// админом — категории общие для семьи.
+	Keywords       []string   `bson:"keywords,omitempty" json:"keywords,omitempty"`
 	IsDefault      bool       `bson:"is_default" json:"is_default"`
 	CreatedAt      time.Time  `bson:"created_at" json:"created_at"`
 	Version        int        `bson:"version" json:"version"`
@@ -51,6 +56,11 @@ type UpdateCategoryRequest struct {
 	Icon         *string       `json:"icon,omitempty"`
 	IconScale    *float64      `json:"icon_scale,omitempty"`
 	MonthlyLimit NullableFloat `json:"monthly_limit,omitempty"`
+	// Keywords — полная замена списка подсказок. nil = не трогать;
+	// `[]` (пустой массив) = очистить. JSON-разница absent vs `[]`
+	// различается на уровне декодера: encoding/json даёт nil-slice для
+	// absent и empty-slice для `[]`, чем мы и пользуемся.
+	Keywords *[]string `json:"keywords,omitempty"`
 }
 
 // NullableFloat preserves the JSON tri-state needed for "set / clear /

@@ -1,0 +1,42 @@
+[project]
+name = "budget-telegram-bot"
+version = "0.2.0"
+description = "Telegram bot front-end for the msdnna budget API. Free-form text/voice → normalized transaction via LLM."
+requires-python = ">=3.12"
+dependencies = [
+    "aiogram>=3.13.0",
+    "aiohttp-socks>=0.10.0",
+    "faster-whisper>=1.0.3",
+    "httpx>=0.27.0",
+    "openai>=1.50.0",
+    "pydantic>=2.9.0",
+    "pydantic-settings>=2.5.0",
+    "python-dateutil>=2.9.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.6.0",
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-httpx>=0.32.0",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "ASYNC"]
+ignore = ["E501"]  # long lines acceptable in formatted prompts
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

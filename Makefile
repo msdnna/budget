@@ -51,6 +51,35 @@ clean: ## Remove containers, volumes, and built images
 logs: ## Tail Docker logs
 	docker compose logs -f
 
+# ─── Telegram bot (dev) ──────────────────────────────────────────────────────
+# Lives under `profiles: ["bot"]` in docker-compose.yml so the plain `make up`
+# stack ignores it. These targets enable the profile + scope the action to the
+# bot service.
+#
+# `set -a; . ./.env; set +a` exports every key in .env into the make-shell so
+# docker compose's substitution sees them. Without this, shell-empty vars
+# (e.g. an unset HTTPS_PROXY) win over the .env values because docker
+# compose's interpolation priority is shell > .env. The Telegram bot needs
+# HTTPS_PROXY end-to-end on this dev box — a silent fallback to "no proxy"
+# breaks polling against api.telegram.org with a "Request timeout".
+
+.PHONY: bot-up
+bot-up: ## Build + start the telegram-bot service in dev compose
+	set -a; . ./.env; set +a; \
+	  docker compose --profile bot up -d --build telegram-bot
+
+.PHONY: bot-logs
+bot-logs: ## Tail telegram-bot logs
+	docker compose --profile bot logs -f telegram-bot
+
+.PHONY: bot-restart
+bot-restart: ## Restart telegram-bot (re-reads .env without rebuild)
+	docker compose --profile bot restart telegram-bot
+
+.PHONY: bot-down
+bot-down: ## Stop telegram-bot (keeps image)
+	docker compose --profile bot stop telegram-bot
+
 # ─── Production (Docker Compose) ─────────────────────────────────────────────
 
 .PHONY: prod-build

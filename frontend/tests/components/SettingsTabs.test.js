@@ -3,6 +3,7 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import SettingsTabs from '../../src/components/SettingsTabs.vue'
+import { useAuthStore } from '../../src/stores/auth'
 
 function makeRouter(initialPath = '/settings/categories') {
   const router = createRouter({
@@ -11,15 +12,21 @@ function makeRouter(initialPath = '/settings/categories') {
       { path: '/settings/categories', component: { template: '<div />' } },
       { path: '/settings/users', component: { template: '<div />' } },
       { path: '/settings/portability', component: { template: '<div />' } },
+      { path: '/settings/glossary', component: { template: '<div />' } },
+      { path: '/settings/telegram', component: { template: '<div />' } },
     ],
   })
   router.push(initialPath)
   return router
 }
 
-async function mountIt(path) {
+async function mountIt(path, { admin = true } = {}) {
   const router = makeRouter(path)
   await router.isReady()
+  // Tabs filter by auth.isAdmin — seed the store before mounting so the
+  // computed `visibleTabs` resolves to the expected set.
+  const auth = useAuthStore()
+  auth.user = admin ? { is_admin: true } : { is_admin: false }
   const wrapper = mount(SettingsTabs, {
     global: { plugins: [router] },
   })
@@ -31,10 +38,22 @@ describe('SettingsTabs', () => {
     setActivePinia(createPinia())
   })
 
-  it('renders three tabs in fixed order', async () => {
+  it('renders all admin tabs in fixed order', async () => {
     const { wrapper } = await mountIt('/settings/categories')
     const tabs = wrapper.findAll('button.settings-tab')
-    expect(tabs.map((t) => t.text())).toEqual(['Категории', 'Пользователи', 'Импорт/экспорт'])
+    expect(tabs.map((t) => t.text())).toEqual([
+      'Категории',
+      'Пользователи',
+      'Глоссарий',
+      'Импорт/экспорт',
+      'Telegram',
+    ])
+  })
+
+  it('renders only Telegram tab for non-admins', async () => {
+    const { wrapper } = await mountIt('/settings/telegram', { admin: false })
+    const tabs = wrapper.findAll('button.settings-tab')
+    expect(tabs.map((t) => t.text())).toEqual(['Telegram'])
   })
 
   it('marks the active tab by route path', async () => {
@@ -47,7 +66,8 @@ describe('SettingsTabs', () => {
 
   it('navigates on click', async () => {
     const { wrapper, router } = await mountIt('/settings/categories')
-    const portability = wrapper.findAll('button.settings-tab')[2]
+    // Tab order: Категории, Пользователи, Глоссарий, Импорт/экспорт, Telegram
+    const portability = wrapper.findAll('button.settings-tab')[3]
     await portability.trigger('click')
     await flushPromises()
     expect(router.currentRoute.value.path).toBe('/settings/portability')

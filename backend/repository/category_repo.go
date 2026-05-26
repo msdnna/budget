@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"budget-go/models"
@@ -11,6 +12,27 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
+
+// normalizeKeywords trims whitespace, drops empties, lower-cases for the
+// dedupe key but preserves the first-seen casing. The admin UI uses
+// dynamic-tags which can leak duplicates and stray spaces.
+func normalizeKeywords(in []string) []string {
+	seen := make(map[string]struct{}, len(in))
+	out := make([]string, 0, len(in))
+	for _, raw := range in {
+		v := strings.TrimSpace(raw)
+		if v == "" {
+			continue
+		}
+		key := strings.ToLower(v)
+		if _, dup := seen[key]; dup {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, v)
+	}
+	return out
+}
 
 // defaultCategoryPreset is the seed metadata for a single default category.
 // Color is a hex string. Icon is a key from the shared icon dictionary
@@ -247,6 +269,17 @@ func (r *CategoryRepository) Update(ctx context.Context, id string, req models.U
 			set["monthly_limit"] = req.MonthlyLimit.Value
 		} else {
 			unset["monthly_limit"] = ""
+		}
+	}
+	if req.Keywords != nil {
+		// Normalize: drop empties and dedupe (case-insensitive) — admin UI
+		// edits via free text input, easy to leak doubles. Empty resulting
+		// slice means "clear" → $unset so omitempty drops it from JSON.
+		kws := normalizeKeywords(*req.Keywords)
+		if len(kws) == 0 {
+			unset["keywords"] = ""
+		} else {
+			set["keywords"] = kws
 		}
 	}
 	update := bson.M{"$set": set, "$inc": bson.M{"version": 1}}
