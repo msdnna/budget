@@ -1,18 +1,25 @@
 <template>
   <div class="sc-root">
-    <!-- Action panel «под» содержимым: видна, когда контент смещён влево.
-         Клики по action-кнопкам внутри сначала запускают их handler'ы (event
-         bubbling), затем закрывают swipe через @click здесь.
-         visibility: hidden пока offset=0 — иначе цветной фон актионов
-         «просвечивает» по краям карточки (n-card не покрывает 100% .sc-root). -->
+    <!-- Right action panel — revealed by swipe-left (offset < 0). -->
     <div
       v-if="$slots.actions"
-      class="sc-actions"
-      :class="{ revealed: offset !== 0 }"
+      class="sc-actions sc-actions-right"
+      :class="{ revealed: offset < 0 }"
       :style="{ width: revealWidth + 'px' }"
       @click="reset"
     >
       <slot name="actions" />
+    </div>
+    <!-- Left action panel — revealed by swipe-right (offset > 0). Width is
+         pinned (revealLeftWidth, default 96px = one icon). Hidden if no slot. -->
+    <div
+      v-if="$slots.actionsLeft"
+      class="sc-actions sc-actions-left"
+      :class="{ revealed: offset > 0 }"
+      :style="{ width: revealLeftWidth + 'px' }"
+      @click="reset"
+    >
+      <slot name="actionsLeft" />
     </div>
     <div
       class="sc-content"
@@ -33,8 +40,11 @@
 import { ref, computed } from 'vue'
 
 const props = defineProps({
-  // Сколько px вскрывается под полным свайпом (слева).
+  // Сколько px вскрывается под полным свайпом влево (open RIGHT panel).
   revealWidth: { type: Number, default: 180 },
+  // Сколько px вскрывается под полным свайпом вправо (open LEFT panel).
+  // 0 = swipe-right отключён (back-compat для существующих consumers).
+  revealLeftWidth: { type: Number, default: 0 },
   // Long-press timeout (мс). 0 = выключить.
   longPressMs: { type: Number, default: 1000 },
   // Минимум px движения чтобы зафиксировать направление gesture'а.
@@ -118,9 +128,10 @@ function onTouchMove(e) {
     // scroll'инг страницы во время свайпа.
     if (e.cancelable) e.preventDefault()
     let next = startOffset + dx
-    // Только свайп-влево раскрывает actions (offset уходит в минус). Right-
-    // overshoot snap'ится к 0.
-    next = Math.min(0, Math.max(-props.revealWidth, next))
+    // Свайп-влево раскрывает правый actions-panel (offset → -revealWidth).
+    // Свайп-вправо — левый actions-panel (offset → +revealLeftWidth, если slot
+    // подключен). Если revealLeftWidth=0 — right-overshoot снапится к 0.
+    next = Math.min(props.revealLeftWidth, Math.max(-props.revealWidth, next))
     offset.value = next
   }
 }
@@ -129,10 +140,12 @@ function onTouchEnd() {
   clearLongPress()
   dragging.value = false
   if (mode === 'horizontal') {
-    // Snap: если перетянули за середину reveal-зоны — открыть полностью,
-    // иначе закрыть.
-    if (Math.abs(offset.value) > props.revealWidth / 2) {
-      offset.value = -props.revealWidth
+    // Snap: середина reveal-зоны решает open/close, отдельная логика для
+    // левой/правой панелей чтобы пороги совпадали с их фактическими ширинами.
+    if (offset.value < 0) {
+      offset.value = offset.value < -props.revealWidth / 2 ? -props.revealWidth : 0
+    } else if (offset.value > 0 && props.revealLeftWidth > 0) {
+      offset.value = offset.value > props.revealLeftWidth / 2 ? props.revealLeftWidth : 0
     } else {
       offset.value = 0
     }
@@ -196,25 +209,27 @@ defineExpose({ reset })
 .sc-actions {
   position: absolute;
   top: 0;
-  right: 0;
   height: 100%;
   display: flex;
   align-items: stretch;
-  /* Прижимаем кнопки к правому краю reveal-зоны — если суммарная ширина
-     action'ов меньше revealWidth, пустота окажется слева и будет скрыта
-     контентом до полного свайпа. */
-  justify-content: flex-end;
   z-index: 1;
   visibility: hidden;
   transition: visibility 0s linear 0.2s;
-  /* Правые углы скруглены под форму карточки. Левые — острые: они
-     стыкуются с .sc-content (карточка во время swipe «срезает» свои
-     правые углы через CSS-transition потребителя). overflow:hidden
-     обрезает <button>-дети по этой же форме — иначе их прямоугольный
-     bg-цвет торчит за скруглением. */
+  overflow: hidden;
+}
+.sc-actions-right {
+  right: 0;
+  /* Прижимаем правый-панельные кнопки к правому краю reveal-зоны. */
+  justify-content: flex-end;
   border-top-right-radius: v-bind('props.radius + "px"');
   border-bottom-right-radius: v-bind('props.radius + "px"');
-  overflow: hidden;
+}
+.sc-actions-left {
+  left: 0;
+  /* Левый action прижат к левому краю карточки. */
+  justify-content: flex-start;
+  border-top-left-radius: v-bind('props.radius + "px"');
+  border-bottom-left-radius: v-bind('props.radius + "px"');
 }
 .sc-actions.revealed {
   visibility: visible;

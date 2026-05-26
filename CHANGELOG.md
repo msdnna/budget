@@ -291,6 +291,22 @@
 
 ## Web (frontend)
 
+### [1.42.0] — 2026-05-26
+
+#### Added
+- **Group-color подсветка split/DR-групп.** Pastel-фон на родителе и его детях по hash(parent_id) из палитры 6 цветов. `utils/groupColor.js` + новый helper в обоих view + mobile cards. Если split-родитель и DR-родитель попадают в один список — каждая группа красится своим оттенком.
+- **Mobile swipe-right action.** Одно действие на свайп вправо: Income → «Разделить доход» (canonical) / «Расформировать» (split-parent); Expenses → «Создать ЗнД» (canonical) / «Открыть ЗнД» (если есть DR). Split/DR-children — без левой панели. `SwipeableCard` получил `revealLeftWidth` prop + `actionsLeft` slot (back-compat: 0 по умолчанию).
+- **Avatar на мобильной карточке = смена автора.** Тап по UserAvatar в строке открывает `openReassign` modal (как на desktop). Раньше клик попадал на tap-to-edit, что было неинтуитивно.
+- **Кликабельный source-link на split-child** (mirror Android pack 3): хотя ранее текст «Часть от записи …» уже выводился в IncomeView, теперь web mobile/desktop поведение унифицировано через `groupTint` + visual grouping.
+
+#### Changed
+- **Actions палитра/порядок** на Income/Expenses (desktop NDataTable + ⋯-menu):
+  - Quick (всегда видимы): 👁 «Скрыть/Показать» (default/warning) + 📋 «Шаблон» (success).
+  - Under ⋯: Income — «Разделить доход» (primary) или «Расформировать» (warning); Expenses — «Создать ЗнД» (primary) или «Открыть запрос» (warning/default).
+  - 🗑 Удалить — всегда последним пунктом в ⋯-menu. Bulk-delete теперь живёт только в bulk-mode, постоянная кнопка убрана.
+- **Auto-balance в SplitIncomeModal**: трекаем touched-rows; пересчитывается только то, что юзер не редактировал. Раньше последний слот auto-balanced, и редактирование самого последнего не вернуло разницу.
+- **DepositChip на мобильной карточке** теперь read-only (раньше открывал dropdown). Смена депозита — через edit-form, которая открывается тапом по строке.
+
 ### [1.41.0] — 2026-05-26
 
 #### Added
@@ -836,6 +852,19 @@
 ---
 
 ## Android
+
+### [1.43.0] — 2026-05-26
+
+#### Added
+- **Group-color подсветка split/DR-групп.** `ui/components/GroupColors.kt` — палитра 6 пастельных tint'ов + `Transaction.groupTint(alpha)`; в `SwipeableTransactionCard` фон карточки тонируется одним цветом для parent + всех его children (split + DR). Алгоритм mirror-в-1 с web `utils/groupColor.js` (одна и та же hash-функция → одинаковый слот в списке для общей группы).
+- **Кликабельный source-link на split-child** в `TransactionDetailSheet`: параметр `splitParentName` + `onOpenSplitParent` рендерят DR-style row «Разделение → "Источник"», клик открывает parent в новой sheet. `TransactionRepository.findById` (suspend) добавлен — резолвит parent даже когда «Показывать разделённые» выключен.
+- **Filter chip «Показывать закрытые ЗнД»** в Expenses FilterCard (секция «Запросы на детализацию», `Icons.AutoMirrored.Filled.Assignment`) — заменяет старый Checkbox в «Параметры отображения», unify-ный стиль с «Показывать разделённые» в Income.
+
+#### Changed
+- **Auto-balance в `SplitIncomeSheet`**: трекаем touched-индексы, нетронутые слоты перераспределяют остаток равными долями. До: только последний слот ловил delta — редактирование самого последнего не возвращало баланс.
+
+#### Fixed
+- **Filter-card close animation gap**. Vertical padding(6.dp) на root-модификаторе `FilterCard` оставлял 12dp gap между IB-card и списком после schrink-collapse. Переехало внутрь `AnimatedVisibility` через Column-wrapper со Spacer'ами — теперь shrinks вместе с card.
 
 ### [1.42.0] — 2026-05-26
 
