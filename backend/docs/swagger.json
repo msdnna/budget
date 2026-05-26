@@ -424,6 +424,14 @@
                     "is_default": {
                         "type": "boolean"
                     },
+                    "keywords": {
+                        "description": "Keywords — подсказки для LLM-парсера (telegram-бот). Каждое слово\nповышает приоритет этой категории, если встречается в тексте. Поле\nвидно всем (отдаётся через /categories/all), но редактируется только\nадмином — категории общие для семьи.",
+                        "items": {
+                            "type": "string"
+                        },
+                        "type": "array",
+                        "uniqueItems": false
+                    },
                     "last_modified_by": {
                         "$ref": "#/components/schemas/models.UserInfo"
                     },
@@ -551,6 +559,21 @@
                 "required": [
                     "assignee_id",
                     "transaction_id"
+                ],
+                "type": "object"
+            },
+            "models.CreateGlossaryRequest": {
+                "properties": {
+                    "meaning": {
+                        "type": "string"
+                    },
+                    "term": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "meaning",
+                    "term"
                 ],
                 "type": "object"
             },
@@ -774,6 +797,26 @@
                     "FrequencyQuarterly",
                     "FrequencyYearly"
                 ]
+            },
+            "models.GlossaryEntry": {
+                "properties": {
+                    "created_at": {
+                        "type": "string"
+                    },
+                    "id": {
+                        "type": "string"
+                    },
+                    "meaning": {
+                        "type": "string"
+                    },
+                    "term": {
+                        "type": "string"
+                    },
+                    "updated_at": {
+                        "type": "string"
+                    }
+                },
+                "type": "object"
             },
             "models.LoginRequest": {
                 "properties": {
@@ -1123,6 +1166,149 @@
                 },
                 "type": "object"
             },
+            "models.TelegramContextCategory": {
+                "properties": {
+                    "keywords": {
+                        "items": {
+                            "type": "string"
+                        },
+                        "type": "array",
+                        "uniqueItems": false
+                    },
+                    "name": {
+                        "type": "string"
+                    }
+                },
+                "type": "object"
+            },
+            "models.TelegramContextCounterparty": {
+                "properties": {
+                    "category": {
+                        "type": "string"
+                    },
+                    "count": {
+                        "type": "integer"
+                    },
+                    "counterparty": {
+                        "type": "string"
+                    },
+                    "type": {
+                        "description": "\"income\" | \"expense\"",
+                        "type": "string"
+                    }
+                },
+                "type": "object"
+            },
+            "models.TelegramContextGlossary": {
+                "properties": {
+                    "meaning": {
+                        "type": "string"
+                    },
+                    "term": {
+                        "type": "string"
+                    }
+                },
+                "type": "object"
+            },
+            "models.TelegramContextResponse": {
+                "properties": {
+                    "counterparties": {
+                        "items": {
+                            "$ref": "#/components/schemas/models.TelegramContextCounterparty"
+                        },
+                        "type": "array",
+                        "uniqueItems": false
+                    },
+                    "expense": {
+                        "items": {
+                            "$ref": "#/components/schemas/models.TelegramContextCategory"
+                        },
+                        "type": "array",
+                        "uniqueItems": false
+                    },
+                    "glossary": {
+                        "items": {
+                            "$ref": "#/components/schemas/models.TelegramContextGlossary"
+                        },
+                        "type": "array",
+                        "uniqueItems": false
+                    },
+                    "income": {
+                        "items": {
+                            "$ref": "#/components/schemas/models.TelegramContextCategory"
+                        },
+                        "type": "array",
+                        "uniqueItems": false
+                    }
+                },
+                "type": "object"
+            },
+            "models.TelegramLink": {
+                "properties": {
+                    "created_at": {
+                        "type": "string"
+                    },
+                    "linked_at": {
+                        "type": "string"
+                    },
+                    "telegram_user_id": {
+                        "type": "integer"
+                    },
+                    "telegram_username": {
+                        "type": "string"
+                    },
+                    "user_id": {
+                        "type": "string"
+                    }
+                },
+                "type": "object"
+            },
+            "models.TelegramLinkConfirmRequest": {
+                "properties": {
+                    "code": {
+                        "type": "string"
+                    },
+                    "telegram_user_id": {
+                        "type": "integer"
+                    },
+                    "telegram_username": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "code",
+                    "telegram_user_id"
+                ],
+                "type": "object"
+            },
+            "models.TelegramLinkInitResponse": {
+                "properties": {
+                    "code": {
+                        "type": "string"
+                    },
+                    "expires_at": {
+                        "type": "string"
+                    }
+                },
+                "type": "object"
+            },
+            "models.TelegramLinkStatus": {
+                "properties": {
+                    "linked": {
+                        "type": "boolean"
+                    },
+                    "linked_at": {
+                        "type": "string"
+                    },
+                    "telegram_user_id": {
+                        "type": "integer"
+                    },
+                    "telegram_username": {
+                        "type": "string"
+                    }
+                },
+                "type": "object"
+            },
             "models.Transaction": {
                 "properties": {
                     "amount": {
@@ -1217,10 +1403,29 @@
                     "icon_scale": {
                         "type": "number"
                     },
+                    "keywords": {
+                        "description": "Keywords — полная замена списка подсказок. nil = не трогать;\n`[]` (пустой массив) = очистить. JSON-разница absent vs `[]`\nразличается на уровне декодера: encoding/json даёт nil-slice для\nabsent и empty-slice для `[]`, чем мы и пользуемся.",
+                        "items": {
+                            "type": "string"
+                        },
+                        "type": "array",
+                        "uniqueItems": false
+                    },
                     "monthly_limit": {
                         "$ref": "#/components/schemas/models.NullableFloat"
                     },
                     "name": {
+                        "type": "string"
+                    }
+                },
+                "type": "object"
+            },
+            "models.UpdateGlossaryRequest": {
+                "properties": {
+                    "meaning": {
+                        "type": "string"
+                    },
+                    "term": {
                         "type": "string"
                     }
                 },
@@ -3248,6 +3453,239 @@
                 ]
             }
         },
+        "/glossary": {
+            "get": {
+                "description": "Общесемейный словарь term→meaning, используется telegram-ботом как подсказки LLM. Видно всем авторизованным.",
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "items": {
+                                        "$ref": "#/components/schemas/models.GlossaryEntry"
+                                    },
+                                    "type": "array"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Список глоссария (псевдонимов)",
+                "tags": [
+                    "glossary"
+                ]
+            },
+            "post": {
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "oneOf": [
+                                    {
+                                        "type": "object"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/models.CreateGlossaryRequest",
+                                        "summary": "body",
+                                        "description": "Тело"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "description": "Тело",
+                    "required": true
+                },
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.GlossaryEntry"
+                                }
+                            }
+                        },
+                        "description": "Created"
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Bad Request"
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Conflict"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Добавить запись глоссария (admin)",
+                "tags": [
+                    "glossary"
+                ]
+            }
+        },
+        "/glossary/{id}": {
+            "delete": {
+                "parameters": [
+                    {
+                        "description": "Glossary ID",
+                        "in": "path",
+                        "name": "id",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Not Found"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Удалить запись глоссария (admin)",
+                "tags": [
+                    "glossary"
+                ]
+            },
+            "patch": {
+                "parameters": [
+                    {
+                        "description": "Glossary ID",
+                        "in": "path",
+                        "name": "id",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "oneOf": [
+                                    {
+                                        "type": "object"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/models.UpdateGlossaryRequest",
+                                        "summary": "body",
+                                        "description": "Тело"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "description": "Тело",
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.GlossaryEntry"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Bad Request"
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Not Found"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Обновить запись глоссария (admin)",
+                "tags": [
+                    "glossary"
+                ]
+            }
+        },
         "/health": {
             "get": {
                 "description": "Публичный probe — клиенты (Android `ServerDiscovery`, in-app updates) проверяют, что сервер «свой» по полю `app=msdnna-budget`.",
@@ -4200,6 +4638,363 @@
                 "summary": "Push-фаза синка: батч клиентских мутаций",
                 "tags": [
                     "sync"
+                ]
+            }
+        },
+        "/telegram/context": {
+            "get": {
+                "description": "Возвращает категории + keywords, глоссарий и топ-50 пар (контрагент, категория) из истории конкретного пользователя. Один эндпоинт = один промпт LLM. Aggregate-пайплайн mongo тяжёлый — telegram-бот кеширует ответ на стороне клиента (60 сек).",
+                "parameters": [
+                    {
+                        "description": "Service shared secret",
+                        "in": "header",
+                        "name": "X-Service-Token",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Budget user id",
+                        "in": "query",
+                        "name": "user_id",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.TelegramContextResponse"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Bad Request"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized"
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Not Found"
+                    }
+                },
+                "summary": "Полный контекст для LLM-парсера (service-only)",
+                "tags": [
+                    "telegram"
+                ]
+            }
+        },
+        "/telegram/link": {
+            "delete": {
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized"
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Not Found"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Отвязать текущий telegram",
+                "tags": [
+                    "telegram"
+                ]
+            },
+            "get": {
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.TelegramLinkStatus"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Текущая привязка telegram текущего пользователя",
+                "tags": [
+                    "telegram"
+                ]
+            }
+        },
+        "/telegram/link/confirm": {
+            "post": {
+                "description": "Вызывается telegram-ботом со service-token'ом. Body содержит код, который пользователь ввёл в боте, и его telegram_user_id. Возвращает обновлённый link или 400 «invalid code».",
+                "parameters": [
+                    {
+                        "description": "Service shared secret",
+                        "in": "header",
+                        "name": "X-Service-Token",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "oneOf": [
+                                    {
+                                        "type": "object"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/models.TelegramLinkConfirmRequest",
+                                        "summary": "body",
+                                        "description": "Код + telegram ids"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "description": "Код + telegram ids",
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.TelegramLink"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Bad Request"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized"
+                    }
+                },
+                "summary": "Подтвердить привязку telegram (service-only)",
+                "tags": [
+                    "telegram"
+                ]
+            }
+        },
+        "/telegram/link/init": {
+            "post": {
+                "description": "Возвращает 6-символьный код (TTL 5 минут). Пользователь отправляет `/link \u003ccode\u003e` боту, тот вызывает `/api/telegram/link/confirm` со своим service-token. Повторный init перезаписывает старый код и сбрасывает действующую привязку.",
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.TelegramLinkInitResponse"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "summary": "Сгенерировать одноразовый код привязки telegram",
+                "tags": [
+                    "telegram"
+                ]
+            }
+        },
+        "/telegram/me": {
+            "get": {
+                "description": "Вызывается ботом при каждом сообщении, чтобы убедиться, что telegram-аккаунт привязан, и достать display_name/avatar для UserInfo-сниппетов. 404 если не привязан.",
+                "parameters": [
+                    {
+                        "description": "Service shared secret",
+                        "in": "header",
+                        "name": "X-Service-Token",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Telegram user id",
+                        "in": "query",
+                        "name": "telegram_user_id",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.UserInfo"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Bad Request"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized"
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "Not Found"
+                    }
+                },
+                "summary": "Найти budget-пользователя по telegram_user_id (service-only)",
+                "tags": [
+                    "telegram"
                 ]
             }
         },

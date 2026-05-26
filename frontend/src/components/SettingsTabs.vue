@@ -1,7 +1,7 @@
 <template>
   <div class="settings-tabs" :style="cssVars">
     <button
-      v-for="t in TABS"
+      v-for="t in visibleTabs"
       :key="t.key"
       type="button"
       class="settings-tab"
@@ -17,17 +17,25 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
+import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
 
+// Tabs flagged `adminOnly` hide for regular users; Telegram is visible to
+// everyone because the binding is per-user.
 const TABS = [
-  { key: 'settings/categories', label: 'Категории' },
-  { key: 'settings/users', label: 'Пользователи' },
-  { key: 'settings/portability', label: 'Импорт/экспорт' },
+  { key: 'settings/categories', label: 'Категории', adminOnly: true },
+  { key: 'settings/users', label: 'Пользователи', adminOnly: true },
+  { key: 'settings/glossary', label: 'Глоссарий', adminOnly: true },
+  { key: 'settings/portability', label: 'Импорт/экспорт', adminOnly: true },
+  { key: 'settings/telegram', label: 'Telegram', adminOnly: false },
 ]
 
 const route = useRoute()
 const router = useRouter()
+const auth = useAuthStore()
 const { palette, primaryColor, onPrimaryColor } = storeToRefs(useThemeStore())
+
+const visibleTabs = computed(() => TABS.filter((t) => !t.adminOnly || auth.isAdmin))
 
 const activeKey = computed(() => route.path.replace(/^\//, ''))
 function go(key) {

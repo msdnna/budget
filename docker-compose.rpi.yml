@@ -55,8 +55,9 @@ services:
       - PORT=8080
       - PDF_FONT_PATH=/usr/share/fonts/dejavu/DejaVuSans.ttf
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
+      - SERVICE_TOKEN=${SERVICE_TOKEN:-}
       - TZ=${TZ:-Europe/Moscow}
-      - ANDROID_LATEST=${ANDROID_LATEST:-1.43.3}
+      - ANDROID_LATEST=${ANDROID_LATEST:-1.44.0}
       - ANDROID_MIN_REQUIRED=${ANDROID_MIN_REQUIRED:-1.12.0}
     depends_on:
       mongodb:
@@ -76,6 +77,43 @@ services:
       # APKs for in-app Android updates. nginx.conf serves /apks/ from
       # /usr/share/nginx/html/apks — drop msdnna-budget-app-v<ver>.apk here.
       - ./apks:/usr/share/nginx/html/apks:ro
+    depends_on:
+      - backend
+    networks:
+      - budget-network
+
+  telegram-bot:
+    # Pull pre-built image — building Python deps on a Pi 4 is painfully slow.
+    # Phase ahead: publish multi-arch via a release-bot.yml workflow once the
+    # MVP is stable on the desktop.
+    image: ghcr.io/${GHCR_OWNER:-msdnna}/budget-telegram-bot:${BOT_VERSION:?BOT_VERSION is required}
+    container_name: budget-telegram-bot
+    restart: always
+    profiles: ["bot"]
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:?TELEGRAM_BOT_TOKEN is required when bot profile enabled}
+      - BUDGET_API_URL=http://backend:8080
+      - SERVICE_TOKEN=${SERVICE_TOKEN:?SERVICE_TOKEN is required for the bot}
+      # LLM_BASE_URL must point at the desktop's llama.cpp over the LAN —
+      # the Pi has no GPU. Example: http://192.168.x.x:8001/v1
+      - LLM_BASE_URL=${LLM_BASE_URL:?LLM_BASE_URL is required for the bot}
+      - LLM_API_KEY=${LLM_API_KEY:-not-needed}
+      - LLM_MODEL=${LLM_MODEL:-Qwen3.5-9B-UD-Q4_K_XL.gguf}
+      # RPi 4 не тянет faster-whisper локально (даже `tiny` int8 — нестабильно
+      # на коротких сообщениях, на длинных стопит весь python-loop). На проде
+      # Whisper всегда remote: faster-whisper-server поднимается на десктопе
+      # с GPU, бот ходит по LAN. Поэтому WHISPER_BASE_URL — required.
+      - WHISPER_BASE_URL=${WHISPER_BASE_URL:?WHISPER_BASE_URL is required (point at faster-whisper-server on the desktop, e.g. http://192.168.x.x:8002/v1)}
+      - WHISPER_API_KEY=${WHISPER_API_KEY:-not-needed}
+      - WHISPER_REMOTE_MODEL=${WHISPER_REMOTE_MODEL:-Systran/faster-whisper-small}
+      - WHISPER_LANGUAGE=${WHISPER_LANGUAGE:-ru}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - TZ=${TZ:-Europe/Moscow}
+      - HTTP_PROXY=${HTTP_PROXY:-}
+      - HTTPS_PROXY=${HTTPS_PROXY:-}
+      - NO_PROXY=${NO_PROXY:-localhost,127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16},backend
+    # No bot_whisper_cache mount — RPi compose is remote-only; nothing to
+    # cache on the bot side.
     depends_on:
       - backend
     networks:

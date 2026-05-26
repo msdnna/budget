@@ -35,7 +35,7 @@ func newAdminFixture(t *testing.T) *fixture {
 	userAdminH := handlers.NewUserAdminHandler(f.userRepo, f.db)
 	api := f.router.Group("/api")
 	auth := api.Group("/")
-	auth.Use(middleware.Auth(f.cfg))
+	auth.Use(middleware.Auth(f.cfg, f.userRepo))
 	{
 		auth.GET("/admin/users", userAdminH.AdminList)
 		auth.POST("/admin/users", userAdminH.Create)

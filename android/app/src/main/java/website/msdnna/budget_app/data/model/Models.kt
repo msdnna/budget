@@ -335,3 +335,23 @@ data class NotificationsListResponse(
     val data: List<ServerNotification> = emptyList(),
     @SerializedName("unread_count") val unreadCount: Int = 0,
 )
+
+// ── Telegram link ────────────────────────────────────────────────────────
+//
+// Mirrors backend `models.TelegramLink{Status,InitResponse}`. The status
+// endpoint always returns the same envelope: `linked=false` (without
+// telegram_user_id/username) when the user hasn't bound yet, otherwise the
+// full triplet + linked_at. `code` is short-lived (5 min TTL, see backend
+// repository/telegram_repo.go) — keep it in memory only.
+
+data class TelegramLinkStatus(
+    val linked: Boolean = false,
+    @SerializedName("telegram_user_id") val telegramUserId: Long = 0,
+    @SerializedName("telegram_username") val telegramUsername: String? = null,
+    @SerializedName("linked_at") val linkedAt: String? = null,
+)
+
+data class TelegramLinkInitResponse(
+    val code: String = "",
+    @SerializedName("expires_at") val expiresAt: String = "",
+)

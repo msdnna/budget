@@ -58,6 +58,8 @@ func main() {
 	iconRepo := repository.NewCategoryIconRepository(db)
 	drRepo := repository.NewDetailRequestRepository(db)
 	notifRepo := repository.NewNotificationRepository(db)
+	tgRepo := repository.NewTelegramRepository(db)
+	glossaryRepo := repository.NewGlossaryRepository(db)
 
 	seedCtx, seedCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer seedCancel()
@@ -85,6 +87,8 @@ func main() {
 	txHandler.SetLimitChecker(limitChecker)
 	setupHandler := handlers.NewSetupHandler(userRepo, authHandler)
 	portabilityHandler := handlers.NewPortabilityHandler(db, userRepo)
+	tgHandler := handlers.NewTelegramHandler(tgRepo, userRepo, catRepo, txRepo, glossaryRepo)
+	glossaryHandler := handlers.NewGlossaryHandler(glossaryRepo)
 
 	r := gin.Default()
 	if err := r.SetTrustedProxies([]string{"127.0.0.1", "::1"}); err != nil {
@@ -116,9 +120,21 @@ func main() {
 		api.GET("/setup/status", setupHandler.Status)
 		api.POST("/setup/init", setupHandler.Init)
 
+		// Service-only routes for the Telegram bot. Sit under /api but
+		// outside the JWT-protected group — they authenticate via the
+		// shared SERVICE_TOKEN. Used by the bot during the user-binding
+		// handshake (LinkConfirm) and per-message identity lookup (Me).
+		service := api.Group("/")
+		service.Use(middleware.ServiceOnly(cfg))
+		{
+			service.POST("/telegram/link/confirm", tgHandler.LinkConfirm)
+			service.GET("/telegram/me", tgHandler.Me)
+			service.GET("/telegram/context", tgHandler.Context)
+		}
+
 		// Protected routes
 		protected := api.Group("/")
-		protected.Use(middleware.Auth(cfg))
+		protected.Use(middleware.Auth(cfg, userRepo))
 		{
 			protected.GET("/auth/me", authHandler.Me)
 			protected.POST("/auth/password", userAdminHandler.ChangeOwnPassword)
@@ -192,6 +208,27 @@ func main() {
 			protected.POST("/detail-requests/:id/transactions", drHandler.AddChild)
 			protected.POST("/detail-requests/:id/close", drHandler.Close)
 			protected.POST("/detail-requests/:id/cancel", drHandler.Cancel)
+
+			protected.POST("/telegram/link/init", tgHandler.LinkInit)
+			protected.GET("/telegram/link", tgHandler.LinkStatus)
+			protected.DELETE("/telegram/link", tgHandler.LinkDelete)
+
+			// Glossary — read is open to any authed user (clients can show
+			// it in Settings); mutations are admin-only (registered in the
+			// admin group above).
+			protected.GET("/glossary", glossaryHandler.List)
+		}
+
+		// Glossary mutations sit under the admin group registered earlier,
+		// but `admin` is scoped inside the protected block so we re-open it
+		// here for clarity. Done as a separate group to avoid reshuffling
+		// the existing block.
+		adminTuning := api.Group("/")
+		adminTuning.Use(middleware.Auth(cfg, userRepo), middleware.AdminRequired())
+		{
+			adminTuning.POST("/glossary", glossaryHandler.Create)
+			adminTuning.PATCH("/glossary/:id", glossaryHandler.Update)
+			adminTuning.DELETE("/glossary/:id", glossaryHandler.Delete)
 		}
 	}
 

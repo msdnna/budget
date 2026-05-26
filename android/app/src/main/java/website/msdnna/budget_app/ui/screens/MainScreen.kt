@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Assignment
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.automirrored.filled.TrendingDown
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.*
@@ -183,6 +184,7 @@ fun MainScreen(
     var showNotificationsHistory by remember { mutableStateOf(false) }
     var showCategoryLimits by remember { mutableStateOf(false) }
     var showSecurity by remember { mutableStateOf(false) }
+    var showTelegram by remember { mutableStateOf(false) }
     // Detail-request navigation: list overlay vs single-request overlay vs
     // "all" mode reachable from settings (showAll=true -> tabs).
     var showDetailRequestsList by remember { mutableStateOf(false) }
@@ -842,6 +844,10 @@ fun MainScreen(
                 showSettings = false
                 showSecurity = true
             },
+            onOpenTelegram = {
+                showSettings = false
+                showTelegram = true
+            },
             onOpenDetailRequests = {
                 showSettings = false
                 detailRequestsListShowAll = true
@@ -867,6 +873,18 @@ fun MainScreen(
             primaryColor = primaryColor,
             prefs = prefs,
             onClose = { showSecurity = false },
+        )
+    }
+
+    androidx.compose.animation.AnimatedVisibility(
+        visible = showTelegram,
+        enter = androidx.compose.animation.slideInHorizontally(initialOffsetX = { it }) + androidx.compose.animation.fadeIn(),
+        exit = androidx.compose.animation.slideOutHorizontally(targetOffsetX = { it }) + androidx.compose.animation.fadeOut(),
+    ) {
+        TelegramScreen(
+            serverUrl = serverUrl,
+            primaryColor = primaryColor,
+            onClose = { showTelegram = false },
         )
     }
 
@@ -952,6 +970,7 @@ fun SettingsDialog(
     onDarkModeChange: (Boolean) -> Unit = {},
     onOpenNotifications: () -> Unit = {},
     onOpenSecurity: () -> Unit = {},
+    onOpenTelegram: () -> Unit = {},
     onOpenDetailRequests: () -> Unit = {},
     onPieUnitChange: (Boolean) -> Unit = {},
     onLogout: () -> Unit = {},
@@ -1141,6 +1160,38 @@ fun SettingsDialog(
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Text("Защита приложения", style = MaterialTheme.typography.bodyMedium)
+                    }
+                    Icon(
+                        Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
+                HorizontalDivider()
+
+                // Telegram — opens a dedicated screen for per-user bot binding.
+                // Available to everyone (no admin gate); the underlying API
+                // endpoint sits in the regular auth-protected group.
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(onClick = onOpenTelegram)
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.Send,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text("Telegram", style = MaterialTheme.typography.bodyMedium)
                     }
                     Icon(
                         Icons.AutoMirrored.Filled.KeyboardArrowRight,

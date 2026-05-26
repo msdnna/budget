@@ -39,7 +39,26 @@ const routes = [
     component: () => import('@/views/PortabilityView.vue'),
     meta: { title: 'Импорт/экспорт', adminOnly: true },
   },
-  { path: '/settings', redirect: '/settings/categories' },
+  {
+    path: '/settings/telegram',
+    component: () => import('@/views/SettingsTelegramView.vue'),
+    meta: { title: 'Telegram' },
+  },
+  {
+    path: '/settings/glossary',
+    component: () => import('@/views/SettingsGlossaryView.vue'),
+    meta: { title: 'Глоссарий', adminOnly: true },
+  },
+  // Default settings landing depends on role — admins see the
+  // categories tab, regular users land directly on Telegram (the only
+  // tab they can access).
+  {
+    path: '/settings',
+    redirect: () => {
+      const auth = useAuthStore()
+      return auth.isAdmin ? '/settings/categories' : '/settings/telegram'
+    },
+  },
   // Backwards-compat redirect — earlier Phase 2 build used `/admin`.
   { path: '/admin', redirect: '/settings/categories' },
 ]

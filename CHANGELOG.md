@@ -16,6 +16,33 @@
 
 ## API (backend)
 
+### [1.28.0] — 2026-05-26
+
+#### Added
+- **`Category.Keywords []string`** — список подсказок для LLM-парсера telegram-бота (e.g. `["магнит", "пятёрочка", "продукты"]`). Опционально, omitempty в bson и json. Редактирование через PATCH `/api/categories/:id` (admin) — `keywords` поле в `UpdateCategoryRequest` поддерживает tri-state: nil = не трогать, `[]` = очистить, непустой массив = заменить целиком; внутри repo нормализуется (trim + dedupe case-insensitive).
+- **Глоссарий (общий для семьи)** — новая коллекция `glossary {term, meaning}` + 4 эндпоинта: `GET /api/glossary` (любой авторизованный), `POST` / `PATCH /:id` / `DELETE /:id` (admin). Уникальность по case-folded term, дубль → 409. Используется ботом как блок «псевдонимов» в системном промпте.
+- **`GET /api/telegram/context?user_id=` (service-only)** — единый endpoint для bot-парсера. Возвращает `{expense:[{name,keywords}], income:[...], glossary:[{term,meaning}], counterparties:[{counterparty,category,type,count}]}`. Counterparty-pairs aggregate'ятся из истории конкретного пользователя (топ-50 по count, sort desc; пайплайн в `TransactionRepository.AggregateUserCounterparties`). Один RPC = весь контекст для одного запроса к LLM.
+
+#### Changed
+- `NewTelegramHandler` теперь требует `catRepo`, `txRepo`, `glossaryRepo` для `/telegram/context`. Сигнатура изменилась — у нас один caller (main.go), правка только в нём.
+
+#### Tests
+- `TestGlossary_CRUD` + `TestGlossary_MutationsAdminOnly` — happy path + admin-gate + 409 на duplicate.
+- `TestTelegram_Context_*` — happy path с seeded transactions/glossary, missing service-token (401), unknown user (404).
+
+### [1.27.0] — 2026-05-26
+
+#### Added
+- **Telegram-bot linking.** Новая коллекция `telegram_links` + 5 эндпоинтов: `POST /api/telegram/link/init` (auth) генерит 6-символьный код (Crockford-base32, TTL 5 минут); `GET /api/telegram/link` (auth) — статус привязки для UI; `DELETE /api/telegram/link` (auth) — отвязать; `POST /api/telegram/link/confirm` (service-only) и `GET /api/telegram/me?telegram_user_id=<id>` (service-only) — для бота.
+- **Service-token auth.** Новое env `SERVICE_TOKEN` + ветка в `middleware.Auth`: если запрос несёт `X-Service-Token`, выполняется constant-time compare; для proxied-вызовов дополнительно нужен `X-Act-As-User: <user_id>`, по которому из БД достаётся пользователь (с проверками deleted/blocked), и контекст заполняется так же, как при обычном JWT. Bot пишет транзакции через тот же `POST /api/transactions`, отдельной service-CRUD-поверхности нет.
+- **`middleware.ServiceOnly`** — для пары service-эндпоинтов, не привязанных к конкретному пользователю (`telegram/link/confirm`, `telegram/me`).
+
+#### Changed
+- `middleware.Auth(cfg, userRepo)` — сигнатура расширена `*repository.UserRepository`; нужен для act-as ветки (подгрузить пользователя из БД). Тестам, которым service-путь не нужен, можно передавать nil.
+
+#### Tests
+- 16 новых тестов в `handlers/telegram_test.go`: linking happy-path + invalid/expired code + повтор init + pending-status + service auth (создание tx через `X-Act-As-User`, отсутствующий/неизвестный/блокированный user) + `/me` lookup/404.
+
 ### [1.26.0] — 2026-05-26
 
 #### Added
@@ -290,6 +317,19 @@
 ---
 
 ## Web (frontend)
+
+### [1.44.0] — 2026-05-26
+
+#### Added
+- **Editor «Подсказки для Telegram-бота» на категории.** В `AdminCategoriesView` рядом с лимитом — `n-dynamic-tags` для поля `keywords`. Сохраняется через PATCH `/categories/:id` (требует api 1.28.0). Diff-логика: пустой массив = `$unset` keywords; пропуск изменения = не шлём поле.
+- **`/settings/glossary` — admin-страница глоссария.** Таблица term/meaning с inline-редактированием (per-row dirty-flag → «Сохранить» появляется при изменении), кнопкой удаления через `n-popconfirm` и формой добавления внизу. Bot подкидывает все записи как «псевдонимы» в системный промпт LLM (web/admin-only, чтение видно всем через `GET /glossary`).
+- **Sidebar/mobile-nav + SettingsTabs.** Новая под-вкладка «Глоссарий» (admin-only) рядом с «Импорт/экспорт».
+- **API client** в `frontend/src/api/index.js` — экспорт `glossary` с `list/create/update/remove`.
+
+### [1.43.0] — 2026-05-26
+
+#### Added
+- **Settings → Telegram.** Привязка телеграм-аккаунта к боту для свободной записи транзакций: страница `/settings/telegram` доступна всем пользователям (не только админам), генерит 6-символьный код с TTL 5 минут, показывает обратный отсчёт и инструкцию `/link <код>` в чате с ботом. После привязки — карточка с `@username` + кнопка «Отвязать». Sidebar/mobile-nav «Настройки» теперь виден всем (раньше — только админам); внутренний tab-strip фильтрует подразделы по `auth.isAdmin`.
 
 ### [1.42.1] — 2026-05-26
 
@@ -862,7 +902,38 @@
 
 ---
 
+## Telegram bot
+
+### [0.2.0] — 2026-05-27
+
+#### Added
+- **Voice input (faster-whisper).** Хендлер `F.voice | F.audio`: download → транскрипция → echo `🎤 <text>` → тот же pipeline `_parse_and_confirm`, что и у текста. `vad_filter=True`, `beam_size=1`, `condition_on_previous_text=False`. Модель кешируется в named volume `bot_whisper_cache` — переживает ребилды.
+- **Two-mode Whisper.** `whisper_client.py`: `LocalTranscriber` (faster-whisper в боте) + `RemoteTranscriber` (OpenAI-compatible HTTP) + `make_transcriber(settings)`. Выбор по `WHISPER_BASE_URL` (пусто → local, URL → remote). RPi compose делает `WHISPER_BASE_URL` required — fail-closed, RPi 4 локально не тянет.
+- **Pluggable LLM/Whisper** — уже existing для LLM (`LLM_BASE_URL`) и теперь симметрично для Whisper. Прод-сценарий: приложение на RPi, LLM+Whisper рядом с llama.cpp на ПК.
+- **Документация** — [`docs/TELEGRAM_BOT.md`](docs/TELEGRAM_BOT.md) описывает привязку, тюнинг (keywords/глоссарий/counterparty learning), оба режима деплоя и подводные камни (HF Xet через прокси, Telegram блокировка, compose env priority).
+
+#### Changed
+- `WhisperTranscriber` теперь Protocol-alias на `Transcriber` — старые импорты работают, но новый код использует `Transcriber` + factory.
+- HF Xet отключён по умолчанию (`HF_HUB_DISABLE_XET=1`, `HF_HUB_DOWNLOAD_TIMEOUT=600`) — корпоративный прокси иногда обрывает chunked-downloads из HF.
+
+### [0.1.0] — 2026-05-26
+
+#### Added
+- **Первый релиз** — Telegram-бот для свободного ввода доходов/расходов в семейный бюджет.
+- **Привязка пользователя** через одноразовый код (`/link XXXXXX`, TTL 5 мин). Service-only эндпоинты в backend (`/api/telegram/link/confirm`, `/api/telegram/me`) + `X-Service-Token` middleware + `X-Act-As-User` для проксирования действий пользователя.
+- **LLM нормализация** через llama.cpp (Qwen3.5-9B Q4) с JSON-schema `response_format`. Per-category keywords, общесемейный глоссарий, counterparty learning из истории пользователя — всё через `/api/telegram/context`.
+- **Confirmation UX** — inline-keyboard `[✅ Сохранить] [❌ Отмена] / [✏️ Сумма] [✏️ Категория]` + FSM state.
+- **Создание транзакций** через `POST /api/transactions` со service-token + act-as.
+
+---
+
 ## Android
+
+### [1.44.0] — 2026-05-26
+
+#### Added
+- **Settings → Telegram.** Per-user привязка телеграм-аккаунта к боту: новый экран `TelegramScreen` открывается из `SettingsDialog` через chevron-row (рядом с «Защита приложения»), доступен всем пользователям. Три state'а — Загрузка / Привязано (карточка `@username` + «Отвязать») / Pending код (большой моно-код 36sp + countdown TTL 5 мин + «Скопировать» / «Новый код» / «Обновить статус»). Использует тот же `/api/telegram/link/{init,status,unlink}` контракт что и web 1.43.0.
+- **`ApiService`** расширен `getTelegramLink()` / `initTelegramLink()` / `deleteTelegramLink()`; `Models.kt` — `TelegramLinkStatus` + `TelegramLinkInitResponse`.
 
 ### [1.43.3] — 2026-05-26
 

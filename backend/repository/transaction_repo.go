@@ -770,6 +770,70 @@ func buildTransactionFilter(f models.TransactionFilter) bson.M {
 	return filter
 }
 
+// CounterpartyAgg — пара «контрагент ↔ категория» с количеством упоминаний
+// в истории конкретного пользователя. Используется telegram-ботом как
+// подсказка LLM («известные привязки»).
+type CounterpartyAgg struct {
+	Counterparty string `bson:"counterparty" json:"counterparty"`
+	Category     string `bson:"category" json:"category"`
+	Type         string `bson:"type" json:"type"`
+	Count        int    `bson:"count" json:"count"`
+}
+
+// AggregateUserCounterparties собирает топ-N уникальных пар
+// (source/purpose, category, type) из транзакций пользователя.
+// Используется для in-context подсказок LLM-парсеру: «Магнит → Продукты,
+// 15 раз», «Сбер Наташе → Переводы, 12 раз» и т.д. Soft-deleted и
+// excluded-from-stats записи игнорируются — они смутят модель.
+func (r *TransactionRepository) AggregateUserCounterparties(ctx context.Context, userID string, limit int) ([]CounterpartyAgg, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	match := bson.D{{Key: "$match", Value: bson.M{
+		"created_by.user_id":  userID,
+		"deleted_at":          nil,
+		"hidden":              bson.M{"$ne": true},
+		"excluded_from_stats": bson.M{"$ne": true},
+	}}}
+	addCp := bson.D{{Key: "$addFields", Value: bson.M{
+		"counterparty": bson.M{"$cond": bson.A{
+			bson.M{"$eq": bson.A{"$type", "income"}}, "$source", "$purpose",
+		}},
+	}}}
+	dropEmpty := bson.D{{Key: "$match", Value: bson.M{
+		"counterparty": bson.M{"$nin": bson.A{"", nil}},
+		"category":     bson.M{"$nin": bson.A{"", nil}},
+	}}}
+	group := bson.D{{Key: "$group", Value: bson.D{
+		{Key: "_id", Value: bson.D{
+			{Key: "counterparty", Value: "$counterparty"},
+			{Key: "category", Value: "$category"},
+			{Key: "type", Value: "$type"},
+		}},
+		{Key: "count", Value: bson.D{{Key: "$sum", Value: 1}}},
+	}}}
+	project := bson.D{{Key: "$project", Value: bson.M{
+		"_id":          0,
+		"counterparty": "$_id.counterparty",
+		"category":     "$_id.category",
+		"type":         "$_id.type",
+		"count":        1,
+	}}}
+	sort := bson.D{{Key: "$sort", Value: bson.D{{Key: "count", Value: -1}}}}
+	lim := bson.D{{Key: "$limit", Value: int64(limit)}}
+
+	cur, err := r.col.Aggregate(ctx, mongo.Pipeline{match, addCp, dropEmpty, group, project, sort, lim})
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+	var out []CounterpartyAgg
+	if err := cur.All(ctx, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func buildDateFilter(txType, deposit string, from, to time.Time) bson.M {
 	filter := bson.M{"hidden": bson.M{"$ne": true}, "deleted_at": nil, "excluded_from_stats": bson.M{"$ne": true}}
 	if txType != "" {

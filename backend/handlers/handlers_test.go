@@ -38,6 +38,7 @@ type fixture struct {
 	userRepo    *repository.UserRepository
 	drRepo      *repository.DetailRequestRepository
 	notifRepo   *repository.NotificationRepository
+	tgRepo      *repository.TelegramRepository
 	router      *gin.Engine
 	userID      string
 	displayName string
@@ -51,13 +52,18 @@ func newFixture(t *testing.T) *fixture {
 	t.Helper()
 	db := mongotest.Start(t)
 
-	cfg := &config.Config{JWTSecret: "test-jwt-secret-min-32-chars-please!"}
+	cfg := &config.Config{
+		JWTSecret:    "test-jwt-secret-min-32-chars-please!",
+		ServiceToken: "test-service-token-min-32-chars-ok!",
+	}
 	txRepo := repository.NewTransactionRepository(db)
 	wlRepo := repository.NewWishlistRepository(db)
 	catRepo := repository.NewCategoryRepository(db)
 	userRepo := repository.NewUserRepository(db)
 	drRepo := repository.NewDetailRequestRepository(db)
 	notifRepo := repository.NewNotificationRepository(db)
+	tgRepo := repository.NewTelegramRepository(db)
+	glossaryRepo := repository.NewGlossaryRepository(db)
 
 	// Seed a real user with bcrypt-hashed password so /auth/login round-trips.
 	hash, err := bcrypt.GenerateFromPassword([]byte("hunter2"), bcrypt.MinCost)
@@ -83,6 +89,8 @@ func newFixture(t *testing.T) *fixture {
 	drH := handlers.NewDetailRequestHandler(drRepo, txRepo, userRepo)
 	limitsH := handlers.NewLimitsHandler(catRepo, txRepo)
 	notifH := handlers.NewNotificationHandler(notifRepo)
+	tgH := handlers.NewTelegramHandler(tgRepo, userRepo, catRepo, txRepo, glossaryRepo)
+	glossaryH := handlers.NewGlossaryHandler(glossaryRepo)
 	txH.SetLimitChecker(handlers.NewLimitChecker(catRepo, txRepo, notifRepo))
 
 	r := gin.New()
@@ -92,8 +100,16 @@ func newFixture(t *testing.T) *fixture {
 		api.POST("/auth/login", authH.Login)
 		api.POST("/auth/refresh", authH.Refresh)
 
+		service := api.Group("/")
+		service.Use(middleware.ServiceOnly(cfg))
+		{
+			service.POST("/telegram/link/confirm", tgH.LinkConfirm)
+			service.GET("/telegram/me", tgH.Me)
+			service.GET("/telegram/context", tgH.Context)
+		}
+
 		auth := api.Group("/")
-		auth.Use(middleware.Auth(cfg))
+		auth.Use(middleware.Auth(cfg, userRepo))
 		{
 			auth.GET("/auth/me", authH.Me)
 			auth.GET("/users", authH.ListUsers)
@@ -139,6 +155,20 @@ func newFixture(t *testing.T) *fixture {
 			auth.POST("/detail-requests/:id/transactions", drH.AddChild)
 			auth.POST("/detail-requests/:id/close", drH.Close)
 			auth.POST("/detail-requests/:id/cancel", drH.Cancel)
+
+			auth.POST("/telegram/link/init", tgH.LinkInit)
+			auth.GET("/telegram/link", tgH.LinkStatus)
+			auth.DELETE("/telegram/link", tgH.LinkDelete)
+
+			auth.GET("/glossary", glossaryH.List)
+
+			adminOnly := auth.Group("/")
+			adminOnly.Use(middleware.AdminRequired())
+			{
+				adminOnly.POST("/glossary", glossaryH.Create)
+				adminOnly.PATCH("/glossary/:id", glossaryH.Update)
+				adminOnly.DELETE("/glossary/:id", glossaryH.Delete)
+			}
 		}
 	}
 
@@ -151,6 +181,7 @@ func newFixture(t *testing.T) *fixture {
 		userRepo:    userRepo,
 		drRepo:      drRepo,
 		notifRepo:   notifRepo,
+		tgRepo:      tgRepo,
 		router:      r,
 		userID:      u.ID.Hex(),
 		displayName: u.DisplayName,
