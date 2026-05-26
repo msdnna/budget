@@ -864,6 +864,14 @@
 
 ## Android
 
+### [1.43.3] — 2026-05-26
+
+#### Fixed
+- **Info-sheet висел поверх LinkExpenseScreen** при тапе по иконке «Привязать» в bottom-sheet регулярного расхода / wishlist. Caller теперь сначала закрывает sheet (`detailItem = null` + `detailRegularCtx = null`), потом вызывает navigate-callback — picker открывается на чистом фоне.
+
+#### Changed
+- **Sheet→sheet swap при кликe на split-parent link** ускорен с 280 мс до 120 мс. Сheme: dismiss → 1 frame → open parent — close воспринимается как мгновенный, open-анимация остаётся видимой. (M3 ModalBottomSheet's full exit ≈ 280 мс был бы корректен для отдельного диалога, но между двумя back-to-back sheet'ами слишком медленный.)
+
 ### [1.43.2] — 2026-05-26
 
 #### Changed
