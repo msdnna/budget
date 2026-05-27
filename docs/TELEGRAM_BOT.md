@@ -261,16 +261,47 @@ SERVICE_TOKEN=...                                # тот же, что и в bac
 
 ### 4. Поднять стек на RPi
 
+Бот живёт в отдельном compose-файле (`docker-compose.bot.rpi.yml`), а не в
+основном `docker-compose.rpi.yml`. Это сделано чтобы обязательные переменные
+бота (`BOT_VERSION` / `WHISPER_BASE_URL` / `TELEGRAM_BOT_TOKEN` / ...) не
+валидировались при обычном `make rpi-update`.
+
 ```bash
-make rpi-up                          # backend + frontend
-COMPOSE_PROFILES=bot make rpi-up     # + telegram-bot
+# Основной стек: backend + frontend + mongodb
+make rpi-update                       # git pull + rpi-pull + rpi-apk-fetch + rpi-up
+
+# Telegram-бот (поверх основного стека)
+make rpi-bot-update                   # git pull + rpi-bot-pull + rpi-bot-up
+make rpi-bot-logs                     # tail
+make rpi-bot-down                     # stop
 ```
 
-В `docker-compose.rpi.yml` бот сидит под `profiles: ["bot"]` — отдельный
-профиль, чтобы можно было выключить голос/LLM без правки compose. Также
-там `WHISPER_BASE_URL=${WHISPER_BASE_URL:?...}` — без значения compose
-откажется поднимать бот, чтобы не было «работает на CPU RPi и валится»
-сюрпризов.
+`make rpi-bot-up` сам подмешивает `docker-compose.bot.rpi.yml` поверх
+основного и читает `BOT_VERSION` из `telegram_bot/pyproject.toml`. Версию
+можно зафиксировать вручную: `BOT_VERSION=0.2.1 make rpi-bot-up`.
+
+#### Локальные override-файлы
+
+Если на конкретной машине нужно подкрутить compose без правки общих файлов
+(LAN-specific IPs, отдельные volumes, изменённые ports), положи рядом:
+
+- `docker-compose.rpi.override.yml` — поверх `docker-compose.rpi.yml`
+- `docker-compose.bot.rpi.override.yml` — поверх `docker-compose.bot.rpi.yml`
+
+Оба файла gitignored, переживают `git pull`. Makefile-таргеты подхватывают
+их автоматически через `-f` если файл существует.
+
+Пример: `docker-compose.bot.rpi.override.yml` для использования другого
+порта Whisper-сервера на десктопе:
+
+```yaml
+services:
+  telegram-bot:
+    environment:
+      - WHISPER_BASE_URL=http://10.0.0.5:9001/v1
+      - LLM_BASE_URL=http://10.0.0.5:11434/v1
+      - LLM_MODEL=qwen2.5:7b
+```
 
 ### 5. Что должно быть в логах при первом запуске
 

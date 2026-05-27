@@ -39,6 +39,15 @@ telegram_bot/.ruff_cache/
 site/
 docs/api/
 
+# ─── Local compose overrides ────────────────────────────────────────────────
+# Подхватываются Makefile-таргетами автоматически если файл существует.
+# Используются для машино-специфичной конфигурации, которая не должна
+# конфликтовать при `git pull` (e.g. LAN-specific IPs, локальные тюны).
+docker-compose.*.override.yml
+docker-compose.override.yml
+.env.local
+.env.override
+
 # ─── Android ─────────────────────────────────────────────────────────────────
 android/build/
 android/app/build/

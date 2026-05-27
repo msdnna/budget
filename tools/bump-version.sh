@@ -2,10 +2,11 @@
 # Bump the semantic version of a service.
 #
 # Usage: ./tools/bump-version.sh <service> [major|minor|patch]
-#   service: api | web | android
+#   service: api | web | android | bot
 #   bump:    major | minor | patch   (default: patch)
 #
 # For android, also updates versionCode and versionName in app/build.gradle.
+# For bot, reads/writes telegram_bot/pyproject.toml `version = "..."` line.
 set -euo pipefail
 
 SERVICE="${1:-}"
@@ -14,20 +15,31 @@ BUMP="${2:-patch}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 usage() {
-  echo "Usage: $0 <api|web|android> [major|minor|patch]"
+  echo "Usage: $0 <api|web|android|bot> [major|minor|patch]"
   exit 1
 }
 
 [ -n "$SERVICE" ] || usage
 
+BOT_PYPROJECT="$ROOT/telegram_bot/pyproject.toml"
+
 case "$SERVICE" in
   api)     VERSION_FILE="$ROOT/backend/VERSION" ;;
   web)     VERSION_FILE="$ROOT/frontend/VERSION" ;;
   android) VERSION_FILE="$ROOT/android/VERSION" ;;
+  bot)
+    # No standalone VERSION file — single source of truth is pyproject.toml,
+    # which is also what release-bot.yml CI checks against the git tag.
+    VERSION_FILE=""
+    ;;
   *) usage ;;
 esac
 
-CURRENT="$(cat "$VERSION_FILE" | tr -d '[:space:]')"
+if [ "$SERVICE" = "bot" ]; then
+  CURRENT="$(awk -F'"' '/^version = / {print $2; exit}' "$BOT_PYPROJECT")"
+else
+  CURRENT="$(cat "$VERSION_FILE" | tr -d '[:space:]')"
+fi
 IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
 
 case "$BUMP" in
@@ -38,8 +50,17 @@ case "$BUMP" in
 esac
 
 NEW="$MAJOR.$MINOR.$PATCH"
-echo "$NEW" > "$VERSION_FILE"
-echo "[$SERVICE] $CURRENT → $NEW"
+if [ "$SERVICE" = "bot" ]; then
+  # In-place edit of `version = "X.Y.Z"`. Pattern is anchored to BOL +
+  # exact prefix to avoid touching other `version` keys (e.g. in
+  # `[project.optional-dependencies]` block — there aren't any today, but
+  # being defensive).
+  sed -i -E "s|^(version = )\"[^\"]+\"|\\1\"$NEW\"|" "$BOT_PYPROJECT"
+  echo "[bot] $CURRENT → $NEW (telegram_bot/pyproject.toml)"
+else
+  echo "$NEW" > "$VERSION_FILE"
+  echo "[$SERVICE] $CURRENT → $NEW"
+fi
 
 if [ "$SERVICE" = "android" ]; then
   # build.gradle reads versionName/versionCode from android/VERSION at evaluation
