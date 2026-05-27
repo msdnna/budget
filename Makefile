@@ -109,10 +109,26 @@ prod-logs: ## Tail production logs
 # one currently checked out (e.g. API_VERSION=1.19.2 make rpi-up).
 RPI_API_VERSION ?= $(shell cat $(BACKEND_DIR)/VERSION)
 RPI_WEB_VERSION ?= $(shell cat $(FRONTEND_DIR)/VERSION)
-RPI_COMPOSE     := API_VERSION=$(RPI_API_VERSION) WEB_VERSION=$(RPI_WEB_VERSION) docker compose -f docker-compose.rpi.yml
+# BOT_VERSION читается из pyproject.toml — простой grep вместо tomllib, чтобы
+# Makefile работал без Python 3.11+ на старых RPi (Bookworm ships 3.11, но
+# подстраховка). Override через `BOT_VERSION=0.2.0 make rpi-bot-up`.
+RPI_BOT_VERSION ?= $(shell awk -F'"' '/^version = / {print $$2; exit}' telegram_bot/pyproject.toml)
+
+# Override files (docker-compose.*.override.yml) — gitignored, переживают
+# `git pull`. Если у пользователя есть локальная конфигурация, эти файлы
+# подмешиваются автоматически. Это стандартный compose-pattern для
+# окружения-специфичного config'а.
+RPI_OVERRIDE     := $(if $(wildcard docker-compose.rpi.override.yml),-f docker-compose.rpi.override.yml,)
+RPI_BOT_OVERRIDE := $(if $(wildcard docker-compose.bot.rpi.override.yml),-f docker-compose.bot.rpi.override.yml,)
+
+RPI_COMPOSE     := API_VERSION=$(RPI_API_VERSION) WEB_VERSION=$(RPI_WEB_VERSION) \
+                   docker compose -f docker-compose.rpi.yml $(RPI_OVERRIDE)
+RPI_BOT_COMPOSE := API_VERSION=$(RPI_API_VERSION) WEB_VERSION=$(RPI_WEB_VERSION) BOT_VERSION=$(RPI_BOT_VERSION) \
+                   docker compose -f docker-compose.rpi.yml $(RPI_OVERRIDE) \
+                                  -f docker-compose.bot.rpi.yml $(RPI_BOT_OVERRIDE)
 
 .PHONY: rpi-pull
-rpi-pull: ## Pull GHCR images for the pinned API/WEB_VERSION
+rpi-pull: ## Pull GHCR images for the pinned API/WEB_VERSION (без bot — см. rpi-bot-pull)
 	$(RPI_COMPOSE) pull
 
 .PHONY: rpi-up
@@ -126,6 +142,34 @@ rpi-down: ## Stop Pi stack (keeps volumes)
 .PHONY: rpi-logs
 rpi-logs: ## Tail Pi logs
 	$(RPI_COMPOSE) logs -f
+
+# ─── Pi: Telegram bot overlay ────────────────────────────────────────────────
+# Bot живёт в отдельном compose (docker-compose.bot.rpi.yml) — у него
+# обязательные WHISPER_BASE_URL / TELEGRAM_BOT_TOKEN / SERVICE_TOKEN, которые
+# не должны валидироваться при обычном `make rpi-update`. Все rpi-bot-*
+# таргеты сами подключают bot-overlay поверх основного rpi-compose.
+
+.PHONY: rpi-bot-pull
+rpi-bot-pull: ## Pull GHCR image for the pinned BOT_VERSION
+	$(RPI_BOT_COMPOSE) pull telegram-bot
+
+.PHONY: rpi-bot-up
+rpi-bot-up: ## Start telegram-bot on the Pi (detached); requires BOT_VERSION + .env с WHISPER/LLM URLs
+	$(RPI_BOT_COMPOSE) up -d telegram-bot
+
+.PHONY: rpi-bot-down
+rpi-bot-down: ## Stop telegram-bot (keeps main stack running)
+	$(RPI_BOT_COMPOSE) stop telegram-bot
+
+.PHONY: rpi-bot-logs
+rpi-bot-logs: ## Tail telegram-bot logs
+	$(RPI_BOT_COMPOSE) logs -f telegram-bot
+
+.PHONY: rpi-bot-update
+rpi-bot-update: ## git pull → rpi-bot-pull → rpi-bot-up (для обновления только бота)
+	git pull --ff-only
+	$(MAKE) rpi-bot-pull
+	$(MAKE) rpi-bot-up
 
 .PHONY: rpi-apk-fetch
 rpi-apk-fetch: ## Download signed APK for android/VERSION from GitHub Releases into ./apks/
