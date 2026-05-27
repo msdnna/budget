@@ -212,6 +212,14 @@ lint-android: ## Run ktlint + detekt on the Android app
 format-android: ## Auto-format Kotlin sources via ktlint
 	@$(ANDROID_GRADLE) :app:ktlintFormat
 
+.PHONY: lint-bot
+lint-bot: ## Run ruff on telegram_bot/ (via uvx — no venv needed)
+	cd telegram_bot && uvx ruff check src
+
+.PHONY: format-bot
+format-bot: ## Auto-format Python via ruff
+	cd telegram_bot && uvx ruff check --fix src && uvx ruff format src
+
 .PHONY: lint
 lint: ## Run all linters and produce reports/lint.html (uses tools/aggregate-reports.py)
 	@python3 tools/aggregate-reports.py lint

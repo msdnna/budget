@@ -125,8 +125,12 @@ class RemoteTranscriber:
         # Multipart upload — OpenAI's /audio/transcriptions takes a real
         # file part, not a base64 blob. Server-side decoders (ffmpeg /
         # pyav) handle the Telegram OGG/Opus container fine.
-        with open(audio_path, "rb") as f:
-            files = {"file": ("audio.ogg", f.read(), "audio/ogg")}
+        #
+        # `Path.read_bytes` is blocking — voice messages can be up to ~1 MB
+        # (Telegram caps at 64 MB anyway), so offload to a worker thread
+        # to keep the event loop responsive. Also satisfies ruff ASYNC230.
+        payload = await asyncio.to_thread(Path(audio_path).read_bytes)
+        files = {"file": ("audio.ogg", payload, "audio/ogg")}
         data = {"model": self._model, "language": self._language}
         r = await self._client.post(
             f"{self._base}/audio/transcriptions",
