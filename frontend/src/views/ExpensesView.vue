@@ -341,6 +341,8 @@
                   <SwipeableCard
                     v-for="row in store.items"
                     :key="row.id"
+                    :data-focus-id="row.id"
+                    :class="{ 'tx-card-focus': focusedId === row.id }"
                     :long-press-ms="bulkMode ? 0 : 1000"
                     :radius="3"
                     :reveal-left-width="canMobileDrAction(row) ? 96 : 0"
@@ -449,9 +451,43 @@
                             />
                           </div>
                           <div
-                            v-if="row.purpose || row.description || row.wishlist_id"
+                            v-if="
+                              row.purpose ||
+                              row.description ||
+                              row.wishlist_id ||
+                              row.parent_id ||
+                              row.detail_request_status === 'closed'
+                            "
                             class="tx-card-desc"
                           >
+                            <n-tag
+                              v-if="row.parent_id"
+                              size="small"
+                              round
+                              :bordered="false"
+                              style="cursor: pointer; margin-right: 4px"
+                              title="Перейти к родительской записи"
+                              @click.stop="goToParent(row)"
+                            >
+                              <template #icon>
+                                <n-icon :component="ArrowUpOutline" />
+                              </template>
+                              К родителю
+                            </n-tag>
+                            <n-tag
+                              v-else-if="row.detail_request_status === 'closed'"
+                              type="warning"
+                              size="small"
+                              round
+                              :bordered="false"
+                              style="margin-right: 4px"
+                              title="Родитель детализации (дочерние — записи с этим же цветом группы)"
+                            >
+                              <template #icon>
+                                <n-icon :component="GitMergeOutline" />
+                              </template>
+                              Детализировано
+                            </n-tag>
                             <n-tag
                               v-if="wishlistById.get(row.wishlist_id)"
                               type="info"
@@ -554,7 +590,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch, h } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted, watch, h } from 'vue'
 function toLocalDateString(ts) {
   const d = new Date(ts)
   const offset = d.getTimezoneOffset()
@@ -594,12 +630,14 @@ import {
 } from 'naive-ui'
 import {
   ArrowBackOutline,
+  ArrowUpOutline,
   CheckmarkOutline,
   CloseOutline,
   CopyOutline,
   EyeOffOutline,
   EyeOutline,
   FunnelOutline,
+  GitMergeOutline,
   LinkOutline,
   ListOutline,
   TrashOutline,
@@ -1037,9 +1075,93 @@ function getRowProps(row) {
 }
 
 function getRowClass(row) {
-  // Open-DR highlight wins — it's an actionable signal, not a passive group.
-  if (hasMyOpenRequest(row)) return ''
-  return groupClass(row) || ''
+  const cls = []
+  // Focus ring (parent-navigation target) layers on top of any group tint.
+  if (row.id === focusedId.value) cls.push('tx-row-focus')
+  // Open-DR highlight wins for the background — it's an actionable signal,
+  // not a passive group — so skip the group class then.
+  if (!hasMyOpenRequest(row)) {
+    const g = groupClass(row)
+    if (g) cls.push(g)
+  }
+  return cls.join(' ')
+}
+
+// ── Parent-navigation: jump from a detail-request child to its (hidden by
+// default) closed-DR parent. We flip the «показать детализированные» toggle so
+// the parent row materializes, wait for the refetch, then focus + scroll it.
+const focusedId = ref('')
+
+async function waitForListIdle() {
+  await nextTick()
+  for (let i = 0; i < 60 && store.loading; i++) {
+    await new Promise((r) => setTimeout(r, 40))
+  }
+}
+
+async function focusRowById(id) {
+  focusedId.value = id
+  await nextTick()
+  await new Promise((r) => setTimeout(r, 60))
+  // Mobile cards carry `data-focus-id`; desktop rows get the `.tx-row-focus`
+  // class. Try the card first, fall back to the table row.
+  const el =
+    document.querySelector(`[data-focus-id="${id}"]`) ||
+    document.querySelector('.n-data-table-tr.tx-row-focus')
+  el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+}
+
+async function goToParent(row) {
+  if (!row.parent_id) return
+  if (!showDetailed.value) {
+    showDetailed.value = true
+    applyFilters()
+    await waitForListIdle()
+  }
+  await focusRowById(row.parent_id)
+}
+
+// Render the group-role badge for the description column: a clickable
+// «↑ к родителю» on detail-request children, a static «Детализировано» marker
+// on the (closed) parent so the two are tellable apart.
+function groupRoleTag(row) {
+  if (row.parent_id) {
+    return h(
+      NTag,
+      {
+        size: 'small',
+        round: true,
+        bordered: false,
+        style: 'cursor:pointer',
+        title: 'Перейти к родительской записи',
+        onClick: (e) => {
+          e.stopPropagation()
+          goToParent(row)
+        },
+      },
+      {
+        icon: () => h(NIcon, null, { default: () => h(ArrowUpOutline) }),
+        default: () => 'К родителю',
+      },
+    )
+  }
+  if (row.detail_request_status === 'closed' && !row.parent_id) {
+    return h(
+      NTag,
+      {
+        type: 'warning',
+        size: 'small',
+        round: true,
+        bordered: false,
+        title: 'Родитель детализации (дочерние — записи с этим же цветом группы)',
+      },
+      {
+        icon: () => h(NIcon, null, { default: () => h(GitMergeOutline) }),
+        default: () => 'Детализировано',
+      },
+    )
+  }
+  return null
 }
 
 const myOpenRequestParentIds = computed(
@@ -1601,9 +1723,11 @@ const columns = computed(() => {
       ...(compact ? { ellipsis: { tooltip: true } } : {}),
       render: (row) => {
         const linkedTag = linkedWishlistTag(row)
-        const descNode = linkedTag
+        const roleTag = groupRoleTag(row)
+        const extras = [roleTag, linkedTag].filter(Boolean)
+        const descNode = extras.length
           ? h('div', { style: 'display:flex;flex-direction:column;gap:4px;min-width:0' }, [
-              linkedTag,
+              ...extras,
               row.description
                 ? plainTextCell(row.description, 'opacity:0.85;font-size:12px')
                 : null,
@@ -1929,42 +2053,83 @@ watch(
   user-select: none;
 }
 
-/* Group tint backgrounds — mirror IncomeView. */
-:deep(.n-data-table-tr.tx-grp-0 > .n-data-table-td) {
-  background: #b39ddb22;
+/* Group tint backgrounds — mirror IncomeView.
+   Each group class sets an RGB triplet var on the row; a single shared rule
+   paints the cells. Hover keeps the SAME tint (just a touch stronger) instead
+   of swapping to Naive's grey hover bg — that abrupt swap read as a "blink"
+   when moving the cursor across a group. A transition smooths it further. */
+:deep(.n-data-table-tr.tx-grp-0) {
+  --grp: 179, 157, 219;
 }
-:deep(.n-data-table-tr.tx-grp-1 > .n-data-table-td) {
-  background: #ffb74d22;
+:deep(.n-data-table-tr.tx-grp-1) {
+  --grp: 255, 183, 77;
 }
-:deep(.n-data-table-tr.tx-grp-2 > .n-data-table-td) {
-  background: #81c78422;
+:deep(.n-data-table-tr.tx-grp-2) {
+  --grp: 129, 199, 132;
 }
-:deep(.n-data-table-tr.tx-grp-3 > .n-data-table-td) {
-  background: #4fc3f722;
+:deep(.n-data-table-tr.tx-grp-3) {
+  --grp: 79, 195, 247;
 }
-:deep(.n-data-table-tr.tx-grp-4 > .n-data-table-td) {
-  background: #e5737322;
+:deep(.n-data-table-tr.tx-grp-4) {
+  --grp: 229, 115, 115;
 }
-:deep(.n-data-table-tr.tx-grp-5 > .n-data-table-td) {
-  background: #ffd54f22;
+:deep(.n-data-table-tr.tx-grp-5) {
+  --grp: 255, 213, 79;
 }
-:deep(.n-data-table-tr.tx-grp-6 > .n-data-table-td) {
-  background: #a1887f22;
+:deep(.n-data-table-tr.tx-grp-6) {
+  --grp: 161, 136, 127;
 }
-:deep(.n-data-table-tr.tx-grp-7 > .n-data-table-td) {
-  background: #f0629222;
+:deep(.n-data-table-tr.tx-grp-7) {
+  --grp: 240, 98, 146;
 }
-:deep(.n-data-table-tr.tx-grp-8 > .n-data-table-td) {
-  background: #7986cb22;
+:deep(.n-data-table-tr.tx-grp-8) {
+  --grp: 121, 134, 203;
 }
-:deep(.n-data-table-tr.tx-grp-9 > .n-data-table-td) {
-  background: #aed58122;
+:deep(.n-data-table-tr.tx-grp-9) {
+  --grp: 174, 213, 129;
 }
-:deep(.n-data-table-tr.tx-grp-10 > .n-data-table-td) {
-  background: #4dd0e122;
+:deep(.n-data-table-tr.tx-grp-10) {
+  --grp: 77, 208, 225;
 }
-:deep(.n-data-table-tr.tx-grp-11 > .n-data-table-td) {
-  background: #ff8a6522;
+:deep(.n-data-table-tr.tx-grp-11) {
+  --grp: 255, 138, 101;
+}
+:deep(.n-data-table-tr[class*='tx-grp-'] > .n-data-table-td) {
+  background: rgba(var(--grp), 0.13);
+  transition: background-color 0.18s ease;
+}
+:deep(.n-data-table-tr[class*='tx-grp-']:hover > .n-data-table-td) {
+  background: rgba(var(--grp), 0.24);
+}
+
+/* Parent-navigation focus ring — a single 1px border around the whole row
+   (no per-cell verticals). Top+bottom on every cell form the long edges;
+   left only on the first cell, right only on the last. Inset box-shadow → no
+   layout shift. Border colour = theme primary; the group tint background is
+   preserved (we only ring the row, не перекрашиваем фон). */
+:deep(.n-data-table-tr.tx-row-focus > .n-data-table-td) {
+  box-shadow:
+    inset 0 1px 0 v-bind(primaryColor),
+    inset 0 -1px 0 v-bind(primaryColor);
+}
+:deep(.n-data-table-tr.tx-row-focus > .n-data-table-td:first-child) {
+  box-shadow:
+    inset 0 1px 0 v-bind(primaryColor),
+    inset 0 -1px 0 v-bind(primaryColor),
+    inset 1px 0 0 v-bind(primaryColor);
+}
+:deep(.n-data-table-tr.tx-row-focus > .n-data-table-td:last-child) {
+  box-shadow:
+    inset 0 1px 0 v-bind(primaryColor),
+    inset 0 -1px 0 v-bind(primaryColor),
+    inset -1px 0 0 v-bind(primaryColor);
+}
+
+/* Mobile card focus — outer 1px primary ring around the opaque card (inset
+   wouldn't show through its background); group tint of the card is preserved. */
+.tx-card-focus {
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px v-bind(primaryColor);
 }
 
 .swipe-action {

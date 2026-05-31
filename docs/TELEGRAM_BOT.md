@@ -365,6 +365,32 @@ make bot-up
 - `make bot-up` подгружает `.env` вручную через `set -a; . ./.env; set +a`
   — если запускаешь руками, делай так же либо `export HTTPS_PROXY=...`
 
+### NO_PROXY: httpx не понимает CIDR
+
+Если бот ходит к LLM/Whisper по LAN-IP (например `http://192.168.x.x:8001/v1`)
+и при этом `HTTPS_PROXY` задан — проверь, что в `NO_PROXY` есть **конкретный
+IP** этого хоста. Python httpx (и urllib3 под капотом) **не поддерживает
+CIDR-нотацию** типа `192.168.0.0/16` — она работает только в curl, Docker
+BuildKit, Go и подобных. См.
+[encode/httpx#3024](https://github.com/encode/httpx/issues/3024).
+
+Симптом: `RuntimeError: remote whisper 503: ` в логах бота, а в логах самого
+whisper/llama.cpp **никаких** входящих запросов. Прокси перехватил запрос и
+отдал 503.
+
+Фикс — дополни `NO_PROXY` в `.env`:
+
+```env
+# Было:
+NO_PROXY=localhost,127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+
+# Стало (добавлен явный IP десктопа с LLM/Whisper):
+NO_PROXY=localhost,127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,192.168.100.117
+```
+
+CIDR-блок оставь для других потребителей (Docker pull через прокси и т.п.),
+но обязательно положи конкретный IP.
+
 ### Compose env priority
 
 `docker compose` берёт переменные из shell с приоритетом над `.env`. Если в

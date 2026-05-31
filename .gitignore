@@ -34,6 +34,8 @@ telegram_bot/**/*.pyc
 telegram_bot/**/*.pyo
 telegram_bot/.pytest_cache/
 telegram_bot/.ruff_cache/
+telegram_bot/**/*.egg-info/
+telegram_bot/uv.lock
 
 # ─── Docs site build (MkDocs) ───────────────────────────────────────────────
 site/

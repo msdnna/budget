@@ -26,6 +26,7 @@ const TABS = [
   { key: 'settings/categories', label: 'Категории', adminOnly: true },
   { key: 'settings/users', label: 'Пользователи', adminOnly: true },
   { key: 'settings/glossary', label: 'Глоссарий', adminOnly: true },
+  { key: 'settings/intent-triggers', label: 'Триггеры бота', adminOnly: true },
   { key: 'settings/portability', label: 'Импорт/экспорт', adminOnly: true },
   { key: 'settings/telegram', label: 'Telegram', adminOnly: false },
 ]
@@ -72,9 +73,23 @@ const cssVars = computed(() => ({
   border-radius: 3px;
   padding: 6px;
   margin-bottom: 12px;
+  /* На узком экране вкладок больше, чем влезает — полоса скроллится
+     горизонтально вместо переноса/сжатия. Скроллбар прячем: свайп —
+     привычный паттерн для tab-strip. */
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.settings-tabs::-webkit-scrollbar {
+  display: none;
 }
 .settings-tab {
-  flex: 1 1 0;
+  /* grow=1 → на десктопе вкладки заполняют ширину; shrink=0 + nowrap →
+     на мобиле не сжимаются и не переносятся, текст всегда в одну строку,
+     лишнее уходит в горизонтальный скролл. */
+  flex: 1 0 auto;
+  white-space: nowrap;
   border: 0;
   background: transparent;
   color: var(--st-text2);

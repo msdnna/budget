@@ -34,11 +34,12 @@ func generateLinkCode() (string, error) {
 }
 
 type TelegramHandler struct {
-	repo         *repository.TelegramRepository
-	userRepo     *repository.UserRepository
-	catRepo      *repository.CategoryRepository
-	txRepo       *repository.TransactionRepository
-	glossaryRepo *repository.GlossaryRepository
+	repo           *repository.TelegramRepository
+	userRepo       *repository.UserRepository
+	catRepo        *repository.CategoryRepository
+	txRepo         *repository.TransactionRepository
+	glossaryRepo   *repository.GlossaryRepository
+	intentTrigRepo *repository.IntentTriggerRepository
 }
 
 func NewTelegramHandler(
@@ -47,13 +48,15 @@ func NewTelegramHandler(
 	catRepo *repository.CategoryRepository,
 	txRepo *repository.TransactionRepository,
 	glossaryRepo *repository.GlossaryRepository,
+	intentTrigRepo *repository.IntentTriggerRepository,
 ) *TelegramHandler {
 	return &TelegramHandler{
-		repo:         repo,
-		userRepo:     userRepo,
-		catRepo:      catRepo,
-		txRepo:       txRepo,
-		glossaryRepo: glossaryRepo,
+		repo:           repo,
+		userRepo:       userRepo,
+		catRepo:        catRepo,
+		txRepo:         txRepo,
+		glossaryRepo:   glossaryRepo,
+		intentTrigRepo: intentTrigRepo,
 	}
 }
 
@@ -206,11 +209,19 @@ func (h *TelegramHandler) Context(c *gin.Context) {
 	// gets an empty list.
 	cps, _ := h.txRepo.AggregateUserCounterparties(c.Request.Context(), userID, 50)
 
+	// Intent triggers — admin-tuned phrases for the bot's intent classifier.
+	// Non-fatal: bot falls back to its built-in defaults on an empty map.
+	var triggers map[string][]string
+	if h.intentTrigRepo != nil {
+		triggers, _ = h.intentTrigRepo.AsMap(c.Request.Context())
+	}
+
 	resp := models.TelegramContextResponse{
 		Expense:        toContextCategories(expCats),
 		Income:         toContextCategories(incCats),
 		Glossary:       toContextGlossary(gloss),
 		Counterparties: toContextCounterparties(cps),
+		IntentTriggers: triggers,
 	}
 	c.JSON(http.StatusOK, resp)
 }

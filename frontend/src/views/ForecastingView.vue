@@ -889,6 +889,9 @@ import { historyOptions, pushHistory } from '@/utils/inputHistory'
 
 const themeStore = useThemeStore()
 const { primaryColor, onPrimaryColor, palette } = storeToRefs(themeStore)
+// Soft primary fill for the link-focus row (8-digit hex → ~12% alpha). Bound
+// into scoped CSS via v-bind so it tracks theme changes.
+const focusBg = computed(() => `${primaryColor.value}1f`)
 
 // ── Mobile tabs (Аналитика / Регулярные / Желания) ───────────────
 // На десктопе все 3 секции видны в общем потоке — табы лишь для мобильных.
@@ -1033,6 +1036,10 @@ function onForecastBulkLongPress(kind, id) {
 // тап по второй карточке в bulk-режиме открывал edit вместо добавления
 // её в выбор.
 function onForecastTap(kind, item) {
+  // Ignore the ghost click that lands right after a link-nav focus (see
+  // tapSuppressUntil) — otherwise it immediately opens the focused card's
+  // edit sheet, which reads as a stray "double click".
+  if (Date.now() < tapSuppressUntil) return
   if (kind === 'regular') {
     if (regularBulkMode.value) {
       toggleRegularSelect(item.id)
@@ -2538,7 +2545,10 @@ const forecastCategoryMeta = computed(() => {
 //   3) Подсвечиваем строку через row-class на 2.5с (CSS — `.fc-row-focus`).
 const route = useRoute()
 const focusedId = ref('')
-let focusClearTimer = null
+// Tap-suppression window: after a link-nav focus, the device dispatches a
+// synthetic "ghost" click at the tap coordinates onto the freshly-rendered
+// Forecast card, which would open its edit sheet. Ignore taps until this ts.
+let tapSuppressUntil = 0
 
 async function focusForecastItem(id) {
   if (!id) return
@@ -2552,16 +2562,15 @@ async function focusForecastItem(id) {
     activeTab.value = isRegular ? 'regular' : 'wishlist'
   }
   focusedId.value = id
-  // Scroll the matching row/card into view after the next paint.
+  // Swallow the cross-navigation ghost click that follows the tap on the
+  // source link tag (see tapSuppressUntil).
+  tapSuppressUntil = Date.now() + 700
+  // Scroll the matching row/card into view after the next paint. Highlight is
+  // persistent (no auto-clear) so the user keeps the found item in view.
   await new Promise((r) => setTimeout(r, 50))
   const el =
     document.querySelector(`[data-focus-id="${id}"]`) || document.querySelector(`.fc-row-focus`)
   el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-  if (focusClearTimer) clearTimeout(focusClearTimer)
-  focusClearTimer = setTimeout(() => {
-    focusedId.value = ''
-    focusClearTimer = null
-  }, 2500)
 }
 
 function getRegularRowClass(row) {
@@ -2604,9 +2613,18 @@ watch(
   border-radius: 3px;
   padding: 4px;
   margin-bottom: 12px;
+  /* Горизонтальный скролл вместо переноса/сжатия — как в `.settings-tabs`. */
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.forecast-tabs::-webkit-scrollbar {
+  display: none;
 }
 .forecast-tab {
-  flex: 1 1 0;
+  flex: 1 0 auto;
+  white-space: nowrap;
   border: 0;
   background: transparent;
   color: var(--st-text2);
@@ -2785,27 +2803,36 @@ watch(
   background: v-bind('primaryColor + "1f"');
 }
 
-/* «Фокус» — подсветка целевой строки/карточки на 2.5с после прихода с
-   /forecast?focus=<id>. Жёлто-оранжевая обводка + лёгкий фон, чтобы юзер
-   сразу нашёл итем глазами. Затухает через @keyframes; элемент остаётся
-   нормальным после `focusedId` reset.
-   Анимация одноразовая на маунте (animation-fill-mode forwards), без
-   loop — повторный приход с тем же id сработает через :class re-toggle. */
-@keyframes fc-focus-flash {
-  0% {
-    background: rgba(240, 160, 32, 0.32);
-    box-shadow: 0 0 0 2px rgba(240, 160, 32, 0.6) inset;
-  }
-  100% {
-    background: transparent;
-    box-shadow: 0 0 0 2px transparent inset;
-  }
-}
+/* «Фокус» — подсветка целевой строки/карточки после прихода с
+   /forecast?focus=<id>. Тонкая (1px) жёлто-оранжевая обводка + лёгкий фон.
+   Подсветка стойкая (не затухает) — держится пока `focusedId` установлен,
+   чтобы юзер не терял найденный итем из виду. На десктопе — inset-обводка по
+   ячейкам; на мобиле — внешнее кольцо вокруг непрозрачной карточки (inset не
+   видно из-за её фона), чтобы подсветка вообще проявилась. */
+/* Single 1px border around the whole row (no per-cell verticals): top+bottom
+   on every cell + left on the first cell, right on the last — mirrors the
+   Income/Expenses parent-focus ring. Colour = theme primary; these forecast
+   items have no group tint so a soft primary fill is fine. */
 .forecast-split :deep(.n-data-table-tr.fc-row-focus > .n-data-table-td) {
-  animation: fc-focus-flash 2.5s ease-out forwards;
+  background: v-bind(focusBg);
+  box-shadow:
+    inset 0 1px 0 v-bind(primaryColor),
+    inset 0 -1px 0 v-bind(primaryColor);
+}
+.forecast-split :deep(.n-data-table-tr.fc-row-focus > .n-data-table-td:first-child) {
+  box-shadow:
+    inset 0 1px 0 v-bind(primaryColor),
+    inset 0 -1px 0 v-bind(primaryColor),
+    inset 1px 0 0 v-bind(primaryColor);
+}
+.forecast-split :deep(.n-data-table-tr.fc-row-focus > .n-data-table-td:last-child) {
+  box-shadow:
+    inset 0 1px 0 v-bind(primaryColor),
+    inset 0 -1px 0 v-bind(primaryColor),
+    inset -1px 0 0 v-bind(primaryColor);
 }
 .fc-card-focus {
-  animation: fc-focus-flash 2.5s ease-out forwards;
-  border-radius: 6px;
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px v-bind(primaryColor);
 }
 </style>

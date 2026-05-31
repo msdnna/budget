@@ -153,6 +153,14 @@ export const glossary = {
   remove: (id) => api.delete(`/glossary/${id}`),
 }
 
+// Telegram-bot intent trigger phrases (per-intent). List is open to any authed
+// user; updates are admin-only. `update` replaces the whole phrase list for an
+// intent (PUT semantics).
+export const intentTriggers = {
+  list: () => api.get('/intent-triggers'),
+  update: (intent, phrases) => api.put(`/intent-triggers/${intent}`, { phrases }),
+}
+
 export const icons = {
   list: () => api.get('/icons'),
   upload: (file) => {

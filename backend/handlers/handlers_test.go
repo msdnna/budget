@@ -64,6 +64,7 @@ func newFixture(t *testing.T) *fixture {
 	notifRepo := repository.NewNotificationRepository(db)
 	tgRepo := repository.NewTelegramRepository(db)
 	glossaryRepo := repository.NewGlossaryRepository(db)
+	intentTriggerRepo := repository.NewIntentTriggerRepository(db)
 
 	// Seed a real user with bcrypt-hashed password so /auth/login round-trips.
 	hash, err := bcrypt.GenerateFromPassword([]byte("hunter2"), bcrypt.MinCost)
@@ -89,7 +90,7 @@ func newFixture(t *testing.T) *fixture {
 	drH := handlers.NewDetailRequestHandler(drRepo, txRepo, userRepo)
 	limitsH := handlers.NewLimitsHandler(catRepo, txRepo)
 	notifH := handlers.NewNotificationHandler(notifRepo)
-	tgH := handlers.NewTelegramHandler(tgRepo, userRepo, catRepo, txRepo, glossaryRepo)
+	tgH := handlers.NewTelegramHandler(tgRepo, userRepo, catRepo, txRepo, glossaryRepo, intentTriggerRepo)
 	glossaryH := handlers.NewGlossaryHandler(glossaryRepo)
 	txH.SetLimitChecker(handlers.NewLimitChecker(catRepo, txRepo, notifRepo))
 

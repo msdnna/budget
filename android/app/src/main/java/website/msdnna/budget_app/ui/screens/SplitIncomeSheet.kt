@@ -39,6 +39,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import java.util.Locale
 import kotlin.math.abs
 import kotlinx.coroutines.launch
 import website.msdnna.budget_app.data.model.SplitPart
@@ -266,7 +267,10 @@ private fun formatAmountInput(v: Double): String {
     return if (rounded == rounded.toInt().toDouble()) {
         rounded.toInt().toString()
     } else {
-        "%.2f".format(rounded)
+        // Locale.US → always a dot decimal separator. The RU locale would emit
+        // a comma here, which `toDoubleOrNull()` (used for the sum) can't parse,
+        // so an auto-balanced row would count as 0 until the user re-typed it.
+        "%.2f".format(Locale.US, rounded)
     }
 }
 

@@ -7,6 +7,7 @@ import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
@@ -37,6 +38,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
@@ -887,6 +889,13 @@ private fun SwipeableRegularItemCard(
             animationSpec = tween(durationMillis = 220),
             label = "regBg",
         )
+        // Dim the card content while selected so the SelectionOverlay check-
+        // circle reads clearly (matches SwipeableTransactionCard).
+        val contentDimAlpha by animateFloatAsState(
+            targetValue = if (selected) 0.4f else 1f,
+            animationSpec = tween(durationMillis = 220),
+            label = "selDim",
+        )
 
         val cardBaseModifier = Modifier
             .fillMaxWidth()
@@ -936,7 +945,10 @@ private fun SwipeableRegularItemCard(
             colors = CardDefaults.cardColors(containerColor = animatedBg)
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp).fillMaxWidth(),
+                modifier = Modifier
+                    .alpha(contentDimAlpha)
+                    .padding(horizontal = 12.dp, vertical = 10.dp)
+                    .fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -1211,6 +1223,12 @@ fun SwipeableWishlistCard(
             animationSpec = tween(durationMillis = 260),
             label = "wlCardBg",
         )
+        // Dim content while selected so the SelectionOverlay check-circle pops.
+        val contentDimAlpha by animateFloatAsState(
+            targetValue = if (selected) 0.4f else 1f,
+            animationSpec = tween(durationMillis = 220),
+            label = "selDim",
+        )
         // Dynamic corners — same pattern as SwipeableTransactionCard;
         // ×6 multiplier flattens the corner before the rail-through-corner
         // sliver becomes visible. For recurring items the left reveal is
@@ -1236,7 +1254,10 @@ fun SwipeableWishlistCard(
             colors = CardDefaults.cardColors(containerColor = animatedBg)
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp).fillMaxWidth(),
+                modifier = Modifier
+                    .alpha(contentDimAlpha)
+                    .padding(horizontal = 12.dp, vertical = 10.dp)
+                    .fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
