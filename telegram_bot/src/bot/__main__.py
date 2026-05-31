@@ -9,6 +9,7 @@ from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.enums import ParseMode
 
 from .api_client import BudgetAPI
+from .commands import setup_bot_commands
 from .config import get_settings
 from .handlers import router
 from .llm_client import make_llm_client
@@ -62,6 +63,15 @@ async def main() -> None:
     dp["llm"] = llm
     dp["llm_model"] = settings.llm_model
     dp["whisper"] = whisper
+
+    # Publish the «/» autocomplete menu + commands menu-button before polling.
+    # Non-fatal: a transient Telegram error here shouldn't block message
+    # handling, so we log and continue.
+    try:
+        await setup_bot_commands(bot)
+        log.info("bot commands menu published")
+    except Exception:
+        log.exception("failed to publish bot commands menu")
 
     try:
         await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())

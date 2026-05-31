@@ -635,6 +635,7 @@ const currentTitle = computed(() => {
     'settings/users': 'Настройки · Пользователи',
     'settings/portability': 'Настройки · Импорт/экспорт',
     'settings/glossary': 'Настройки · Глоссарий',
+    'settings/intent-triggers': 'Настройки · Триггеры бота',
     'settings/telegram': 'Настройки · Telegram',
   }
   return map[activeKey.value] ?? 'Статистика'
@@ -668,6 +669,7 @@ const menuOptions = computed(() => {
       { label: 'Категории', key: 'settings/categories' },
       { label: 'Пользователи', key: 'settings/users' },
       { label: 'Глоссарий', key: 'settings/glossary' },
+      { label: 'Триггеры бота', key: 'settings/intent-triggers' },
       { label: 'Импорт/экспорт', key: 'settings/portability' },
     )
   }

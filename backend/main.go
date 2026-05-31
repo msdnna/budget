@@ -60,6 +60,7 @@ func main() {
 	notifRepo := repository.NewNotificationRepository(db)
 	tgRepo := repository.NewTelegramRepository(db)
 	glossaryRepo := repository.NewGlossaryRepository(db)
+	intentTriggerRepo := repository.NewIntentTriggerRepository(db)
 
 	seedCtx, seedCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer seedCancel()
@@ -68,6 +69,9 @@ func main() {
 	}
 	if err := userRepo.EnsureAdmin(seedCtx); err != nil {
 		log.Printf("Warning: failed to bootstrap admin user: %v", err)
+	}
+	if err := intentTriggerRepo.EnsureDefaults(seedCtx); err != nil {
+		log.Printf("Warning: failed to seed default intent triggers: %v", err)
 	}
 
 	txHandler := handlers.NewTransactionHandler(txRepo)
@@ -87,8 +91,9 @@ func main() {
 	txHandler.SetLimitChecker(limitChecker)
 	setupHandler := handlers.NewSetupHandler(userRepo, authHandler)
 	portabilityHandler := handlers.NewPortabilityHandler(db, userRepo)
-	tgHandler := handlers.NewTelegramHandler(tgRepo, userRepo, catRepo, txRepo, glossaryRepo)
+	tgHandler := handlers.NewTelegramHandler(tgRepo, userRepo, catRepo, txRepo, glossaryRepo, intentTriggerRepo)
 	glossaryHandler := handlers.NewGlossaryHandler(glossaryRepo)
+	intentTriggerHandler := handlers.NewIntentTriggerHandler(intentTriggerRepo)
 
 	r := gin.Default()
 	if err := r.SetTrustedProxies([]string{"127.0.0.1", "::1"}); err != nil {
@@ -217,6 +222,10 @@ func main() {
 			// it in Settings); mutations are admin-only (registered in the
 			// admin group above).
 			protected.GET("/glossary", glossaryHandler.List)
+
+			// Intent-triggers — same split as glossary: read open to any
+			// authed user, update admin-only (registered below).
+			protected.GET("/intent-triggers", intentTriggerHandler.List)
 		}
 
 		// Glossary mutations sit under the admin group registered earlier,
@@ -229,6 +238,8 @@ func main() {
 			adminTuning.POST("/glossary", glossaryHandler.Create)
 			adminTuning.PATCH("/glossary/:id", glossaryHandler.Update)
 			adminTuning.DELETE("/glossary/:id", glossaryHandler.Delete)
+
+			adminTuning.PUT("/intent-triggers/:intent", intentTriggerHandler.Update)
 		}
 	}
 

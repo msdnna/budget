@@ -579,6 +579,20 @@ components:
         updated_at:
           type: string
       type: object
+    models.IntentTrigger:
+      properties:
+        id:
+          type: string
+        intent:
+          type: string
+        phrases:
+          items:
+            type: string
+          type: array
+          uniqueItems: false
+        updated_at:
+          type: string
+      type: object
     models.LoginRequest:
       properties:
         login:
@@ -882,6 +896,15 @@ components:
             $ref: '#/components/schemas/models.TelegramContextCategory'
           type: array
           uniqueItems: false
+        intent_triggers:
+          additionalProperties:
+            items:
+              type: string
+            type: array
+          description: |-
+            IntentTriggers maps an intent name to admin-tuned trigger phrases for
+            the bot's classifier. Only intents with ≥1 phrase are present.
+          type: object
       type: object
     models.TelegramLink:
       properties:
@@ -1022,6 +1045,14 @@ components:
           type: string
         term:
           type: string
+      type: object
+    models.UpdateIntentTriggerRequest:
+      properties:
+        phrases:
+          items:
+            type: string
+          type: array
+          uniqueItems: false
       type: object
     models.UpdateTransactionRequest:
       properties:
@@ -2563,6 +2594,83 @@ paths:
       summary: Отдать пользовательскую иконку (raw bytes)
       tags:
       - icons
+  /intent-triggers:
+    get:
+      description: Per-intent списки фраз-подсказок для классификатора бота. Возвращает
+        все известные намерения (пустой список если фраз нет). Читать может любой
+        авторизованный, менять — только админ.
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/models.IntentTrigger'
+                type: array
+          description: OK
+        "401":
+          content:
+            application/json:
+              schema:
+                additionalProperties:
+                  type: string
+                type: object
+          description: Unauthorized
+      security:
+      - BearerAuth: []
+      summary: Список intent-триггеров telegram-бота
+      tags:
+      - intent-triggers
+  /intent-triggers/{intent}:
+    put:
+      description: Полная замена списка фраз для одного намерения. Фразы триммятся
+        и дедупятся на бэкенде. Бот мерджит их аддитивно поверх встроенных дефолтов.
+      parameters:
+      - description: Намерение (wishlist|recurring_payment|link_existing|detail_request)
+        in: path
+        name: intent
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              oneOf:
+              - type: object
+              - $ref: '#/components/schemas/models.UpdateIntentTriggerRequest'
+                description: Список фраз
+                summary: body
+        description: Список фраз
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.IntentTrigger'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                additionalProperties:
+                  type: string
+                type: object
+          description: Bad Request
+        "401":
+          content:
+            application/json:
+              schema:
+                additionalProperties:
+                  type: string
+                type: object
+          description: Unauthorized
+      security:
+      - BearerAuth: []
+      summary: Заменить фразы-триггеры намерения (admin)
+      tags:
+      - intent-triggers
   /notifications:
     get:
       description: Каждое уведомление — family-wide; флаг `read` — per-user (учитывается,

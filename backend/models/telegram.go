@@ -76,4 +76,7 @@ type TelegramContextResponse struct {
 	Income         []TelegramContextCategory     `json:"income"`
 	Glossary       []TelegramContextGlossary     `json:"glossary"`
 	Counterparties []TelegramContextCounterparty `json:"counterparties"`
+	// IntentTriggers maps an intent name to admin-tuned trigger phrases for
+	// the bot's classifier. Only intents with ≥1 phrase are present.
+	IntentTriggers map[string][]string `json:"intent_triggers,omitempty"`
 }

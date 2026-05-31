@@ -49,6 +49,11 @@ const routes = [
     component: () => import('@/views/SettingsGlossaryView.vue'),
     meta: { title: 'Глоссарий', adminOnly: true },
   },
+  {
+    path: '/settings/intent-triggers',
+    component: () => import('@/views/SettingsIntentTriggersView.vue'),
+    meta: { title: 'Триггеры бота', adminOnly: true },
+  },
   // Default settings landing depends on role — admins see the
   // categories tab, regular users land directly on Telegram (the only
   // tab they can access).

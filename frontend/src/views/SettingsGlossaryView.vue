@@ -55,7 +55,11 @@
                   @positive-click="remove(row)"
                 >
                   <template #trigger>
-                    <n-button size="tiny" quaternary type="error">×</n-button>
+                    <n-button size="small" quaternary type="error" :title="`Удалить «${row.term}»`">
+                      <template #icon>
+                        <n-icon :component="TrashOutline" />
+                      </template>
+                    </n-button>
                   </template>
                   Удалить «{{ row.term }}»?
                 </n-popconfirm>
@@ -104,7 +108,18 @@
 
 <script setup>
 import { onMounted, ref } from 'vue'
-import { NButton, NCard, NInput, NPopconfirm, NSpin, NTable, NText, useMessage } from 'naive-ui'
+import {
+  NButton,
+  NCard,
+  NIcon,
+  NInput,
+  NPopconfirm,
+  NSpin,
+  NTable,
+  NText,
+  useMessage,
+} from 'naive-ui'
+import { TrashOutline } from '@vicons/ionicons5'
 import { glossary as glossaryApi } from '@/api'
 
 const message = useMessage()

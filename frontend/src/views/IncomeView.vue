@@ -333,6 +333,8 @@
                   <SwipeableCard
                     v-for="row in store.items"
                     :key="row.id"
+                    :data-focus-id="row.id"
+                    :class="{ 'tx-card-focus': focusedId === row.id }"
                     :long-press-ms="bulkMode ? 0 : 1000"
                     :radius="3"
                     :reveal-left-width="canMobileSplitAction(row) ? 96 : 0"
@@ -445,7 +447,43 @@
                               :size="14"
                             />
                           </div>
-                          <div v-if="row.source || row.description" class="tx-card-desc">
+                          <div
+                            v-if="
+                              row.source ||
+                              row.description ||
+                              row.parent_id ||
+                              (row.excluded_from_stats && !row.detail_request_status)
+                            "
+                            class="tx-card-desc"
+                          >
+                            <n-tag
+                              v-if="row.parent_id"
+                              size="small"
+                              round
+                              :bordered="false"
+                              style="cursor: pointer; margin-right: 4px"
+                              title="Перейти к родительской записи"
+                              @click.stop="goToParent(row)"
+                            >
+                              <template #icon>
+                                <n-icon :component="ArrowUpOutline" />
+                              </template>
+                              К родителю
+                            </n-tag>
+                            <n-tag
+                              v-else-if="row.excluded_from_stats && !row.detail_request_status"
+                              type="warning"
+                              size="small"
+                              round
+                              :bordered="false"
+                              style="margin-right: 4px"
+                              title="Родитель разделения (дочерние — записи с этим же цветом группы)"
+                            >
+                              <template #icon>
+                                <n-icon :component="GitMergeOutline" />
+                              </template>
+                              Разделено
+                            </n-tag>
                             {{ [row.source, row.description].filter(Boolean).join(' · ') }}
                           </div>
                         </div>
@@ -570,7 +608,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch, h } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted, watch, h } from 'vue'
 import { useRoute } from 'vue-router'
 function toLocalDateString(ts) {
   const d = new Date(ts)
@@ -639,7 +677,7 @@ import { users as usersApi, transactions as txApi } from '@/api'
 import { useAdaptiveTable, plainTextCell, renderActionsRow } from '@/utils/adaptiveTable'
 import SplitIncomeModal from '@/components/SplitIncomeModal.vue'
 import { groupClass, groupSolidBg } from '@/utils/groupColor'
-import { GitMergeOutline } from '@vicons/ionicons5'
+import { ArrowUpOutline, GitMergeOutline } from '@vicons/ionicons5'
 
 const store = useTransactionsStore('income')
 const { palette, valuesHidden, primaryColor } = storeToRefs(useThemeStore())
@@ -1046,7 +1084,86 @@ function getRowProps(row) {
 }
 
 function getRowClass(row) {
-  return groupClass(row) || ''
+  const cls = []
+  if (row.id === focusedId.value) cls.push('tx-row-focus')
+  const g = groupClass(row)
+  if (g) cls.push(g)
+  return cls.join(' ')
+}
+
+// ── Parent-navigation: jump from a split child to its split parent (hidden by
+// default). Flip «показать разделённые», wait for the refetch, focus + scroll.
+const focusedId = ref('')
+
+async function waitForListIdle() {
+  await nextTick()
+  for (let i = 0; i < 60 && store.loading; i++) {
+    await new Promise((r) => setTimeout(r, 40))
+  }
+}
+
+async function focusRowById(id) {
+  focusedId.value = id
+  await nextTick()
+  await new Promise((r) => setTimeout(r, 60))
+  // Mobile cards carry `data-focus-id`; desktop rows get `.tx-row-focus`.
+  const el =
+    document.querySelector(`[data-focus-id="${id}"]`) ||
+    document.querySelector('.n-data-table-tr.tx-row-focus')
+  el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+}
+
+async function goToParent(row) {
+  if (!row.parent_id) return
+  if (!showSplit.value) {
+    showSplit.value = true
+    applyFilters()
+    await waitForListIdle()
+  }
+  await focusRowById(row.parent_id)
+}
+
+// «↑ к родителю» on split children; static «Разделено» marker on the split
+// parent so parent vs child are tellable apart (same group colour links them).
+function groupRoleTag(row) {
+  if (row.parent_id) {
+    return h(
+      NTag,
+      {
+        size: 'small',
+        round: true,
+        bordered: false,
+        style: 'cursor:pointer',
+        title: 'Перейти к родительской записи',
+        onClick: (e) => {
+          e.stopPropagation()
+          goToParent(row)
+        },
+      },
+      {
+        icon: () => h(NIcon, null, { default: () => h(ArrowUpOutline) }),
+        default: () => 'К родителю',
+      },
+    )
+  }
+  // Split parent: income + excluded + no DR status.
+  if (row.excluded_from_stats && !row.parent_id && !row.detail_request_status) {
+    return h(
+      NTag,
+      {
+        type: 'warning',
+        size: 'small',
+        round: true,
+        bordered: false,
+        title: 'Родитель разделения (дочерние — записи с этим же цветом группы)',
+      },
+      {
+        icon: () => h(NIcon, null, { default: () => h(GitMergeOutline) }),
+        default: () => 'Разделено',
+      },
+    )
+  }
+  return null
 }
 
 function fillFromTemplate(row) {
@@ -1615,11 +1732,20 @@ const columns = computed(() => {
       key: 'description',
       minWidth: compact ? 70 : 120,
       ...(compact ? { ellipsis: { tooltip: true } } : {}),
-      render: (row) =>
-        renderCell(
+      render: (row) => {
+        const roleTag = groupRoleTag(row)
+        const descNode = roleTag
+          ? h('div', { style: 'display:flex;flex-direction:column;gap:4px;min-width:0' }, [
+              roleTag,
+              row.description
+                ? plainTextCell(row.description, 'opacity:0.85;font-size:12px')
+                : null,
+            ])
+          : plainTextCell(row.description || '')
+        return renderCell(
           row,
           'description',
-          plainTextCell(row.description || ''),
+          descNode,
           h(NInput, {
             value: editCellValue.value,
             size: 'small',
@@ -1632,7 +1758,8 @@ const columns = computed(() => {
               if (e.key === 'Escape') cancelCellEdit()
             },
           }),
-        ),
+        )
+      },
     },
     {
       title: 'Сумма',
@@ -1939,41 +2066,78 @@ onMounted(() => {
    per-cell background overrides don't strip it. Alpha kept low so the
    row colour reads as "this belongs to a group" without dominating the
    text. Palette + algorithm mirror utils/groupColor.js. */
-:deep(.n-data-table-tr.tx-grp-0 > .n-data-table-td) {
-  background: #b39ddb22;
+/* Each group class sets an RGB triplet on the row; a shared rule paints the
+   cells. Hover keeps the same tint (slightly stronger) instead of swapping to
+   Naive's grey hover — that abrupt swap looked like a "blink". */
+:deep(.n-data-table-tr.tx-grp-0) {
+  --grp: 179, 157, 219;
 }
-:deep(.n-data-table-tr.tx-grp-1 > .n-data-table-td) {
-  background: #ffb74d22;
+:deep(.n-data-table-tr.tx-grp-1) {
+  --grp: 255, 183, 77;
 }
-:deep(.n-data-table-tr.tx-grp-2 > .n-data-table-td) {
-  background: #81c78422;
+:deep(.n-data-table-tr.tx-grp-2) {
+  --grp: 129, 199, 132;
 }
-:deep(.n-data-table-tr.tx-grp-3 > .n-data-table-td) {
-  background: #4fc3f722;
+:deep(.n-data-table-tr.tx-grp-3) {
+  --grp: 79, 195, 247;
 }
-:deep(.n-data-table-tr.tx-grp-4 > .n-data-table-td) {
-  background: #e5737322;
+:deep(.n-data-table-tr.tx-grp-4) {
+  --grp: 229, 115, 115;
 }
-:deep(.n-data-table-tr.tx-grp-5 > .n-data-table-td) {
-  background: #ffd54f22;
+:deep(.n-data-table-tr.tx-grp-5) {
+  --grp: 255, 213, 79;
 }
-:deep(.n-data-table-tr.tx-grp-6 > .n-data-table-td) {
-  background: #a1887f22;
+:deep(.n-data-table-tr.tx-grp-6) {
+  --grp: 161, 136, 127;
 }
-:deep(.n-data-table-tr.tx-grp-7 > .n-data-table-td) {
-  background: #f0629222;
+:deep(.n-data-table-tr.tx-grp-7) {
+  --grp: 240, 98, 146;
 }
-:deep(.n-data-table-tr.tx-grp-8 > .n-data-table-td) {
-  background: #7986cb22;
+:deep(.n-data-table-tr.tx-grp-8) {
+  --grp: 121, 134, 203;
 }
-:deep(.n-data-table-tr.tx-grp-9 > .n-data-table-td) {
-  background: #aed58122;
+:deep(.n-data-table-tr.tx-grp-9) {
+  --grp: 174, 213, 129;
 }
-:deep(.n-data-table-tr.tx-grp-10 > .n-data-table-td) {
-  background: #4dd0e122;
+:deep(.n-data-table-tr.tx-grp-10) {
+  --grp: 77, 208, 225;
 }
-:deep(.n-data-table-tr.tx-grp-11 > .n-data-table-td) {
-  background: #ff8a6522;
+:deep(.n-data-table-tr.tx-grp-11) {
+  --grp: 255, 138, 101;
+}
+:deep(.n-data-table-tr[class*='tx-grp-'] > .n-data-table-td) {
+  background: rgba(var(--grp), 0.13);
+  transition: background-color 0.18s ease;
+}
+:deep(.n-data-table-tr[class*='tx-grp-']:hover > .n-data-table-td) {
+  background: rgba(var(--grp), 0.24);
+}
+
+/* Parent-navigation focus ring — single 1px primary border around the whole
+   row (no per-cell verticals); group tint background preserved. See
+   ExpensesView for the edge-inset rationale. */
+:deep(.n-data-table-tr.tx-row-focus > .n-data-table-td) {
+  box-shadow:
+    inset 0 1px 0 v-bind(primaryColor),
+    inset 0 -1px 0 v-bind(primaryColor);
+}
+:deep(.n-data-table-tr.tx-row-focus > .n-data-table-td:first-child) {
+  box-shadow:
+    inset 0 1px 0 v-bind(primaryColor),
+    inset 0 -1px 0 v-bind(primaryColor),
+    inset 1px 0 0 v-bind(primaryColor);
+}
+:deep(.n-data-table-tr.tx-row-focus > .n-data-table-td:last-child) {
+  box-shadow:
+    inset 0 1px 0 v-bind(primaryColor),
+    inset 0 -1px 0 v-bind(primaryColor),
+    inset -1px 0 0 v-bind(primaryColor);
+}
+
+/* Mobile card focus — outer 1px primary ring around the opaque card. */
+.tx-card-focus {
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px v-bind(primaryColor);
 }
 
 .swipe-action-success {

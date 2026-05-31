@@ -13,6 +13,7 @@ function makeRouter(initialPath = '/settings/categories') {
       { path: '/settings/users', component: { template: '<div />' } },
       { path: '/settings/portability', component: { template: '<div />' } },
       { path: '/settings/glossary', component: { template: '<div />' } },
+      { path: '/settings/intent-triggers', component: { template: '<div />' } },
       { path: '/settings/telegram', component: { template: '<div />' } },
     ],
   })
@@ -45,6 +46,7 @@ describe('SettingsTabs', () => {
       'Категории',
       'Пользователи',
       'Глоссарий',
+      'Триггеры бота',
       'Импорт/экспорт',
       'Telegram',
     ])
@@ -66,8 +68,8 @@ describe('SettingsTabs', () => {
 
   it('navigates on click', async () => {
     const { wrapper, router } = await mountIt('/settings/categories')
-    // Tab order: Категории, Пользователи, Глоссарий, Импорт/экспорт, Telegram
-    const portability = wrapper.findAll('button.settings-tab')[3]
+    // Order: Категории, Пользователи, Глоссарий, Триггеры бота, Импорт/экспорт, Telegram
+    const portability = wrapper.findAll('button.settings-tab')[4]
     await portability.trigger('click')
     await flushPromises()
     expect(router.currentRoute.value.path).toBe('/settings/portability')
