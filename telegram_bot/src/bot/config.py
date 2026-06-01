@@ -89,6 +89,31 @@ class Settings(BaseSettings):
             return None
         return v
 
+    # Sentry (error tracking + performance). Empty DSN = telemetry disabled.
+    # This is the bot's OWN project — compose maps host SENTRY_BOT_DSN onto the
+    # container's SENTRY_DSN so it never collides with the backend's project.
+    # The DSN host must sit in NO_PROXY (host.docker.internal already is) so the
+    # SDK reaches the LAN Sentry directly rather than via the Telegram proxy.
+    sentry_dsn: str | None = Field(default=None, alias="SENTRY_DSN")
+    sentry_env: str = Field(default="development", alias="SENTRY_ENV")
+    sentry_traces_sample_rate: float = Field(default=0.1, alias="SENTRY_TRACES_SAMPLE_RATE")
+
+    @field_validator("sentry_dsn", mode="before")
+    @classmethod
+    def _empty_dsn_is_none(cls, v: object) -> object:
+        if isinstance(v, str) and not v.strip():
+            return None
+        return v
+
+    @field_validator("sentry_traces_sample_rate", mode="before")
+    @classmethod
+    def _blank_rate_is_default(cls, v: object) -> object:
+        # docker-compose interpolation can deliver an empty string for an unset
+        # var; treat that as "use the default" rather than a parse error.
+        if isinstance(v, str) and not v.strip():
+            return 0.1
+        return v
+
 
 def get_settings() -> Settings:
     return Settings()  # type: ignore[call-arg]

@@ -13,6 +13,7 @@ from .commands import setup_bot_commands
 from .config import get_settings
 from .handlers import router
 from .llm_client import make_llm_client
+from .observability import init_sentry
 from .whisper_client import Transcriber, make_transcriber
 
 
@@ -23,6 +24,8 @@ async def main() -> None:
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
     log = logging.getLogger("bot")
+    # Telemetry first so errors during the rest of startup are also captured.
+    init_sentry(settings)
     log.info(
         "starting bot, api=%s llm=%s proxy=%s",
         settings.budget_api_url,

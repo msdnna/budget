@@ -5,6 +5,8 @@ go 1.25.0
 toolchain go1.25.9
 
 require (
+	github.com/getsentry/sentry-go v0.46.2
+	github.com/getsentry/sentry-go/gin v0.46.2
 	github.com/gin-gonic/gin v1.12.0
 	github.com/go-pdf/fpdf v0.9.0
 	github.com/golang-jwt/jwt/v5 v5.3.1

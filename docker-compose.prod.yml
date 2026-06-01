@@ -46,6 +46,16 @@ services:
       - TZ=${TZ:-Europe/Moscow}
       - ANDROID_LATEST=${ANDROID_LATEST:-1.44.1}
       - ANDROID_MIN_REQUIRED=${ANDROID_MIN_REQUIRED:-1.12.0}
+      # Sentry telemetry. Empty SENTRY_DSN = disabled (no-op). In prod the DSN
+      # points at the LAN-reachable self-hosted Sentry, e.g.
+      # http://<key>@<sentry-host-ip>:9100/<project-id>
+      - SENTRY_DSN=${SENTRY_DSN:-}
+      - SENTRY_ENV=${SENTRY_ENV:-production}
+      - SENTRY_TRACES_SAMPLE_RATE=${SENTRY_TRACES_SAMPLE_RATE:-}
+      # Frontend Sentry: DSN served to the browser via /api/client-config; events
+      # relayed via /api/sentry-tunnel (host must be reachable from this backend).
+      - SENTRY_FRONTEND_DSN=${SENTRY_FRONTEND_DSN:-}
+      - SENTRY_FRONTEND_TRACES_SAMPLE_RATE=${SENTRY_FRONTEND_TRACES_SAMPLE_RATE:-}
     # Bound to loopback only — external Nginx proxies /api/ → 127.0.0.1:8080
     ports:
       - "127.0.0.1:8080:8080"
@@ -112,6 +122,11 @@ services:
       - WHISPER_LANGUAGE=${WHISPER_LANGUAGE:-ru}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - TZ=${TZ:-Europe/Moscow}
+      # Sentry (bot's own project). Empty = off. NO_PROXY must cover the Sentry
+      # host so events bypass the Telegram egress proxy.
+      - SENTRY_DSN=${SENTRY_BOT_DSN:-}
+      - SENTRY_ENV=${SENTRY_ENV:-production}
+      - SENTRY_TRACES_SAMPLE_RATE=${SENTRY_BOT_TRACES_SAMPLE_RATE:-}
       - HTTP_PROXY=${HTTP_PROXY:-}
       - HTTPS_PROXY=${HTTPS_PROXY:-}
       - NO_PROXY=${NO_PROXY:-localhost,127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16},backend

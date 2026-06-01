@@ -1,6 +1,6 @@
 [project]
 name = "budget-telegram-bot"
-version = "0.3.0"
+version = "0.4.0"
 description = "Telegram bot front-end for the msdnna budget API. Free-form text/voice → normalized transaction via LLM."
 requires-python = ">=3.12"
 dependencies = [
@@ -12,6 +12,7 @@ dependencies = [
     "pydantic>=2.9.0",
     "pydantic-settings>=2.5.0",
     "python-dateutil>=2.9.0",
+    "sentry-sdk>=2.0.0",
 ]
 
 [project.optional-dependencies]
