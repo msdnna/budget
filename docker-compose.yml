@@ -41,6 +41,19 @@ services:
       - TZ=${TZ:-Europe/Moscow}
       - ANDROID_LATEST=${ANDROID_LATEST:-1.44.1}
       - ANDROID_MIN_REQUIRED=${ANDROID_MIN_REQUIRED:-1.12.0}
+      # Sentry telemetry (error + performance). Empty SENTRY_DSN = disabled.
+      # Self-hosted Sentry binds to 127.0.0.1:9100 on the host, so the DSN
+      # should target host.docker.internal:9100 (see extra_hosts below).
+      - SENTRY_DSN=${SENTRY_DSN:-}
+      - SENTRY_ENV=${SENTRY_ENV:-development}
+      - SENTRY_TRACES_SAMPLE_RATE=${SENTRY_TRACES_SAMPLE_RATE:-}
+      # Frontend (Vue) Sentry: DSN handed to the browser via /api/client-config,
+      # events relayed through /api/sentry-tunnel. Host must be reachable from
+      # THIS backend (it's also the tunnel upstream); the browser ignores it.
+      - SENTRY_FRONTEND_DSN=${SENTRY_FRONTEND_DSN:-}
+      - SENTRY_FRONTEND_TRACES_SAMPLE_RATE=${SENTRY_FRONTEND_TRACES_SAMPLE_RATE:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "8080:8080"
     depends_on:
@@ -108,6 +121,12 @@ services:
       - WHISPER_LANGUAGE=${WHISPER_LANGUAGE:-ru}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - TZ=${TZ:-Europe/Moscow}
+      # Sentry (bot's OWN project — distinct from the backend's). Empty = off.
+      # host.docker.internal is in NO_PROXY below, so the SDK reaches the LAN
+      # Sentry directly instead of via the Telegram egress proxy.
+      - SENTRY_DSN=${SENTRY_BOT_DSN:-}
+      - SENTRY_ENV=${SENTRY_ENV:-development}
+      - SENTRY_TRACES_SAMPLE_RATE=${SENTRY_BOT_TRACES_SAMPLE_RATE:-}
       # Egress proxy — Telegram is blocked without it on this dev box.
       # NO_PROXY must include `backend` and `host.docker.internal`
       # so intra-stack calls (API + LLM) don't get routed through the proxy.

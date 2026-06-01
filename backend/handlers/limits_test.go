@@ -159,12 +159,13 @@ func TestLimits_NotificationOnOverflow(t *testing.T) {
 	}
 	if cat == nil {
 		t.Fatal("category-limit notification not generated within 2s")
-	}
-	if cat.CategoryName != "Транспорт" {
-		t.Errorf("category_name = %q", cat.CategoryName)
-	}
-	if cat.Limit != 100 || cat.Spent < 150 {
-		t.Errorf("category limit=%v spent=%v", cat.Limit, cat.Spent)
+	} else {
+		if cat.CategoryName != "Транспорт" {
+			t.Errorf("category_name = %q", cat.CategoryName)
+		}
+		if cat.Limit != 100 || cat.Spent < 150 {
+			t.Errorf("category limit=%v spent=%v", cat.Limit, cat.Spent)
+		}
 	}
 	if global == nil {
 		t.Fatal("global-limit notification not generated within 2s")

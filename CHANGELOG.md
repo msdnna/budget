@@ -16,6 +16,13 @@
 
 ## API (backend)
 
+### [1.30.0] — 2026-06-01
+
+#### Added
+- **Sentry-интеграция (error tracking + performance/tracing).** Новый пакет `internal/observability` инициализирует глобальный Sentry-хаб из env; `sentrygin`-middleware открывает performance-транзакцию на каждый HTTP-запрос и ловит паники (`Repanic: true` — gin-Recovery по-прежнему отдаёт 500). Конфиг: `SENTRY_DSN` (пустой = телеметрия полностью выключена, no-op), `SENTRY_ENV` (тег окружения, fallback на `APP_ENV`, затем `development`), `SENTRY_TRACES_SAMPLE_RATE` (доля трейсов `[0..1]`, по умолчанию `1.0`; `0` отключает tracing, оставляя error-capture). Release-тег — `budget-go@<version>`. Переменные проброшены во все три compose-файла (`docker-compose.yml` / `.prod.yml` / `.rpi.yml`); dev-backend получил `extra_hosts: host.docker.internal` для доступа к self-hosted Sentry на хосте.
+- **Перехват всех 5xx как Sentry-событий** — `middleware.SentryReport` ловит любой ответ со статусом ≥ 500 (и ошибки, прикреплённые через `c.Error()`) и шлёт их в Sentry с телом ответа, методом, маршрутом и стабильным fingerprint'ом по `route+status`. Так падения MongoDB и прочие обработанные серверные ошибки (которые хендлеры отдают как 500 напрямую, без паники) попадают в Issues. No-op с нулевым оверхедом, когда Sentry выключен.
+- **Бэкенд-поддержка фронтового Sentry: `GET /api/client-config` + `POST /api/sentry-tunnel` (оба публичные).** `client-config` отдаёт браузеру рантайм-конфиг Sentry (`dsn`/`environment`/`tracesSampleRate`/`tunnel`) из env `SENTRY_FRONTEND_DSN` — пусто ⇒ `{"sentry":null}`, фронт не инициализирует телеметрию. `sentry-tunnel` пересылает envelope браузерного SDK на upstream Sentry (хост берётся из `SENTRY_FRONTEND_DSN`), чтобы браузер не обращался к LAN-only Sentry напрямую — обходит ad-блокеры и работает вне LAN; upstream недоступен ⇒ тихий `200` (телеметрия никогда не всплывает ошибкой у пользователя). `SENTRY_FRONTEND_DSN` / `SENTRY_FRONTEND_TRACES_SAMPLE_RATE` (default `0.1`) проброшены во все три compose-файла.
+
 ### [1.29.0] — 2026-05-29
 
 #### Added
@@ -327,6 +334,11 @@
 ---
 
 ## Web (frontend)
+
+### [1.46.0] — 2026-06-01
+
+#### Added
+- **Sentry (ошибки + performance) на фронте, через рантайм-конфиг и туннель.** `src/sentry.js`: на старте (`main.js`, до `mount`) тянет `GET /api/client-config` и, если бэкенд отдал `sentry` (не null), инициализирует `@sentry/vue` — иначе телеметрия не подключается вовсе. DSN/окружение **не зашиты в бандл**, приходят в рантайме (один бандл для dev/десктоп/RPi, выключается пустым DSN на бэке). События уходят через `tunnel: '/api/sentry-tunnel'` (same-origin), поэтому браузер не обращается к LAN-only Sentry напрямую — работает вне LAN и в обход ad-блокеров. Release-тег `budget-web@<version>`, vue-router tracing, `tracesSampleRate` из конфига (default 0.1), фильтр шума ResizeObserver. Фетч конфига с 3-сек таймаутом — старт приложения никогда не блокируется телеметрией. Требует api ≥ 1.30.0.
 
 ### [1.45.4] — 2026-06-01
 
@@ -950,6 +962,11 @@
 ---
 
 ## Telegram bot
+
+### [0.4.0] — 2026-06-01
+
+#### Added
+- **Sentry (ошибки + performance).** `observability.init_sentry` инициализирует `sentry-sdk` из env (вызывается первым в `__main__`, чтобы ловить и ошибки самого старта). Пустой `SENTRY_DSN` ⇒ телеметрия выключена (no-op). Необработанные исключения в хендлерах aiogram логирует на ERROR — дефолтная `LoggingIntegration` превращает их в события Sentry со стек-трейсами, без aiogram-специфичной обвязки; stdlib/httpx-интеграции трейсят исходящие вызовы LLM / budget-API. Конфиг: `SENTRY_DSN` / `SENTRY_ENV` (default `development`) / `SENTRY_TRACES_SAMPLE_RATE` (default `0.1`); release-тег `budget-bot@<version>`. В compose (dev/prod/rpi) проброшен как `SENTRY_DSN=${SENTRY_BOT_DSN}` — **отдельный** проект Sentry, не пересекается с бэкендом; хост DSN держим в `NO_PROXY`, чтобы события шли мимо Telegram-прокси.
 
 ### [0.3.0] — 2026-05-29
 

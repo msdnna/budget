@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	sentrygin "github.com/getsentry/sentry-go/gin"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -18,6 +19,7 @@ import (
 
 	"budget-go/config"
 	"budget-go/handlers"
+	"budget-go/internal/observability"
 	"budget-go/middleware"
 	"budget-go/repository"
 )
@@ -41,6 +43,10 @@ func main() {
 	_ = godotenv.Load()
 
 	cfg := config.New()
+
+	// Optional error/performance telemetry. No-op unless SENTRY_DSN is set.
+	flushSentry := observability.InitSentry(cfg.SentryDSN, cfg.SentryEnv, "budget-go@"+appVersion, cfg.SentryTracesRate)
+	defer flushSentry()
 
 	client := connectMongo(cfg.MongoURI)
 	defer func() {
@@ -83,6 +89,7 @@ func main() {
 	iconHandler := handlers.NewIconHandler(iconRepo)
 	syncHandler := handlers.NewSyncHandler(txRepo, wlRepo, catRepo)
 	versionHandler := handlers.NewVersionHandler(appVersion)
+	sentryConfigHandler := handlers.NewSentryConfigHandler(cfg.SentryFrontendDSN, cfg.SentryEnv, cfg.SentryFrontendTracesRate)
 	drHandler := handlers.NewDetailRequestHandler(drRepo, txRepo, userRepo)
 	userAdminHandler := handlers.NewUserAdminHandler(userRepo, db)
 	limitsHandler := handlers.NewLimitsHandler(catRepo, txRepo)
@@ -99,6 +106,11 @@ func main() {
 	if err := r.SetTrustedProxies([]string{"127.0.0.1", "::1"}); err != nil {
 		log.Printf("Warning: failed to set trusted proxies: %v", err)
 	}
+	// Sentry middleware first so it opens a performance transaction per request
+	// and captures panics. Repanic: true lets gin's own Recovery still emit the
+	// 500 response after Sentry records the event. No-op when Sentry is disabled.
+	r.Use(sentrygin.New(sentrygin.Options{Repanic: true}))
+	r.Use(middleware.SentryReport())
 	r.Use(middleware.CORS())
 
 	// OpenAPI 3.1 spec + Swagger UI (UI грузится с CDN, спека — embed).
@@ -120,6 +132,10 @@ func main() {
 		// Public — no auth required
 		api.GET("/health", healthHandler)
 		api.GET("/version", versionHandler.Get)
+		// Browser runtime config + Sentry event tunnel (both public — the
+		// frontend reads config and reports errors before any login).
+		api.GET("/client-config", sentryConfigHandler.ClientConfig)
+		api.POST("/sentry-tunnel", sentryConfigHandler.Tunnel)
 		api.POST("/auth/login", authHandler.Login)
 		api.POST("/auth/refresh", authHandler.Refresh)
 		api.GET("/setup/status", setupHandler.Status)

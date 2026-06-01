@@ -118,6 +118,102 @@ func TestNew_DBNameFallsBackToMongoDB(t *testing.T) {
 	}
 }
 
+func TestNew_SentryDefaults(t *testing.T) {
+	unsetEnv(t, "APP_ENV")
+	unsetEnv(t, "JWT_SECRET")
+	unsetEnv(t, "MONGO_URI")
+	unsetEnv(t, "SENTRY_DSN")
+	unsetEnv(t, "SENTRY_ENV")
+	unsetEnv(t, "SENTRY_TRACES_SAMPLE_RATE")
+
+	cfg := New()
+	if cfg.SentryDSN != "" {
+		t.Errorf("SentryDSN should default empty (disabled), got %q", cfg.SentryDSN)
+	}
+	if cfg.SentryEnv != "development" {
+		t.Errorf("SentryEnv = %q, want %q", cfg.SentryEnv, "development")
+	}
+	if cfg.SentryTracesRate != 1.0 {
+		t.Errorf("SentryTracesRate = %v, want 1.0", cfg.SentryTracesRate)
+	}
+}
+
+func TestNew_SentryRespectsEnv(t *testing.T) {
+	t.Setenv("APP_ENV", "")
+	t.Setenv("JWT_SECRET", "thisIsAReallyLongJWTSecretFor32+chars")
+	t.Setenv("MONGO_URI", "mongodb://x:y@h:1/z")
+	t.Setenv("SENTRY_DSN", "http://key@localhost:9100/2")
+	t.Setenv("SENTRY_ENV", "production")
+	t.Setenv("SENTRY_TRACES_SAMPLE_RATE", "0.25")
+
+	cfg := New()
+	if cfg.SentryDSN != "http://key@localhost:9100/2" {
+		t.Errorf("SentryDSN = %q", cfg.SentryDSN)
+	}
+	if cfg.SentryEnv != "production" {
+		t.Errorf("SentryEnv = %q, want production", cfg.SentryEnv)
+	}
+	if cfg.SentryTracesRate != 0.25 {
+		t.Errorf("SentryTracesRate = %v, want 0.25", cfg.SentryTracesRate)
+	}
+}
+
+func TestNew_SentryEnvFallsBackToAppEnv(t *testing.T) {
+	unsetEnv(t, "JWT_SECRET")
+	unsetEnv(t, "MONGO_URI")
+	unsetEnv(t, "SENTRY_ENV")
+	t.Setenv("APP_ENV", "staging")
+
+	cfg := New()
+	if cfg.SentryEnv != "staging" {
+		t.Errorf("SentryEnv = %q, want staging (from APP_ENV)", cfg.SentryEnv)
+	}
+}
+
+func TestNew_SentryFrontendDefaults(t *testing.T) {
+	unsetEnv(t, "APP_ENV")
+	unsetEnv(t, "JWT_SECRET")
+	unsetEnv(t, "MONGO_URI")
+	unsetEnv(t, "SENTRY_FRONTEND_DSN")
+	unsetEnv(t, "SENTRY_FRONTEND_TRACES_SAMPLE_RATE")
+
+	cfg := New()
+	if cfg.SentryFrontendDSN != "" {
+		t.Errorf("SentryFrontendDSN should default empty, got %q", cfg.SentryFrontendDSN)
+	}
+	if cfg.SentryFrontendTracesRate != 0.1 {
+		t.Errorf("SentryFrontendTracesRate = %v, want 0.1", cfg.SentryFrontendTracesRate)
+	}
+}
+
+func TestNew_SentryFrontendRespectsEnv(t *testing.T) {
+	t.Setenv("APP_ENV", "")
+	t.Setenv("JWT_SECRET", "thisIsAReallyLongJWTSecretFor32+chars")
+	t.Setenv("MONGO_URI", "mongodb://x:y@h:1/z")
+	t.Setenv("SENTRY_FRONTEND_DSN", "http://k@host:9100/3")
+	t.Setenv("SENTRY_FRONTEND_TRACES_SAMPLE_RATE", "0.5")
+
+	cfg := New()
+	if cfg.SentryFrontendDSN != "http://k@host:9100/3" {
+		t.Errorf("SentryFrontendDSN = %q", cfg.SentryFrontendDSN)
+	}
+	if cfg.SentryFrontendTracesRate != 0.5 {
+		t.Errorf("SentryFrontendTracesRate = %v, want 0.5", cfg.SentryFrontendTracesRate)
+	}
+}
+
+func TestNew_SentryInvalidTracesRateFallsBack(t *testing.T) {
+	unsetEnv(t, "APP_ENV")
+	unsetEnv(t, "JWT_SECRET")
+	unsetEnv(t, "MONGO_URI")
+	t.Setenv("SENTRY_TRACES_SAMPLE_RATE", "banana")
+
+	cfg := New()
+	if cfg.SentryTracesRate != 1.0 {
+		t.Errorf("invalid rate should fall back to 1.0, got %v", cfg.SentryTracesRate)
+	}
+}
+
 func TestNew_ShortJWTSecretStillBoots(t *testing.T) {
 	t.Setenv("APP_ENV", "")
 	t.Setenv("JWT_SECRET", "short")

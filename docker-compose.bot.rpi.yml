@@ -39,6 +39,11 @@ services:
       - WHISPER_LANGUAGE=${WHISPER_LANGUAGE:-ru}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - TZ=${TZ:-Europe/Moscow}
+      # Sentry (bot's own project). Empty = off. Point SENTRY_BOT_DSN at the
+      # desktop's LAN Sentry; keep its host in NO_PROXY.
+      - SENTRY_DSN=${SENTRY_BOT_DSN:-}
+      - SENTRY_ENV=${SENTRY_ENV:-production}
+      - SENTRY_TRACES_SAMPLE_RATE=${SENTRY_BOT_TRACES_SAMPLE_RATE:-}
       - HTTP_PROXY=${HTTP_PROXY:-}
       - HTTPS_PROXY=${HTTPS_PROXY:-}
       - NO_PROXY=${NO_PROXY:-localhost,127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16},backend

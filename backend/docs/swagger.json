@@ -2774,6 +2774,28 @@
                 ]
             }
         },
+        "/client-config": {
+            "get": {
+                "description": "Публичный. Фронт читает это на старте: если `sentry` не null — инициализирует Sentry с туннелем `/api/sentry-tunnel`, иначе не подключает телеметрию. DSN/окружение задаются env-переменными бэкенда (`SENTRY_FRONTEND_DSN`, `SENTRY_ENV`).",
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {},
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "OK"
+                    }
+                },
+                "summary": "Рантайм-конфиг клиента (Sentry)",
+                "tags": [
+                    "meta"
+                ]
+            }
+        },
         "/detail-requests": {
             "get": {
                 "description": "Фильтры комбинируются по И. `assignee_id=me` / `creator_id=me` — сокращение для текущего пользователя.",
@@ -4238,6 +4260,36 @@
                 "summary": "Пометить одно уведомление прочитанным",
                 "tags": [
                     "notifications"
+                ]
+            }
+        },
+        "/sentry-tunnel": {
+            "post": {
+                "description": "Публичный. Принимает Sentry-envelope от браузерного SDK и пересылает его на upstream Sentry, чтобы браузер не обращался к LAN-only Sentry напрямую (обход ad-блокеров + работа вне LAN). No-op (204), если фронтовый Sentry выключен.",
+                "requestBody": {
+                    "content": {
+                        "text/plain": {
+                            "schema": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        },
+                        "description": "forwarded"
+                    }
+                },
+                "summary": "Sentry tunnel (проксирование событий фронта)",
+                "tags": [
+                    "meta"
                 ]
             }
         },
